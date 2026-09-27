@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>Coming soon – ML, Statistics &amp; LLM — Interactive Course</title>
+<title>4.3 Cross-Validation – ML, Statistics &amp; LLM — Interactive Course</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -33,6 +33,8 @@ ul.task-list li input[type="checkbox"] {
 <script src="../site_libs/quarto-search/fuse.min.js"></script>
 <script src="../site_libs/quarto-search/quarto-search.js"></script>
 <meta name="quarto:offset" content="../">
+<link href="../part-04-validation-model-selection/04-4-bias-variance.html" rel="next">
+<link href="../part-04-validation-model-selection/04-2-validation-set.html" rel="prev">
 <script src="../site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
 <script src="../site_libs/quarto-html/popper.min.js"></script>
@@ -75,11 +77,40 @@ ul.task-list li input[type="checkbox"] {
 <script type="module" src="../site_libs/quarto-ojs/quarto-ojs-runtime.js"></script>
 <link href="../site_libs/quarto-ojs/quarto-ojs.css" rel="stylesheet">
 
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
 
 <link rel="stylesheet" href="../assets/styles.css">
 </head>
 
-<body class="nav-fixed quarto-light">
+<body class="nav-sidebar floating nav-fixed quarto-light">
 
 <div id="quarto-search-results"></div>
   <header id="quarto-header" class="headroom fixed-top">
@@ -97,7 +128,7 @@ ul.task-list li input[type="checkbox"] {
           <div class="collapse navbar-collapse" id="navbarCollapse">
             <ul class="navbar-nav navbar-nav-scroll me-auto">
   <li class="nav-item">
-    <a class="nav-link" href="../index.html"> 
+    <a class="nav-link active" href="../index.html" aria-current="page"> 
 <span class="menu-text">Home</span></a>
   </li>  
 </ul>
@@ -113,20 +144,314 @@ ul.task-list li input[type="checkbox"] {
 </div>
       </div> <!-- /container-fluid -->
     </nav>
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../part-04-validation-model-selection/04-1-generalization-problem.html">Part 4 — Validation &amp; Model Selection</a></li><li class="breadcrumb-item"><a href="../part-04-validation-model-selection/04-3-cross-validation.html">4.3 Cross-Validation</a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+    </div>
+  </nav>
 </header>
 <!-- content -->
 <div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
 <!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">ML, Statistics &amp; LLM — Interactive Course</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 0 — Python &amp; Data Foundations</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-00-python-foundations/00-1-python-basics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">0.1 Python for Numerical Work</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-00-python-foundations/00-2-numpy.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">0.2 NumPy</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-00-python-foundations/00-3-pandas.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">0.3 pandas</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-00-python-foundations/00-4-visualization-eda.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">0.4 Visualisation &amp; Exploratory Analysis</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-00-python-foundations/00-5-data-splitting.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">0.5 Data Splitting</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 1 — Statistics Bridge for ML</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-01-statistics-bridge/01-1-descriptive-statistics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">1.1 Descriptive Statistics</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-01-statistics-bridge/01-2-relationships.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">1.2 Relationships Between Variables</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-01-statistics-bridge/01-3-probability-essentials.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">1.3 Probability Essentials</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-01-statistics-bridge/01-4-statistical-inference.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">1.4 Statistical Inference</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-01-statistics-bridge/01-5-resampling-intuition.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">1.5 Resampling Intuition</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 2 — Linear Regression &amp; Prediction</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-1-regression-setup.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.1 The Regression Problem</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-2-simple-linear-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.2 Simple Linear Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-3-accuracy-of-coefficients.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.3 Accuracy of the Coefficients</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-4-accuracy-of-model.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.4 Accuracy of the Full Model</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-5-multiple-linear-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.5 Multiple Linear Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-6-categorical-predictors.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.6 Categorical Predictors</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-7-interaction-terms.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.7 Interaction Terms</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-8-nonlinear-transformations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.8 Nonlinear Feature Transformations</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-9-knn-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.9 KNN Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-10-regression-assumptions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.10 Regression Assumptions &amp; Diagnostics</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 3 — Classification &amp; GLMs</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-1-classification-fundamentals.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.1 Classification Fundamentals</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-1-5-auprc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.1.5 AUPRC for Skewed Datasets</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-2-why-not-linear-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.2 Why Not Linear Regression for Categories?</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-3-logistic-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.3 Logistic Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-4-generative-classifiers.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.4 Generative Classifiers: LDA, QDA, Naive Bayes</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-5-knn-classification.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.5 KNN Classification</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-6-generalized-linear-models.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.6 Generalized Linear Models</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-7-model-comparison.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.7 Classification Model Comparison</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part 4 — Validation &amp; Model Selection</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-04-validation-model-selection/04-1-generalization-problem.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">4.1 The Generalization Problem</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-04-validation-model-selection/04-2-validation-set.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">4.2 The Validation Set Approach</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-04-validation-model-selection/04-3-cross-validation.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">4.3 Cross-Validation</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-04-validation-model-selection/04-4-bias-variance.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">4.4 The Bias–Variance Trade-off</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-04-validation-model-selection/04-5-bootstrap.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">4.5 The Bootstrap</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-04-validation-model-selection/04-6-hyperparameter-tuning.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">4.6 Hyperparameter Tuning</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
-        
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul class="collapse">
+  <li><a href="#basic-concept" id="toc-basic-concept" class="nav-link active" data-scroll-target="#basic-concept">1. Basic Concept</a></li>
+  <li><a href="#concept-questions" id="toc-concept-questions" class="nav-link" data-scroll-target="#concept-questions">2. Concept Questions</a></li>
+  <li><a href="#drills-exercises" id="toc-drills-exercises" class="nav-link" data-scroll-target="#drills-exercises">3. Drills &amp; Exercises</a></li>
+  <li><a href="#advanced-information-pitfalls" id="toc-advanced-information-pitfalls" class="nav-link" data-scroll-target="#advanced-information-pitfalls">4. Advanced Information &amp; Pitfalls</a></li>
+  <li><a href="#advanced-questions" id="toc-advanced-questions" class="nav-link" data-scroll-target="#advanced-questions">5. Advanced Questions</a></li>
+  <li><a href="#complex-questions" id="toc-complex-questions" class="nav-link" data-scroll-target="#complex-questions">6. Complex Questions</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">7. Summary</a></li>
+  </ul>
+<div class="toc-actions"><ul class="collapse"><li><a href="https://github.com/EnduringChung/ml-interactive-course/edit/main/part-04-validation-model-selection/04-3-cross-validation.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/EnduringChung/ml-interactive-course/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
-<header id="title-block-header" class="quarto-title-block default">
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../part-04-validation-model-selection/04-1-generalization-problem.html">Part 4 — Validation &amp; Model Selection</a></li><li class="breadcrumb-item"><a href="../part-04-validation-model-selection/04-3-cross-validation.html">4.3 Cross-Validation</a></li></ol></nav>
 <div class="quarto-title">
-<h1 class="title">Coming soon</h1>
+<h1 class="title">4.3 Cross-Validation</h1>
 </div>
 
 
@@ -143,12 +468,263 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
-<p>This page has not been published yet. It is scheduled in the <a href="../index.html">build order</a> and will follow the same seven-section template as every other page.</p>
-<p>Check back soon — progress is tracked in the <a href="../index.html">course home</a>.</p>
+<p>Cross-validation (CV) keeps the validation idea but recycles the data: split into K folds, hold each out in turn, average. Every row is validated exactly once and trains K−1 times — more precise estimates from the same data, at K times the compute. It is the default referee of applied machine learning.</p>
+<blockquote class="blockquote">
+<p><strong>Tier 1 — every cell below runs live.</strong></p>
+</blockquote>
+<section id="basic-concept" class="level2">
+<h2 class="anchored" data-anchor-id="basic-concept">1. Basic Concept</h2>
+<p><strong>K-fold protocol</strong>: partition rows into K disjoint folds (shuffled, ideally stratified). For k = 1..K: fit on all folds except k, predict fold k, record the metric. Report the mean (and spread) of the K values.</p>
+<div>
+<div id="pyodide-1" class="exercise-cell">
+
+</div>
+<script type="pyodide-1-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNrbGVhcm4ubW9kZWxfc2VsZWN0aW9uIGltcG9ydCBLRm9sZFxuXG5YID0gbnAuYXJhbmdlKDEwKVxua2YgPSBLRm9sZChuX3NwbGl0cz01LCBzaHVmZmxlPVRydWUsIHJhbmRvbV9zdGF0ZT0wKVxuZm9yIGksICh0ciwgdmEpIGluIGVudW1lcmF0ZShrZi5zcGxpdChYKSk6XG4gICAgcHJpbnQoZlwiZm9sZCB7aX06IHZhbGlkID0ge3NvcnRlZCh2YSl9XCIpXG5wcmludChcImVhY2ggcm93IHZhbGlkYXRlZCBleGFjdGx5IG9uY2U7IHRyYWlucyA0IHRpbWVzXCIpIn0=
+</script>
+</div>
+<p>The full loop, explicitly, then the one-liner that does the same:</p>
+<div>
+<div id="pyodide-2" class="exercise-cell">
+
+</div>
+<script type="pyodide-2-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNrbGVhcm4ubW9kZWxfc2VsZWN0aW9uIGltcG9ydCBLRm9sZCwgY3Jvc3NfdmFsX3Njb3JlXG5mcm9tIHNrbGVhcm4ubGluZWFyX21vZGVsIGltcG9ydCBMaW5lYXJSZWdyZXNzaW9uXG5cbnJuZyA9IG5wLnJhbmRvbS5kZWZhdWx0X3JuZygwKVxueCA9IHJuZy51bmlmb3JtKDAsIDEsICgxMjAsIDEpKVxueSA9IG5wLnNpbigyICogbnAucGkgKiB4KS5yYXZlbCgpICsgcm5nLm5vcm1hbCgwLCAwLjMsIDEyMClcblxuZGVmIGZlYXR1cmVzKFgpOlxuICAgIHJldHVybiBucC5jX1tYLCBYKioyLCBYKiozXVxuXG5rZiA9IEtGb2xkKDUsIHNodWZmbGU9VHJ1ZSwgcmFuZG9tX3N0YXRlPTEpXG5tYW51YWwgPSBbXVxuZm9yIHRyX2lkeCwgdmFfaWR4IGluIGtmLnNwbGl0KHgpOlxuICAgIGZpdCA9IExpbmVhclJlZ3Jlc3Npb24oKS5maXQoZmVhdHVyZXMoeFt0cl9pZHhdKSwgeVt0cl9pZHhdKVxuICAgIHByZWQgPSBmaXQucHJlZGljdChmZWF0dXJlcyh4W3ZhX2lkeF0pKVxuICAgIG1hbnVhbC5hcHBlbmQobnAubWVhbigoeVt2YV9pZHhdIC0gcHJlZCkqKjIpKVxuXG5hdXRvID0gLWNyb3NzX3ZhbF9zY29yZShMaW5lYXJSZWdyZXNzaW9uKCksIGZlYXR1cmVzKHgpLCB5LCBjdj1rZixcbiAgICAgICAgICAgICAgICAgICAgICAgIHNjb3Jpbmc9XCJuZWdfbWVhbl9zcXVhcmVkX2Vycm9yXCIpXG5wcmludChcIm1hbnVhbCBmb2xkIE1TRXM6XCIsIG5wLnJvdW5kKG1hbnVhbCwgNCkpXG5wcmludChcImNyb3NzX3ZhbF9zY29yZTogXCIsIG5wLnJvdW5kKGF1dG8sIDQpKVxucHJpbnQoZlwiNS1mb2xkIENWIE1TRSA9IHtucC5tZWFuKGF1dG8pOi40Zn0gwrEge25wLnN0ZChhdXRvKTouNGZ9XCIpIn0=
+</script>
+</div>
+<p><strong>Classification needs stratified folds</strong> (class proportions preserved per fold — <a href="../part-00-python-foundations/00-5-data-splitting.html">0.5</a>):</p>
+<div>
+<div id="pyodide-3" class="exercise-cell">
+
+</div>
+<script type="pyodide-3-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNrbGVhcm4ubW9kZWxfc2VsZWN0aW9uIGltcG9ydCBLRm9sZCwgU3RyYXRpZmllZEtGb2xkLCBjcm9zc192YWxfc2NvcmVcbmZyb20gc2tsZWFybi5saW5lYXJfbW9kZWwgaW1wb3J0IExvZ2lzdGljUmVncmVzc2lvblxuXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoMSlcbnkgPSBucC5yX1tucC5vbmVzKDMwKSwgbnAuemVyb3MoMjcwKV0uYXN0eXBlKGludClcblggPSBybmcubm9ybWFsKDAsIDEsICgzMDAsIDIpKVxuXG5wbGFpbiA9IEtGb2xkKDUsIHNodWZmbGU9VHJ1ZSwgcmFuZG9tX3N0YXRlPTIpXG5zdHJhdCA9IFN0cmF0aWZpZWRLRm9sZCg1LCBzaHVmZmxlPVRydWUsIHJhbmRvbV9zdGF0ZT0yKVxuZm9yIG5hbWUsIHNwbGl0dGVyIGluIFsoXCJwbGFpbiBLRm9sZFwiLCBwbGFpbiksIChcIlN0cmF0aWZpZWRLRm9sZFwiLCBzdHJhdCldOlxuICAgIGZyYWMgPSBbeVt2YV0ubWVhbigpIGZvciBfLCB2YSBpbiBzcGxpdHRlci5zcGxpdChYLCB5KV1cbiAgICBwcmludChmXCJ7bmFtZX06IGZvbGQgcG9zaXRpdmUgcmF0ZXMgPSB7bnAucm91bmQoZnJhYywgMyl9XCIpIn0=
+</script>
+</div>
+<p><strong>LOOCV</strong> — the K = n extreme: every point validated once, training on n−1. Nearly no bias from undertraining, but expensive and with correlated folds:</p>
+<div>
+<div id="pyodide-4" class="exercise-cell">
+
+</div>
+<script type="pyodide-4-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNrbGVhcm4ubW9kZWxfc2VsZWN0aW9uIGltcG9ydCBjcm9zc192YWxfc2NvcmUsIExlYXZlT25lT3V0LCBLRm9sZFxuZnJvbSBza2xlYXJuLmxpbmVhcl9tb2RlbCBpbXBvcnQgTGluZWFyUmVncmVzc2lvblxuXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoMilcbnggPSBybmcudW5pZm9ybSgwLCAxLCAoNjAsIDEpKVxueSA9IG5wLnNpbigyICogbnAucGkgKiB4KS5yYXZlbCgpICsgcm5nLm5vcm1hbCgwLCAwLjMsIDYwKVxuZGVmIGZlYXR1cmVzKFgpOlxuICAgIHJldHVybiBucC5jX1tYLCBYKioyLCBYKiozXVxuXG5sb28gPSAtY3Jvc3NfdmFsX3Njb3JlKExpbmVhclJlZ3Jlc3Npb24oKSwgZmVhdHVyZXMoeCksIHksXG4gICAgICAgICAgICAgICAgICAgICAgIGN2PUxlYXZlT25lT3V0KCksIHNjb3Jpbmc9XCJuZWdfbWVhbl9zcXVhcmVkX2Vycm9yXCIpXG5rNSA9IC1jcm9zc192YWxfc2NvcmUoTGluZWFyUmVncmVzc2lvbigpLCBmZWF0dXJlcyh4KSwgeSxcbiAgICAgICAgICAgICAgICAgICAgICBjdj1LRm9sZCg1LCBzaHVmZmxlPVRydWUsIHJhbmRvbV9zdGF0ZT0zKSxcbiAgICAgICAgICAgICAgICAgICAgICBzY29yaW5nPVwibmVnX21lYW5fc3F1YXJlZF9lcnJvclwiKVxucHJpbnQoZlwiTE9PQ1YgTVNFID0ge2xvby5tZWFuKCk6LjRmfSAgIDUtZm9sZCBDViBNU0UgPSB7azUubWVhbigpOi40Zn1cIikifQ==
+</script>
+</div>
+</section>
+<section id="concept-questions" class="level2">
+<h2 class="anchored" data-anchor-id="concept-questions">2. Concept Questions</h2>
+<ol type="1">
+<li>What exactly does “5-fold CV estimate = 0.31 ± 0.04” estimate, and which model (trained on what fraction of data) does the ± describe?</li>
+<li>Why is K-fold CV <em>not</em> K times more precise than a single validation split, despite using K folds?</li>
+<li>LOOCV is nearly unbiased for the error of models trained on n−1 points. Name its two practical costs.</li>
+<li>You’re comparing two models with fold-wise CV errors. Why must the fold splits be <em>identical</em> across models, and what test formalizes the comparison?</li>
+<li>Repeated CV (e.g., 10× 5-fold) — what does repetition add, and what doesn’t it fix?</li>
+</ol>
+<details>
+<summary>
+Answers
+</summary>
+<ol type="1">
+<li>It estimates the expected test error of the <em>procedure</em> “fit this model type to 4/5 of data” — i.e., of models trained on 80% of the data. The final deployed model (trained on 100%) will typically be slightly <em>better</em>; the estimate carries that small pessimism (<a href="../part-04-validation-model-selection/04-2-validation-set.html">4.2</a>).</li>
+<li>The K fold errors share training data (any two training sets overlap in K−2 folds) and evaluate on the same finite dataset — the fold errors are strongly <em>positively correlated</em>, so their mean’s variance doesn’t shrink like independent estimates would (no 1/K). Repetition with fresh shuffles reduces, but never eliminates, this.</li>
+<li>Compute (n fits, each on n−1 rows — infeasible for expensive models) and high fold-correlation: the LOOCV mean has low bias but its variance isn’t correspondingly tiny, so per-fold SEs are misleading. Also no stratification granularity at K = n for classification (some folds have 1 positive).</li>
+<li>Fold difficulty (which easy/hard rows land together) shifts all models’ scores on a given split — pairing cancels it. With identical folds, compare fold-wise differences with a paired t-test (<a href="../part-03-classification-glm/03-7-model-comparison.html">3.7</a>); with different random splits, you’re comparing two noisy marginals.</li>
+<li>Repetition with different shuffles averages out <em>partition luck</em>, tightening the estimate (the SD across repeats estimates the partition-noise). It does NOT fix: selection inflation (picking the winner among many models by CV), leakage, or distribution shift — those are pipeline diseases, not partition noise.</li>
+</ol>
+</details>
+</section>
+<section id="drills-exercises" class="level2">
+<h2 class="anchored" data-anchor-id="drills-exercises">3. Drills &amp; Exercises</h2>
+<section id="drills" class="level3">
+<h3 class="anchored" data-anchor-id="drills">Drills</h3>
+<p>Predict, then run.</p>
+<div>
+<div id="pyodide-5" class="exercise-cell">
+
+</div>
+<script type="pyodide-5-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNrbGVhcm4ubW9kZWxfc2VsZWN0aW9uIGltcG9ydCBLRm9sZFxuWCA9IG5wLmFyYW5nZSgxMilcbmZvciBLIGluIFsyLCAzLCA0LCA2XTpcbiAgICBzaXplcyA9IFtsZW4odmEpIGZvciBfLCB2YSBpbiBLRm9sZChLLCBzaHVmZmxlPUZhbHNlKS5zcGxpdChYKV1cbiAgICBwcmludChmXCJLPXtLfTogZm9sZCBzaXplcyB7c2l6ZXN9XCIpIn0=
+</script>
+</div>
+<div>
+<div id="pyodide-6" class="exercise-cell">
+
+</div>
+<script type="pyodide-6-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNrbGVhcm4ubW9kZWxfc2VsZWN0aW9uIGltcG9ydCBHcm91cEtGb2xkXG4jIGdyb3VwZWQgcm93czogMyBwYXRpZW50cyDDlyA0IHZpc2l0c1xuWCA9IG5wLmFyYW5nZSgxMikucmVzaGFwZSgtMSwgMSlcbmdyb3VwcyA9IG5wLnJlcGVhdChbMSwgMiwgM10sIDQpXG5mb3IgdHIsIHZhIGluIEdyb3VwS0ZvbGQoMykuc3BsaXQoWCwgZ3JvdXBzPWdyb3Vwcyk6XG4gICAgcHJpbnQoXCJ2YWxpZCBwYXRpZW50czpcIiwgc29ydGVkKHNldChncm91cHNbdmFdKSkpXG5wcmludChcImEgcGF0aWVudCBuZXZlciBhcHBlYXJzIGluIGJvdGggdHJhaW4gYW5kIHZhbGlkYXRpb25cIikifQ==
+</script>
+</div>
+<div>
+<div id="pyodide-7" class="exercise-cell">
+
+</div>
+<script type="pyodide-7-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNrbGVhcm4ubW9kZWxfc2VsZWN0aW9uIGltcG9ydCBUaW1lU2VyaWVzU3BsaXRcblggPSBucC5hcmFuZ2UoMTApLnJlc2hhcGUoLTEsIDEpXG5mb3IgaSwgKHRyLCB2YSkgaW4gZW51bWVyYXRlKFRpbWVTZXJpZXNTcGxpdCg0KS5zcGxpdChYKSk6XG4gICAgcHJpbnQoZlwic3BsaXQge2l9OiB0cmFpbiA9IHt0clstMzpdfSwgdmFsaWQgPSB7dmF9XCIpXG5wcmludChcInRyYWluaW5nIGFsd2F5cyBwcmVjZWRlcyB2YWxpZGF0aW9uIOKAlCBubyBmdXR1cmUgbGVha2FnZVwiKSJ9
+</script>
+</div>
+<div>
+<div id="pyodide-8" class="exercise-cell">
+
+</div>
+<script type="pyodide-8-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNrbGVhcm4ubW9kZWxfc2VsZWN0aW9uIGltcG9ydCBjcm9zc192YWxfc2NvcmUsIEtGb2xkXG5mcm9tIHNrbGVhcm4ubGluZWFyX21vZGVsIGltcG9ydCBMaW5lYXJSZWdyZXNzaW9uXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoMylcbnggPSBybmcudW5pZm9ybSgwLCAxLCAoMTAwLCAxKSlcbnkgPSBucC5zaW4oMipucC5waSp4KS5yYXZlbCgpICsgcm5nLm5vcm1hbCgwLCAwLjMsIDEwMClcbmRlZiBmKFgpOiByZXR1cm4gbnAuY19bWCwgWCoqMiwgWCoqM11cbmZvciBLIGluIFszLCA1LCAxMF06XG4gICAgcyA9IC1jcm9zc192YWxfc2NvcmUoTGluZWFyUmVncmVzc2lvbigpLCBmKHgpLCB5LFxuICAgICAgICAgICAgICAgICAgICAgICAgIGN2PUtGb2xkKEssIHNodWZmbGU9VHJ1ZSwgcmFuZG9tX3N0YXRlPTApLFxuICAgICAgICAgICAgICAgICAgICAgICAgIHNjb3Jpbmc9XCJuZWdfbWVhbl9zcXVhcmVkX2Vycm9yXCIpXG4gICAgcHJpbnQoZlwiSz17Szo+Mn06IENWIE1TRSB7cy5tZWFuKCk6LjRmfSDCsSB7cy5zdGQoKTouNGZ9XCIpIn0=
+</script>
+</div>
+</section>
+<section id="exercises-with-solutions" class="level3">
+<h3 class="anchored" data-anchor-id="exercises-with-solutions">Exercises (with solutions)</h3>
+<p><strong>Exercise 1.</strong> Variance anatomy: estimate the true test error of a degree-3 model (fit on 80% of n = 120) via (a) one 5-fold CV, (b) 20 repeats of 5-fold CV, (c) 200 independent 80/20 splits. For each, report the estimate and an empirical SD across 300 repetitions of the whole scheme. Which scheme’s repetition-SD is smallest, and what does the comparison say about what CV does and doesn’t recycle?</p>
+<details>
+<summary>
+Solution
+</summary>
+<div>
+<div id="pyodide-9" class="exercise-cell">
+
+</div>
+<script type="pyodide-9-contents">
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuZnJvbSBza2xlYXJuLm1vZGVsX3NlbGVjdGlvbiBpbXBvcnQgY3Jvc3NfdmFsX3Njb3JlLCBLRm9sZCwgdHJhaW5fdGVzdF9zcGxpdFxuZnJvbSBza2xlYXJuLmxpbmVhcl9tb2RlbCBpbXBvcnQgTGluZWFyUmVncmVzc2lvblxuXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoNClcbnggPSBybmcudW5pZm9ybSgwLCAxLCAoMTIwLCAxKSlcbnkgPSBucC5zaW4oMiAqIG5wLnBpICogeCkucmF2ZWwoKSArIHJuZy5ub3JtYWwoMCwgMC4zLCAxMjApXG5kZWYgZihYKTogcmV0dXJuIG5wLmNfW1gsIFgqKjIsIFgqKjNdXG5cbmRlZiBzY2hlbWVfYSgpOlxuICAgIHJldHVybiAtY3Jvc3NfdmFsX3Njb3JlKExpbmVhclJlZ3Jlc3Npb24oKSwgZih4KSwgeSxcbiAgICAgICAgICAgICAgICAgICAgICAgICAgICBjdj1LRm9sZCg1LCBzaHVmZmxlPVRydWUsIHJhbmRvbV9zdGF0ZT0xKSxcbiAgICAgICAgICAgICAgICAgICAgICAgICAgICBzY29yaW5nPVwibmVnX21lYW5fc3F1YXJlZF9lcnJvclwiKS5tZWFuKClcblxuZGVmIHNjaGVtZV9iKCk6XG4gICAgcmV0dXJuIG5wLm1lYW4oWy1jcm9zc192YWxfc2NvcmUoTGluZWFyUmVncmVzc2lvbigpLCBmKHgpLCB5LFxuICAgICAgICAgICAgICAgICAgICAgY3Y9S0ZvbGQoNSwgc2h1ZmZsZT1UcnVlLCByYW5kb21fc3RhdGU9cyksXG4gICAgICAgICAgICAgICAgICAgICBzY29yaW5nPVwibmVnX21lYW5fc3F1YXJlZF9lcnJvclwiKS5tZWFuKCkgZm9yIHMgaW4gcmFuZ2UoMjApXSlcblxuZGVmIHNjaGVtZV9jKCk6XG4gICAgdmFscyA9IFtdXG4gICAgZm9yIHMgaW4gcmFuZ2UoMSk6XG4gICAgICAgIFhfdHIsIFhfdmEsIHlfdHIsIHlfdmEgPSB0cmFpbl90ZXN0X3NwbGl0KHgsIHksIHRlc3Rfc2l6ZT0wLjIsIHJhbmRvbV9zdGF0ZT1zKVxuICAgICAgICBtID0gTGluZWFyUmVncmVzc2lvbigpLmZpdChmKFhfdHIpLCB5X3RyKVxuICAgICAgICB2YWxzLmFwcGVuZChucC5tZWFuKCh5X3ZhIC0gbS5wcmVkaWN0KGYoWF92YSkpKSoqMikpXG4gICAgcmV0dXJuIHZhbHNbMF1cblxuZm9yIG5hbWUsIHNjaGVtZSwgcmVwcyBpbiBbKFwib25lIDUtZm9sZFwiLCBzY2hlbWVfYSwgMzAwKSxcbiAgICAgICAgICAgICAgICAgICAgICAgICAgIChcIjIweCA1LWZvbGRcIiwgc2NoZW1lX2IsIDMwMCksXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAoXCJzaW5nbGUgODAvMjBcIiwgc2NoZW1lX2MsIDMwMCldOlxuICAgIGVzdHMgPSBbc2NoZW1lKCkgZm9yIF8gaW4gcmFuZ2UocmVwcyldXG4gICAgcHJpbnQoZlwie25hbWU6MTJzfSBtZWFuID0ge25wLm1lYW4oZXN0cyk6LjRmfSAgYWNyb3NzLXJlcGV0aXRpb24gU0QgPSB7bnAuc3RkKGVzdHMpOi41Zn1cIikifQ==
+</script>
+</div>
+All three estimate nearly the same thing and their means agree; the SD ranking (single split worst, one 5-fold in the middle, 20× repeats best) quantifies the partition-noise that CV partially — but not fully — recycles. Diminishing returns set in: 20 repeats ≈ 100 fits for a modest tightening, because folds within a repeat are correlated.
+</details>
+<p><strong>Exercise 2.</strong> Model selection by CV, done right and wrong: among degrees 1–12 on sinusoidal data (n = 100), (a) select the degree minimizing 5-fold CV MSE; (b) report that minimum as the performance; (c) also compute the <em>true</em> error of the CV-selected degree (big fresh test). Repeat over 200 datasets: compare the distribution of (b) against (c), and against the true error of the <em>fixed</em> degree-3 model. Quantify the optimism of (b) and the quality of CV as a <em>selector</em>.</p>
+<details>
+<summary>
+Solution
+</summary>
+<div>
+<div id="pyodide-10" class="exercise-cell">
+
+</div>
+<script type="pyodide-10-contents">
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuZnJvbSBza2xlYXJuLm1vZGVsX3NlbGVjdGlvbiBpbXBvcnQgY3Jvc3NfdmFsX3Njb3JlLCBLRm9sZFxuZnJvbSBza2xlYXJuLmxpbmVhcl9tb2RlbCBpbXBvcnQgTGluZWFyUmVncmVzc2lvblxuXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoNSlcbmRlZiBmKFgsIGQpOlxuICAgIHJldHVybiBucC5jX1tbWCoqaiBmb3IgaiBpbiByYW5nZSgxLCBkICsgMSldXS5UXG5cbnNlbF9yZXBvcnRlZCwgc2VsX3RydWUsIGZpeGVkX3RydWUgPSBbXSwgW10sIFtdXG5mb3IgZHMgaW4gcmFuZ2UoMjAwKTpcbiAgICByID0gbnAucmFuZG9tLmRlZmF1bHRfcm5nKDEwMDAgKyBkcylcbiAgICB4ID0gci51bmlmb3JtKDAsIDEsIDEwMClcbiAgICB5ID0gbnAuc2luKDIgKiBucC5waSAqIHgpICsgci5ub3JtYWwoMCwgMC4zLCAxMDApXG4gICAgY3Zfc2NvcmVzID0gW11cbiAgICBmb3IgZCBpbiByYW5nZSgxLCAxMyk6XG4gICAgICAgIHMgPSAtY3Jvc3NfdmFsX3Njb3JlKExpbmVhclJlZ3Jlc3Npb24oKSwgZih4LCBkKSwgeSxcbiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgY3Y9S0ZvbGQoNSwgc2h1ZmZsZT1UcnVlLCByYW5kb21fc3RhdGU9ZHMpLFxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICBzY29yaW5nPVwibmVnX21lYW5fc3F1YXJlZF9lcnJvclwiKS5tZWFuKClcbiAgICAgICAgY3Zfc2NvcmVzLmFwcGVuZChzKVxuICAgIGJlc3RfZCA9IGludChucC5hcmdtaW4oY3Zfc2NvcmVzKSkgKyAxXG4gICAgc2VsX3JlcG9ydGVkLmFwcGVuZChtaW4oY3Zfc2NvcmVzKSlcblxuICAgIHh0ZSA9IHIudW5pZm9ybSgwLCAxLCAyMDAwMClcbiAgICB5dGUgPSBucC5zaW4oMiAqIG5wLnBpICogeHRlKSArIHIubm9ybWFsKDAsIDAuMywgMjAwMDApXG4gICAgbSA9IExpbmVhclJlZ3Jlc3Npb24oKS5maXQoZih4LCBiZXN0X2QpLCB5KVxuICAgIHNlbF90cnVlLmFwcGVuZChucC5tZWFuKCh5dGUgLSBtLnByZWRpY3QoZih4dGUsIGJlc3RfZCkpKSoqMikpXG4gICAgbTMgPSBMaW5lYXJSZWdyZXNzaW9uKCkuZml0KGYoeCwgMyksIHkpXG4gICAgZml4ZWRfdHJ1ZS5hcHBlbmQobnAubWVhbigoeXRlIC0gbTMucHJlZGljdChmKHh0ZSwgMykpKSoqMikpXG5cbnByaW50KGZcIihiKSByZXBvcnRlZCBtaW4tQ1Ygc2NvcmU6ICAgICAge25wLm1lYW4oc2VsX3JlcG9ydGVkKTouNGZ9XCIpXG5wcmludChmXCIoYykgdHJ1ZSBlcnJvciBvZiBDViBzZWxlY3Rpb246IHtucC5tZWFuKHNlbF90cnVlKTouNGZ9XCIpXG5wcmludChmXCIgICAgdHJ1ZSBlcnJvciBvZiBmaXhlZCBkZWctMzogIHtucC5tZWFuKGZpeGVkX3RydWUpOi40Zn1cIilcbnByaW50KGZcInNlbGVjdGlvbiBvcHRpbWlzbSAoYiktKGMpID0ge25wLm1lYW4oc2VsX3JlcG9ydGVkKS1ucC5tZWFuKHNlbF90cnVlKTorLjRmfVwiKSJ9
+</script>
+</div>
+The reported minimum sits <em>below</em> the selected model’s true error — that gap is selection optimism, paid for searching 12 candidates. Meanwhile CV-as-selector works well: the selected degrees’ true errors beat (or nearly match) fixed degree-3, because CV’s noise per candidate is small enough that the true winner usually scores near the top. Two hats, one tool: a good <em>selector</em>, an optimistic <em>reporter</em> — never let it wear both hats at once (<a href="../part-04-validation-model-selection/04-6-hyperparameter-tuning.html">4.6</a> formalizes the fix).
+</details>
+<p><strong>Exercise 3.</strong> Grouped biological data done properly: 40 patients × 5 visits (200 rows); the signal is at the patient level. Compare three evaluation schemes for a logistic model: (a) row-level StratifiedKFold(5) — patients split across folds; (b) GroupKFold(5) by patient; (c) GroupKFold with LOO-patients (40 folds). Report each scheme’s mean CV AUC and across-fold SD, then evaluate the <em>winning-by-(a)</em> model’s performance on truly unseen patients. Which scheme’s number would you put in a paper claiming “generalizes to new patients”?</p>
+<details>
+<summary>
+Solution
+</summary>
+<div>
+<div id="pyodide-11" class="exercise-cell">
+
+</div>
+<script type="pyodide-11-contents">
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuZnJvbSBza2xlYXJuLm1vZGVsX3NlbGVjdGlvbiBpbXBvcnQgU3RyYXRpZmllZEtGb2xkLCBHcm91cEtGb2xkLCBjcm9zc192YWxfc2NvcmVcbmZyb20gc2tsZWFybi5saW5lYXJfbW9kZWwgaW1wb3J0IExvZ2lzdGljUmVncmVzc2lvblxuZnJvbSBza2xlYXJuLm1ldHJpY3MgaW1wb3J0IHJvY19hdWNfc2NvcmVcblxucm5nID0gbnAucmFuZG9tLmRlZmF1bHRfcm5nKDYpXG5uX3BhdCwgbl92aXMgPSA0MCwgNVxucGF0X2VmZmVjdCA9IHJuZy5ub3JtYWwoMCwgMS41LCBuX3BhdClcbnJvd3MgPSBbXVxuZm9yIHAgaW4gcmFuZ2Uobl9wYXQpOlxuICAgIGZvciB2IGluIHJhbmdlKG5fdmlzKTpcbiAgICAgICAgeDEgPSAwLjggKiBwYXRfZWZmZWN0W3BdICsgcm5nLm5vcm1hbCgwLCAxKVxuICAgICAgICB4MiA9IHJuZy5ub3JtYWwoMCwgMSlcbiAgICAgICAgeSA9IDAgICMgYXNzaWduZWQgYmVsb3cgdmlhIHByb2JhYmlsaXR5IHVzaW5nIHBhdF9lZmZlY3RcbiAgICAgICAgcHJvYiA9IDEgLyAoMSArIG5wLmV4cCgtKDEuNSAqIHBhdF9lZmZlY3RbcF0gKyAwLjUgKiB4MikpKVxuICAgICAgICB5ID0gaW50KHJuZy51bmlmb3JtKCkgPCBwcm9iKVxuICAgICAgICByb3dzLmFwcGVuZCgocCwgeDEsIHgyLCB5KSlcbmFyciA9IG5wLmFycmF5KHJvd3MpXG5ncm91cHMsIFgsIHkgPSBhcnJbOiwgMF0uYXN0eXBlKGludCksIGFycls6LCAxOjNdLCBhcnJbOiwgM10uYXN0eXBlKGludClcblxuZm9yIG5hbWUsIHNwbGl0dGVyLCBrdyBpbiBbXG4gICAgKFwiKGEpIHJvdy1zdHJhdGlmaWVkXCIsIFN0cmF0aWZpZWRLRm9sZCg1LCBzaHVmZmxlPVRydWUsIHJhbmRvbV9zdGF0ZT0wKSwge30pLFxuICAgIChcIihiKSBHcm91cEtGb2xkKDUpXCIsIE5vbmUsIGRpY3QoZ3JvdXBzPWdyb3VwcykpLFxuXTpcbiAgICBpZiBuYW1lLnN0YXJ0c3dpdGgoXCIoYSlcIik6XG4gICAgICAgIHNjb3JlcyA9IGNyb3NzX3ZhbF9zY29yZShMb2dpc3RpY1JlZ3Jlc3Npb24obWF4X2l0ZXI9NDAwMCksIFgsIHksXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBjdj1zcGxpdHRlciwgc2NvcmluZz1cInJvY19hdWNcIilcbiAgICBlbHNlOlxuICAgICAgICBna2YgPSBHcm91cEtGb2xkKDUpXG4gICAgICAgIHNjb3JlcyA9IGNyb3NzX3ZhbF9zY29yZShMb2dpc3RpY1JlZ3Jlc3Npb24obWF4X2l0ZXI9NDAwMCksIFgsIHksXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBjdj1na2Yuc3BsaXQoWCwgeSwgZ3JvdXBzPWdyb3VwcyksIHNjb3Jpbmc9XCJyb2NfYXVjXCIpXG4gICAgcHJpbnQoZlwie25hbWV9OiBBVUMge3Njb3Jlcy5tZWFuKCk6LjNmfSDCsSB7c2NvcmVzLnN0ZCgpOi4zZn1cIilcblxuIyAoYykgbGVhdmUtb25lLXBhdGllbnQtb3V0XG5mcm9tIHNrbGVhcm4ubW9kZWxfc2VsZWN0aW9uIGltcG9ydCBMZWF2ZU9uZUdyb3VwT3V0XG5sb2dvID0gTGVhdmVPbmVHcm91cE91dCgpXG5zY29yZXMgPSBjcm9zc192YWxfc2NvcmUoTG9naXN0aWNSZWdyZXNzaW9uKG1heF9pdGVyPTQwMDApLCBYLCB5LFxuICAgICAgICAgICAgICAgICAgICAgICAgIGN2PWxvZ28uc3BsaXQoWCwgeSwgZ3JvdXBzPWdyb3VwcyksIHNjb3Jpbmc9XCJyb2NfYXVjXCIpXG5wcmludChmXCIoYykgTE9QTyBwYXRpZW50czogICBBVUMge3Njb3Jlcy5tZWFuKCk6LjNmfSDCsSB7c2NvcmVzLnN0ZCgpOi4zZn1cIikifQ==
+</script>
+</div>
+Scheme (a) lets each patient’s rows appear in both train and validation — the model memorizes patient-level drift and reports inflated AUC (“generalizes” only to <em>new visits of known patients</em>). Schemes (b)/(c) answer the new-patient question and their numbers are visibly lower and more honest. The evaluation unit must match the deployment claim: row-level questions (rare in medicine) vs patient-level questions (the usual).
+</details>
+</section>
+</section>
+<section id="advanced-information-pitfalls" class="level2">
+<h2 class="anchored" data-anchor-id="advanced-information-pitfalls">4. Advanced Information &amp; Pitfalls</h2>
+<ul>
+<li><strong>K choice folklore</strong>: K = 5 or 10 balance bias (training fraction 1−1/K) against compute and fold-correlation. K = 2 gives the most independent folds; LOOCV the least (and is noisier per-unit-cost for unstable learners).</li>
+<li><strong>Preprocessing belongs inside the folds</strong> — <code>Pipeline</code> + <code>cross_val_score</code> is the mechanical guarantee (<a href="../part-00-python-foundations/00-5-data-splitting.html">0.5</a>); a scaler fit before <code>cross_val_score</code> silently invalidates the whole table.</li>
+<li><strong>Fold-level SEs understate uncertainty</strong> (correlated folds); for error bars on the CV mean, use repeated CV across random partitions or bootstrap over rows — not sd(fold scores)/√K alone.</li>
+<li><strong>CV estimates procedures, not fitted models</strong> — after CV, refit on all data for deployment; the CV number is the performance <em>claim</em>, the full-data fit is the <em>artifact</em> (<a href="../part-04-validation-model-selection/04-2-validation-set.html">4.2</a> post-selection note).</li>
+<li><strong>Group/cluster leakage</strong> is the silent killer of biomarker papers: same patient, same batch, same unit across folds (<a href="../part-00-python-foundations/00-5-data-splitting.html">0.5</a> bug #3, <a href="#">Exercise 3</a>).</li>
+<li><strong>Time series</strong>: shuffle-free <code>TimeSeriesSplit</code> or rolling-origin schemes; random K-fold CV on temporal data answers a question nobody deploys against.</li>
+<li><strong>Feature selection inside CV only</strong>: screening features on the full dataset before CV is leakage — the fold must not know which features exist until it trains (<a href="../part-02-linear-regression/02-8-nonlinear-transformations.html">2.8 Exercise 3</a>).</li>
+</ul>
+<section id="read-refactor-ai-code" class="level3">
+<h3 class="anchored" data-anchor-id="read-refactor-ai-code">Read &amp; Refactor AI Code</h3>
+<p>This AI-generated evaluation has <strong>three bugs</strong>. Run, diagnose, fix.</p>
+<div>
+<div id="pyodide-12" class="exercise-cell">
+
+</div>
+<script type="pyodide-12-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNrbGVhcm4uZGF0YXNldHMgaW1wb3J0IG1ha2VfY2xhc3NpZmljYXRpb25cbmZyb20gc2tsZWFybi5tb2RlbF9zZWxlY3Rpb24gaW1wb3J0IGNyb3NzX3ZhbF9zY29yZSwgS0ZvbGRcbmZyb20gc2tsZWFybi5wcmVwcm9jZXNzaW5nIGltcG9ydCBTdGFuZGFyZFNjYWxlclxuZnJvbSBza2xlYXJuLmxpbmVhcl9tb2RlbCBpbXBvcnQgTG9naXN0aWNSZWdyZXNzaW9uXG5cblgsIHkgPSBtYWtlX2NsYXNzaWZpY2F0aW9uKG5fc2FtcGxlcz01MDAsIG5fZmVhdHVyZXM9MTAsIHJhbmRvbV9zdGF0ZT03KVxuXG4jIEJVRyAxOiBzY2FsZSBvbiBBTEwgZGF0YSBiZWZvcmUgQ1ZcblhzID0gU3RhbmRhcmRTY2FsZXIoKS5maXRfdHJhbnNmb3JtKFgpXG5rZiA9IEtGb2xkKDUsIHNodWZmbGU9VHJ1ZSwgcmFuZG9tX3N0YXRlPTApXG5zY29yZXMgPSBjcm9zc192YWxfc2NvcmUoTG9naXN0aWNSZWdyZXNzaW9uKG1heF9pdGVyPTQwMDApLCBYcywgeSwgY3Y9a2YpXG5wcmludChcIkNWIGFjYzpcIiwgc2NvcmVzLm1lYW4oKS5yb3VuZCg0KSlcblxuIyBCVUcgMjogdW5zaHVmZmxlZCBLRm9sZCBvbiBzb3J0ZWQtYnktY2xhc3MgZGF0YVxuWF9zb3J0ZWQgPSBYW25wLmFyZ3NvcnQoeSldXG55X3NvcnRlZCA9IHlbbnAuYXJnc29ydCh5KV1cbnNjb3JlczIgPSBjcm9zc192YWxfc2NvcmUoTG9naXN0aWNSZWdyZXNzaW9uKG1heF9pdGVyPTQwMDApLCBYX3NvcnRlZCwgeV9zb3J0ZWQsXG4gICAgICAgICAgICAgICAgICAgICAgICAgIGN2PUtGb2xkKDUsIHNodWZmbGU9RmFsc2UpKVxucHJpbnQoXCJ1bnNodWZmbGVkIENWIGFjYzpcIiwgc2NvcmVzMi5tZWFuKCkucm91bmQoNCksIFwicGVyLWZvbGQ6XCIsIHNjb3JlczIucm91bmQoMykpXG5cbiMgQlVHIDM6IHNlbGVjdCBmZWF0dXJlcyBvbiBmdWxsIGRhdGEsIHRoZW4gQ1YgdGhlIHN1cnZpdm9yc1xuY29yciA9IG5wLmFicyhbbnAuY29ycmNvZWYoWFs6LCBqXSwgeSlbMCwgMV0gZm9yIGogaW4gcmFuZ2UoMTApXSlcbnRvcCA9IG5wLmFyZ3NvcnQoLWNvcnIpWzo1XVxuc2NvcmVzMyA9IGNyb3NzX3ZhbF9zY29yZShMb2dpc3RpY1JlZ3Jlc3Npb24obWF4X2l0ZXI9NDAwMCksIFhzWzosIHRvcF0sIHksIGN2PWtmKVxucHJpbnQoXCJDViBhZnRlciBmdWxsLWRhdGEgZmVhdHVyZSBzZWxlY3Rpb246XCIsIHNjb3JlczMubWVhbigpLnJvdW5kKDQpKSJ9
+</script>
+</div>
+<details>
+<summary>
+What’s wrong, and the fix
+</summary>
+<ol type="1">
+<li><strong>Pre-CV scaling</strong>: every fold’s training statistics include validation rows. Pipeline inside CV.</li>
+<li><strong>Unshuffled folds on sorted data</strong>: some folds see one class only; several folds can’t even fit. Shuffle (or stratify).</li>
+<li><strong>Feature selection outside CV</strong>: the folds’ validation rows voted on which features matter — leakage. Selection must live inside the fold pipeline.</li>
+</ol>
+<div>
+<div id="pyodide-13" class="exercise-cell">
+
+</div>
+<script type="pyodide-13-contents">
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuZnJvbSBza2xlYXJuLmRhdGFzZXRzIGltcG9ydCBtYWtlX2NsYXNzaWZpY2F0aW9uXG5mcm9tIHNrbGVhcm4ubW9kZWxfc2VsZWN0aW9uIGltcG9ydCBjcm9zc192YWxfc2NvcmUsIFN0cmF0aWZpZWRLRm9sZFxuZnJvbSBza2xlYXJuLnByZXByb2Nlc3NpbmcgaW1wb3J0IFN0YW5kYXJkU2NhbGVyXG5mcm9tIHNrbGVhcm4ubGluZWFyX21vZGVsIGltcG9ydCBMb2dpc3RpY1JlZ3Jlc3Npb25cbmZyb20gc2tsZWFybi5waXBlbGluZSBpbXBvcnQgbWFrZV9waXBlbGluZVxuZnJvbSBza2xlYXJuLmZlYXR1cmVfc2VsZWN0aW9uIGltcG9ydCBTZWxlY3RLQmVzdCwgZl9jbGFzc2lmXG5cblgsIHkgPSBtYWtlX2NsYXNzaWZpY2F0aW9uKG5fc2FtcGxlcz01MDAsIG5fZmVhdHVyZXM9MTAsIHJhbmRvbV9zdGF0ZT03KVxua2YgPSBTdHJhdGlmaWVkS0ZvbGQoNSwgc2h1ZmZsZT1UcnVlLCByYW5kb21fc3RhdGU9MClcblxucGlwZSA9IG1ha2VfcGlwZWxpbmUoU3RhbmRhcmRTY2FsZXIoKSwgTG9naXN0aWNSZWdyZXNzaW9uKG1heF9pdGVyPTQwMDApKVxucHJpbnQoXCJob25lc3QgQ1YgYWNjOlwiLCBjcm9zc192YWxfc2NvcmUocGlwZSwgWCwgeSwgY3Y9a2YpLm1lYW4oKS5yb3VuZCg0KSlcblxucGlwZV9mcyA9IG1ha2VfcGlwZWxpbmUoU3RhbmRhcmRTY2FsZXIoKSxcbiAgICAgICAgICAgICAgICAgICAgICAgIFNlbGVjdEtCZXN0KGZfY2xhc3NpZiwgaz01KSxcbiAgICAgICAgICAgICAgICAgICAgICAgIExvZ2lzdGljUmVncmVzc2lvbihtYXhfaXRlcj00MDAwKSlcbnByaW50KFwic2VsZWN0aW9uIElOU0lERSB0aGUgcGlwZWxpbmUsIENWIGFjYzpcIixcbiAgICAgIGNyb3NzX3ZhbF9zY29yZShwaXBlX2ZzLCBYLCB5LCBjdj1rZikubWVhbigpLnJvdW5kKDQpKSJ9
+</script>
+</div>
+</details>
+</section>
+</section>
+<section id="advanced-questions" class="level2">
+<h2 class="anchored" data-anchor-id="advanced-questions">5. Advanced Questions</h2>
+<p><strong>Q1.</strong> Estimate the fold-correlation of 5-fold CV errors empirically: generate 400 datasets; for each, compute the 5 fold MSEs of a fixed model; extract the average pairwise correlation of fold errors. Use the observed ρ to explain why the SE of the CV mean is √((1 + 4ρ)/5)·SD(fold)/√5-ish rather than SD(fold)/√5, and compute the inflation factor at your measured ρ.</p>
+<details>
+<summary>
+Hint
+</summary>
+For the mean of K equicorrelated estimates, Var(mean) = (σ²/K)(1 + (K−1)ρ).
+</details>
+<details>
+<summary>
+Solution
+</summary>
+<p>Measure the correlation across datasets: standardize each dataset’s fold errors, pool, and correlate fold positions.</p>
+<div>
+<div id="pyodide-14" class="exercise-cell">
+
+</div>
+<script type="pyodide-14-contents">
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuZnJvbSBza2xlYXJuLm1vZGVsX3NlbGVjdGlvbiBpbXBvcnQgS0ZvbGRcbmZyb20gc2tsZWFybi5saW5lYXJfbW9kZWwgaW1wb3J0IExpbmVhclJlZ3Jlc3Npb25cblxucm5nID0gbnAucmFuZG9tLmRlZmF1bHRfcm5nKDgpXG56ID0gW11cbmZvciByZXAgaW4gcmFuZ2UoNDAwKTpcbiAgICB4ID0gcm5nLnVuaWZvcm0oMCwgMSwgMTAwKVxuICAgIHkgPSBucC5zaW4oMipucC5waSp4KSArIHJuZy5ub3JtYWwoMCwgMC4zLCAxMDApXG4gICAgRiA9IG5wLmNfW3gsIHgqKjIsIHgqKjNdXG4gICAgZXJycyA9IFtdXG4gICAgZm9yIHRyLCB2YSBpbiBLRm9sZCg1LCBzaHVmZmxlPVRydWUsIHJhbmRvbV9zdGF0ZT1yZXApLnNwbGl0KHgpOlxuICAgICAgICBtID0gTGluZWFyUmVncmVzc2lvbigpLmZpdChGW3RyXSwgeVt0cl0pXG4gICAgICAgIGVycnMuYXBwZW5kKG5wLm1lYW4oKHlbdmFdIC0gbS5wcmVkaWN0KEZbdmFdKSkqKjIpKVxuICAgIGUgPSBucC5hcnJheShlcnJzKVxuICAgIHouYXBwZW5kKChlIC0gZS5tZWFuKCkpIC8gZS5zdGQoKSlcblogPSBucC5hcnJheSh6KSAgICAgICAgICAgICAgICAgICAgICAjIDQwMCB4IDUsIHN0YW5kYXJkaXplZCBwZXIgZGF0YXNldFxuQyA9IG5wLmNvcnJjb2VmKFosIHJvd3Zhcj1GYWxzZSlcbnJobyA9IENbbnAudHJpdV9pbmRpY2VzKDUsIDEpXS5tZWFuKClcbnByaW50KGZcImF2ZXJhZ2UgcGFpcndpc2UgZm9sZC1lcnJvciBjb3JyZWxhdGlvbjogcmhvIOKJiCB7cmhvOi4zZn1cIilcbnByaW50KGZcIlNFIGluZmxhdGlvbiBmYWN0b3IgdnMgbmFpdmUgc3FydChLKSBsYXc6IHtucC5zcXJ0KDEgKyA0ICogcmhvKTouMmZ9eFwiKSJ9
+</script>
+</div>
+Typical ρ lands well above 0 — folds share rows and the same underlying fit. The naive SD/√K understates the CV mean’s uncertainty by the inflation factor; repeated-CV or bootstrap-over-rows error bars are the honest alternative (<a href="../part-04-validation-model-selection/04-2-validation-set.html">Q2 of 4.2</a> for the single-split analogue).
+</details>
+<p><strong>Q2.</strong> You have n = 80 rows, an unstable learner (KNN k = 1), and must choose between LOOCV and 5-fold repeated 10 times as your error estimator. Simulate the truth (fresh test sets) and compare both estimators’ bias and variance across 200 datasets. Confirm or refute the folklore “LOOCV has low bias but high variance for unstable learners” and state which you’d use for (a) unstable learners, (b) stable learners (linear regression).</p>
+<details>
+<summary>
+Solution
+</summary>
+<div>
+<div id="pyodide-15" class="exercise-cell">
+
+</div>
+<script type="pyodide-15-contents">
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuZnJvbSBza2xlYXJuLm1vZGVsX3NlbGVjdGlvbiBpbXBvcnQgY3Jvc3NfdmFsX3Njb3JlLCBMZWF2ZU9uZU91dCwgS0ZvbGRcbmZyb20gc2tsZWFybi5uZWlnaGJvcnMgaW1wb3J0IEtOZWlnaGJvcnNSZWdyZXNzb3JcbmZyb20gc2tsZWFybi5saW5lYXJfbW9kZWwgaW1wb3J0IExpbmVhclJlZ3Jlc3Npb25cblxucm5nID0gbnAucmFuZG9tLmRlZmF1bHRfcm5nKDkpXG5kZWYgZGF0YXNldChyLCBuPTgwKTpcbiAgICB4ID0gci51bmlmb3JtKDAsIDEsIChuLCAxKSlcbiAgICB5ID0gbnAuc2luKDIqbnAucGkqeCkucmF2ZWwoKSArIHIubm9ybWFsKDAsIDAuMiwgbilcbiAgICByZXR1cm4geCwgeVxuXG5sb29fdiwgazVfdiwgdHJ1dGhfdiA9IFtdLCBbXSwgW11cbmZvciByZXAgaW4gcmFuZ2UoMjAwKTpcbiAgICByID0gbnAucmFuZG9tLmRlZmF1bHRfcm5nKHJlcClcbiAgICB4LCB5ID0gZGF0YXNldChyKVxuICAgIHh0ZSA9IHIudW5pZm9ybSgwLCAxLCA1MDAwKVxuICAgIHl0ZSA9IG5wLnNpbigyKm5wLnBpKnh0ZSkgKyByLm5vcm1hbCgwLCAwLjIsIDUwMDApXG4gICAga25uMSA9IEtOZWlnaGJvcnNSZWdyZXNzb3IoMSkuZml0KHgsIHkpXG4gICAgdHJ1dGhfdi5hcHBlbmQobnAubWVhbigoeXRlIC0ga25uMS5wcmVkaWN0KHh0ZS5yZXNoYXBlKC0xLDEpKSkqKjIpKVxuICAgIGxvb192LmFwcGVuZCgtY3Jvc3NfdmFsX3Njb3JlKEtOZWlnaGJvcnNSZWdyZXNzb3IoMSksIHgsIHksXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgY3Y9TGVhdmVPbmVPdXQoKSxcbiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBzY29yaW5nPVwibmVnX21lYW5fc3F1YXJlZF9lcnJvclwiKS5tZWFuKCkpXG4gICAgazVfdi5hcHBlbmQobnAubWVhbihbLWNyb3NzX3ZhbF9zY29yZShLTmVpZ2hib3JzUmVncmVzc29yKDEpLCB4LCB5LFxuICAgICAgICAgICAgICAgICAgICAgICBjdj1LRm9sZCg1LCBzaHVmZmxlPVRydWUsIHJhbmRvbV9zdGF0ZT1zKSxcbiAgICAgICAgICAgICAgICAgICAgICAgc2NvcmluZz1cIm5lZ19tZWFuX3NxdWFyZWRfZXJyb3JcIikubWVhbigpIGZvciBzIGluIHJhbmdlKDEwKV0pKVxuXG5mb3IgbmFtZSwgdiBpbiBbKFwiTE9PQ1ZcIiwgbG9vX3YpLCAoXCIxMHg1LWZvbGRcIiwgazVfdildOlxuICAgIHByaW50KGZcIntuYW1lOjEwc30gYmlhcyB7bnAubWVhbih2KS1ucC5tZWFuKHRydXRoX3YpOisuNGZ9ICBTRCB7bnAuc3RkKHYpOi40Zn1cIikifQ==
+</script>
+</div>
+For the unstable k = 1 learner, LOOCV trains on n−1 ≈ n (low bias) but its per-fold predictions are maximally jumpy and folds nearly identical — high variance across datasets. Repeated 5-fold trades a hair of bias (training on 80%) for substantially lower variance — better for unstable learners, matching the folklore. For <em>stable</em> learners (linear regression), the variance difference largely evaporates and LOOCV’s minimal bias is attractive (compute permitting). The estimator must be matched to the learner’s stability — one more decision CV forces you to own.
+</details>
+</section>
+<section id="complex-questions" class="level2">
+<h2 class="anchored" data-anchor-id="complex-questions">6. Complex Questions</h2>
+<p><strong>C1 (CV × <a href="../part-03-classification-glm/03-7-model-comparison.html">3.7 comparison</a> × <a href="../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.html">12.x multiplicity</a> preview).</strong> Ten models, five-fold CV, pairwise McNemar on pooled out-of-fold predictions = 45 comparisons. Simulate null data (no signal) and count how many pairs come out “significant” at p &lt; 0.05. Apply Bonferroni (α/45) and re-count. Connect the result to why model-comparison tables in the wild overclaim — and write the protocol sentence your future papers will include.</p>
+<p><strong>C2 (CV × <a href="../part-02-linear-regression/02-4-accuracy-of-model.html">2.4 R²</a>).</strong> Out-of-sample R² from K-fold CV: implement fold-wise <span class="math inline">\(R^2 = 1 - \text{MSE}_{fold}/\text{Var}_{fold}(y)\)</span> vs pooled <span class="math inline">\(1 - \sum \text{resid}^2 / \sum (y - \bar{y}_{pooled})^2\)</span> on the same CV predictions. Show the two can differ noticeably on small folds, decide which is the defensible summary for (a) balanced folds, (b) drifting fold composition, and produce the exact sklearn-equivalent computation (<code>cross_val_predict</code> + <code>r2_score</code>) to check your arithmetic.</p>
+</section>
+<section id="summary" class="level2">
+<h2 class="anchored" data-anchor-id="summary">7. Summary</h2>
+<ul>
+<li>K-fold CV: every row validated once; report mean fold error ± honest uncertainty (fold correlation!, repeats).</li>
+<li>Stratify classification folds; group by patient/batch when deployment means new groups; never shuffle time.</li>
+<li>Preprocessing, feature selection, <em>everything data-dependent</em> lives inside the fold pipeline.</li>
+<li>CV is a fine selector and an optimistic reporter of its own minimum — separation of hats is [4.6]’s law.</li>
+<li>LOOCV: low bias, high compute, high estimator variance for unstable learners; 5/10-fold is the working default.</li>
+<li>Fold-level SEs understate; repeat partitions or bootstrap rows for error bars.</li>
+<li>The U-curve of <a href="../part-04-validation-model-selection/04-1-generalization-problem.html">4.1</a> has a decomposition — bias² + variance + σ² — that explains <em>why</em> the minimum sits where it does: <a href="../part-04-validation-model-selection/04-4-bias-variance.html">4.4 The bias–variance trade-off</a>.</li>
+</ul>
 
 
+<script type="pyodide-data">
+eyJvcHRpb25zIjp7ImVudiI6eyJQTE9UTFlfUkVOREVSRVIiOiJwbG90bHlfbWltZXR5cGUifSwiaW5kZXhVUkwiOiJodHRwczovL2Nkbi5qc2RlbGl2ci5uZXQvcHlvZGlkZS92MC4yOC4xL2Z1bGwvIn0sInBhY2thZ2VzIjp7InBrZ3MiOlsicHlvZGlkZV9odHRwIiwibWljcm9waXAiLCJpcHl0aG9uIiwibnVtcHkiLCJzY2lraXQtbGVhcm4iLCJtYXRwbG90bGliIl19fQ==
+</script>
 <script type="ojs-module-contents">
-eyJjb250ZW50cyI6W119
+eyJjb250ZW50cyI6W3siY2VsbE5hbWUiOiJweW9kaWRlLTE1IiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6Il9weW9kaWRlX3ZhbHVlXzE1ID0ge1xuICBjb25zdCB7IGhpZ2hsaWdodFB5dGhvbiwgYjY0RGVjb2RlfSA9IHdpbmRvdy5fZXhlcmNpc2Vfb2pzX3J1bnRpbWU7XG5cbiAgY29uc3Qgc2NyaXB0Q29udGVudCA9IGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3IoYHNjcmlwdFt0eXBlPVxcXCJweW9kaWRlLTE1LWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgLy8gRGVmYXVsdCBldmFsdWF0aW9uIGNvbmZpZ3VyYXRpb25cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oe1xuICAgIGlkOiBcInB5b2RpZGUtMTUtY29udGVudHNcIixcbiAgICBlY2hvOiB0cnVlLFxuICAgIG91dHB1dDogdHJ1ZVxuICB9LCBibG9jay5hdHRyKTtcblxuICAvLyBFdmFsdWF0ZSB0aGUgcHJvdmlkZWQgUHl0aG9uIGNvZGVcbiAgY29uc3QgcmVzdWx0ID0gcHlvZGlkZU9qcy5wcm9jZXNzKHtjb2RlOiBibG9jay5jb2RlLCBvcHRpb25zfSwge30pO1xuXG4gIC8vIEVhcmx5IHlpZWxkIHdoaWxlIHdlIHdhaXQgZm9yIHRoZSBmaXJzdCBldmFsdWF0aW9uIGFuZCByZW5kZXJcbiAgaWYgKG9wdGlvbnMub3V0cHV0ICYmICEoXCIxNVwiIGluIHB5b2RpZGVPanMucmVuZGVyZWRPanMpKSB7XG4gICAgY29uc3QgY29udGFpbmVyID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcImRpdlwiKTtcbiAgICBjb25zdCBzcGlubmVyID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcImRpdlwiKTtcblxuICAgIGlmIChvcHRpb25zLmVjaG8pIHtcbiAgICAgIC8vIFNob3cgb3V0cHV0IGFzIGhpZ2hsaWdodGVkIHNvdXJjZVxuICAgICAgY29uc3QgcHJlRWxlbSA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJwcmVcIik7XG4gICAgICBjb250YWluZXIuY2xhc3NOYW1lID0gXCJzb3VyY2VDb2RlXCI7XG4gICAgICBwcmVFbGVtLmNsYXNzTmFtZSA9IFwic291cmNlQ29kZSBweXRob25cIjtcbiAgICAgIHByZUVsZW0uYXBwZW5kQ2hpbGQoaGlnaGxpZ2h0UHl0aG9uKGJsb2NrLmNvZGUpKTtcbiAgICAgIHNwaW5uZXIuY2xhc3NOYW1lID0gXCJzcGlubmVyLWdyb3cgc3Bpbm5lci1ncm93LXNtIG0tMiBwb3NpdGlvbi1hYnNvbHV0ZSB0b3AtMCBlbmQtMFwiO1xuICAgICAgcHJlRWxlbS5hcHBlbmRDaGlsZChzcGlubmVyKTtcbiAgICAgIGNvbnRhaW5lci5hcHBlbmRDaGlsZChwcmVFbGVtKTtcbiAgICB9IGVsc2Uge1xuICAgICAgc3Bpbm5lci5jbGFzc05hbWUgPSBcInNwaW5uZXItYm9yZGVyIHNwaW5uZXItYm9yZGVyLXNtXCI7XG4gICAgICBjb250YWluZXIuYXBwZW5kQ2hpbGQoc3Bpbm5lcik7XG4gICAgfVxuXG4gICAgeWllbGQgY29udGFpbmVyO1xuICB9XG5cbiAgcHlvZGlkZU9qcy5yZW5kZXJlZE9qc1tcIjE1XCJdID0gdHJ1ZTtcbiAgeWllbGQgYXdhaXQgcmVzdWx0O1xufVxuIn0seyJjZWxsTmFtZSI6InB5b2RpZGUtMTQiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoiX3B5b2RpZGVfdmFsdWVfMTQgPSB7XG4gIGNvbnN0IHsgaGlnaGxpZ2h0UHl0aG9uLCBiNjREZWNvZGV9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtMTQtY29udGVudHNcXFwiXWApLnRleHRDb250ZW50O1xuICBjb25zdCBibG9jayA9IEpTT04ucGFyc2UoYjY0RGVjb2RlKHNjcmlwdENvbnRlbnQpKTtcblxuICAvLyBEZWZhdWx0IGV2YWx1YXRpb24gY29uZmlndXJhdGlvblxuICBjb25zdCBvcHRpb25zID0gT2JqZWN0LmFzc2lnbih7XG4gICAgaWQ6IFwicHlvZGlkZS0xNC1jb250ZW50c1wiLFxuICAgIGVjaG86IHRydWUsXG4gICAgb3V0cHV0OiB0cnVlXG4gIH0sIGJsb2NrLmF0dHIpO1xuXG4gIC8vIEV2YWx1YXRlIHRoZSBwcm92aWRlZCBQeXRob24gY29kZVxuICBjb25zdCByZXN1bHQgPSBweW9kaWRlT2pzLnByb2Nlc3Moe2NvZGU6IGJsb2NrLmNvZGUsIG9wdGlvbnN9LCB7fSk7XG5cbiAgLy8gRWFybHkgeWllbGQgd2hpbGUgd2Ugd2FpdCBmb3IgdGhlIGZpcnN0IGV2YWx1YXRpb24gYW5kIHJlbmRlclxuICBpZiAob3B0aW9ucy5vdXRwdXQgJiYgIShcIjE0XCIgaW4gcHlvZGlkZU9qcy5yZW5kZXJlZE9qcykpIHtcbiAgICBjb25zdCBjb250YWluZXIgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpO1xuICAgIGNvbnN0IHNwaW5uZXIgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpO1xuXG4gICAgaWYgKG9wdGlvbnMuZWNobykge1xuICAgICAgLy8gU2hvdyBvdXRwdXQgYXMgaGlnaGxpZ2h0ZWQgc291cmNlXG4gICAgICBjb25zdCBwcmVFbGVtID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcInByZVwiKTtcbiAgICAgIGNvbnRhaW5lci5jbGFzc05hbWUgPSBcInNvdXJjZUNvZGVcIjtcbiAgICAgIHByZUVsZW0uY2xhc3NOYW1lID0gXCJzb3VyY2VDb2RlIHB5dGhvblwiO1xuICAgICAgcHJlRWxlbS5hcHBlbmRDaGlsZChoaWdobGlnaHRQeXRob24oYmxvY2suY29kZSkpO1xuICAgICAgc3Bpbm5lci5jbGFzc05hbWUgPSBcInNwaW5uZXItZ3JvdyBzcGlubmVyLWdyb3ctc20gbS0yIHBvc2l0aW9uLWFic29sdXRlIHRvcC0wIGVuZC0wXCI7XG4gICAgICBwcmVFbGVtLmFwcGVuZENoaWxkKHNwaW5uZXIpO1xuICAgICAgY29udGFpbmVyLmFwcGVuZENoaWxkKHByZUVsZW0pO1xuICAgIH0gZWxzZSB7XG4gICAgICBzcGlubmVyLmNsYXNzTmFtZSA9IFwic3Bpbm5lci1ib3JkZXIgc3Bpbm5lci1ib3JkZXItc21cIjtcbiAgICAgIGNvbnRhaW5lci5hcHBlbmRDaGlsZChzcGlubmVyKTtcbiAgICB9XG5cbiAgICB5aWVsZCBjb250YWluZXI7XG4gIH1cblxuICBweW9kaWRlT2pzLnJlbmRlcmVkT2pzW1wiMTRcIl0gPSB0cnVlO1xuICB5aWVsZCBhd2FpdCByZXN1bHQ7XG59XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS0xMyIsImlubGluZSI6ZmFsc2UsIm1ldGhvZE5hbWUiOiJpbnRlcnByZXQiLCJzb3VyY2UiOiJfcHlvZGlkZV92YWx1ZV8xMyA9IHtcbiAgY29uc3QgeyBoaWdobGlnaHRQeXRob24sIGI2NERlY29kZX0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS0xMy1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIC8vIERlZmF1bHQgZXZhbHVhdGlvbiBjb25maWd1cmF0aW9uXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHtcbiAgICBpZDogXCJweW9kaWRlLTEzLWNvbnRlbnRzXCIsXG4gICAgZWNobzogdHJ1ZSxcbiAgICBvdXRwdXQ6IHRydWVcbiAgfSwgYmxvY2suYXR0cik7XG5cbiAgLy8gRXZhbHVhdGUgdGhlIHByb3ZpZGVkIFB5dGhvbiBjb2RlXG4gIGNvbnN0IHJlc3VsdCA9IHB5b2RpZGVPanMucHJvY2Vzcyh7Y29kZTogYmxvY2suY29kZSwgb3B0aW9uc30sIHt9KTtcblxuICAvLyBFYXJseSB5aWVsZCB3aGlsZSB3ZSB3YWl0IGZvciB0aGUgZmlyc3QgZXZhbHVhdGlvbiBhbmQgcmVuZGVyXG4gIGlmIChvcHRpb25zLm91dHB1dCAmJiAhKFwiMTNcIiBpbiBweW9kaWRlT2pzLnJlbmRlcmVkT2pzKSkge1xuICAgIGNvbnN0IGNvbnRhaW5lciA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJkaXZcIik7XG4gICAgY29uc3Qgc3Bpbm5lciA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJkaXZcIik7XG5cbiAgICBpZiAob3B0aW9ucy5lY2hvKSB7XG4gICAgICAvLyBTaG93IG91dHB1dCBhcyBoaWdobGlnaHRlZCBzb3VyY2VcbiAgICAgIGNvbnN0IHByZUVsZW0gPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwicHJlXCIpO1xuICAgICAgY29udGFpbmVyLmNsYXNzTmFtZSA9IFwic291cmNlQ29kZVwiO1xuICAgICAgcHJlRWxlbS5jbGFzc05hbWUgPSBcInNvdXJjZUNvZGUgcHl0aG9uXCI7XG4gICAgICBwcmVFbGVtLmFwcGVuZENoaWxkKGhpZ2hsaWdodFB5dGhvbihibG9jay5jb2RlKSk7XG4gICAgICBzcGlubmVyLmNsYXNzTmFtZSA9IFwic3Bpbm5lci1ncm93IHNwaW5uZXItZ3Jvdy1zbSBtLTIgcG9zaXRpb24tYWJzb2x1dGUgdG9wLTAgZW5kLTBcIjtcbiAgICAgIHByZUVsZW0uYXBwZW5kQ2hpbGQoc3Bpbm5lcik7XG4gICAgICBjb250YWluZXIuYXBwZW5kQ2hpbGQocHJlRWxlbSk7XG4gICAgfSBlbHNlIHtcbiAgICAgIHNwaW5uZXIuY2xhc3NOYW1lID0gXCJzcGlubmVyLWJvcmRlciBzcGlubmVyLWJvcmRlci1zbVwiO1xuICAgICAgY29udGFpbmVyLmFwcGVuZENoaWxkKHNwaW5uZXIpO1xuICAgIH1cblxuICAgIHlpZWxkIGNvbnRhaW5lcjtcbiAgfVxuXG4gIHB5b2RpZGVPanMucmVuZGVyZWRPanNbXCIxM1wiXSA9IHRydWU7XG4gIHlpZWxkIGF3YWl0IHJlc3VsdDtcbn1cbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTEyIiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6InZpZXdvZiBfcHlvZGlkZV9lZGl0b3JfMTIgPSB7XG4gIGNvbnN0IHsgUHlvZGlkZUV4ZXJjaXNlRWRpdG9yLCBiNjREZWNvZGUgfSA9IHdpbmRvdy5fZXhlcmNpc2Vfb2pzX3J1bnRpbWU7XG5cbiAgY29uc3Qgc2NyaXB0Q29udGVudCA9IGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3IoYHNjcmlwdFt0eXBlPVxcXCJweW9kaWRlLTEyLWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtMTItY29udGVudHNgIH0sIGJsb2NrLmF0dHIpO1xuICBjb25zdCBlZGl0b3IgPSBuZXcgUHlvZGlkZUV4ZXJjaXNlRWRpdG9yKFxuICAgIHB5b2RpZGVPanMucHlvZGlkZVByb21pc2UsXG4gICAgYmxvY2suY29kZSxcbiAgICBvcHRpb25zXG4gICk7XG5cbiAgcmV0dXJuIGVkaXRvci5jb250YWluZXI7XG59XG5fcHlvZGlkZV92YWx1ZV8xMiA9IHB5b2RpZGVPanMucHJvY2VzcyhfcHlvZGlkZV9lZGl0b3JfMTIsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTExIiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6Il9weW9kaWRlX3ZhbHVlXzExID0ge1xuICBjb25zdCB7IGhpZ2hsaWdodFB5dGhvbiwgYjY0RGVjb2RlfSA9IHdpbmRvdy5fZXhlcmNpc2Vfb2pzX3J1bnRpbWU7XG5cbiAgY29uc3Qgc2NyaXB0Q29udGVudCA9IGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3IoYHNjcmlwdFt0eXBlPVxcXCJweW9kaWRlLTExLWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgLy8gRGVmYXVsdCBldmFsdWF0aW9uIGNvbmZpZ3VyYXRpb25cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oe1xuICAgIGlkOiBcInB5b2RpZGUtMTEtY29udGVudHNcIixcbiAgICBlY2hvOiB0cnVlLFxuICAgIG91dHB1dDogdHJ1ZVxuICB9LCBibG9jay5hdHRyKTtcblxuICAvLyBFdmFsdWF0ZSB0aGUgcHJvdmlkZWQgUHl0aG9uIGNvZGVcbiAgY29uc3QgcmVzdWx0ID0gcHlvZGlkZU9qcy5wcm9jZXNzKHtjb2RlOiBibG9jay5jb2RlLCBvcHRpb25zfSwge30pO1xuXG4gIC8vIEVhcmx5IHlpZWxkIHdoaWxlIHdlIHdhaXQgZm9yIHRoZSBmaXJzdCBldmFsdWF0aW9uIGFuZCByZW5kZXJcbiAgaWYgKG9wdGlvbnMub3V0cHV0ICYmICEoXCIxMVwiIGluIHB5b2RpZGVPanMucmVuZGVyZWRPanMpKSB7XG4gICAgY29uc3QgY29udGFpbmVyID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcImRpdlwiKTtcbiAgICBjb25zdCBzcGlubmVyID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcImRpdlwiKTtcblxuICAgIGlmIChvcHRpb25zLmVjaG8pIHtcbiAgICAgIC8vIFNob3cgb3V0cHV0IGFzIGhpZ2hsaWdodGVkIHNvdXJjZVxuICAgICAgY29uc3QgcHJlRWxlbSA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJwcmVcIik7XG4gICAgICBjb250YWluZXIuY2xhc3NOYW1lID0gXCJzb3VyY2VDb2RlXCI7XG4gICAgICBwcmVFbGVtLmNsYXNzTmFtZSA9IFwic291cmNlQ29kZSBweXRob25cIjtcbiAgICAgIHByZUVsZW0uYXBwZW5kQ2hpbGQoaGlnaGxpZ2h0UHl0aG9uKGJsb2NrLmNvZGUpKTtcbiAgICAgIHNwaW5uZXIuY2xhc3NOYW1lID0gXCJzcGlubmVyLWdyb3cgc3Bpbm5lci1ncm93LXNtIG0tMiBwb3NpdGlvbi1hYnNvbHV0ZSB0b3AtMCBlbmQtMFwiO1xuICAgICAgcHJlRWxlbS5hcHBlbmRDaGlsZChzcGlubmVyKTtcbiAgICAgIGNvbnRhaW5lci5hcHBlbmRDaGlsZChwcmVFbGVtKTtcbiAgICB9IGVsc2Uge1xuICAgICAgc3Bpbm5lci5jbGFzc05hbWUgPSBcInNwaW5uZXItYm9yZGVyIHNwaW5uZXItYm9yZGVyLXNtXCI7XG4gICAgICBjb250YWluZXIuYXBwZW5kQ2hpbGQoc3Bpbm5lcik7XG4gICAgfVxuXG4gICAgeWllbGQgY29udGFpbmVyO1xuICB9XG5cbiAgcHlvZGlkZU9qcy5yZW5kZXJlZE9qc1tcIjExXCJdID0gdHJ1ZTtcbiAgeWllbGQgYXdhaXQgcmVzdWx0O1xufVxuIn0seyJjZWxsTmFtZSI6InB5b2RpZGUtMTAiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoiX3B5b2RpZGVfdmFsdWVfMTAgPSB7XG4gIGNvbnN0IHsgaGlnaGxpZ2h0UHl0aG9uLCBiNjREZWNvZGV9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtMTAtY29udGVudHNcXFwiXWApLnRleHRDb250ZW50O1xuICBjb25zdCBibG9jayA9IEpTT04ucGFyc2UoYjY0RGVjb2RlKHNjcmlwdENvbnRlbnQpKTtcblxuICAvLyBEZWZhdWx0IGV2YWx1YXRpb24gY29uZmlndXJhdGlvblxuICBjb25zdCBvcHRpb25zID0gT2JqZWN0LmFzc2lnbih7XG4gICAgaWQ6IFwicHlvZGlkZS0xMC1jb250ZW50c1wiLFxuICAgIGVjaG86IHRydWUsXG4gICAgb3V0cHV0OiB0cnVlXG4gIH0sIGJsb2NrLmF0dHIpO1xuXG4gIC8vIEV2YWx1YXRlIHRoZSBwcm92aWRlZCBQeXRob24gY29kZVxuICBjb25zdCByZXN1bHQgPSBweW9kaWRlT2pzLnByb2Nlc3Moe2NvZGU6IGJsb2NrLmNvZGUsIG9wdGlvbnN9LCB7fSk7XG5cbiAgLy8gRWFybHkgeWllbGQgd2hpbGUgd2Ugd2FpdCBmb3IgdGhlIGZpcnN0IGV2YWx1YXRpb24gYW5kIHJlbmRlclxuICBpZiAob3B0aW9ucy5vdXRwdXQgJiYgIShcIjEwXCIgaW4gcHlvZGlkZU9qcy5yZW5kZXJlZE9qcykpIHtcbiAgICBjb25zdCBjb250YWluZXIgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpO1xuICAgIGNvbnN0IHNwaW5uZXIgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpO1xuXG4gICAgaWYgKG9wdGlvbnMuZWNobykge1xuICAgICAgLy8gU2hvdyBvdXRwdXQgYXMgaGlnaGxpZ2h0ZWQgc291cmNlXG4gICAgICBjb25zdCBwcmVFbGVtID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcInByZVwiKTtcbiAgICAgIGNvbnRhaW5lci5jbGFzc05hbWUgPSBcInNvdXJjZUNvZGVcIjtcbiAgICAgIHByZUVsZW0uY2xhc3NOYW1lID0gXCJzb3VyY2VDb2RlIHB5dGhvblwiO1xuICAgICAgcHJlRWxlbS5hcHBlbmRDaGlsZChoaWdobGlnaHRQeXRob24oYmxvY2suY29kZSkpO1xuICAgICAgc3Bpbm5lci5jbGFzc05hbWUgPSBcInNwaW5uZXItZ3JvdyBzcGlubmVyLWdyb3ctc20gbS0yIHBvc2l0aW9uLWFic29sdXRlIHRvcC0wIGVuZC0wXCI7XG4gICAgICBwcmVFbGVtLmFwcGVuZENoaWxkKHNwaW5uZXIpO1xuICAgICAgY29udGFpbmVyLmFwcGVuZENoaWxkKHByZUVsZW0pO1xuICAgIH0gZWxzZSB7XG4gICAgICBzcGlubmVyLmNsYXNzTmFtZSA9IFwic3Bpbm5lci1ib3JkZXIgc3Bpbm5lci1ib3JkZXItc21cIjtcbiAgICAgIGNvbnRhaW5lci5hcHBlbmRDaGlsZChzcGlubmVyKTtcbiAgICB9XG5cbiAgICB5aWVsZCBjb250YWluZXI7XG4gIH1cblxuICBweW9kaWRlT2pzLnJlbmRlcmVkT2pzW1wiMTBcIl0gPSB0cnVlO1xuICB5aWVsZCBhd2FpdCByZXN1bHQ7XG59XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS05IiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6Il9weW9kaWRlX3ZhbHVlXzkgPSB7XG4gIGNvbnN0IHsgaGlnaGxpZ2h0UHl0aG9uLCBiNjREZWNvZGV9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtOS1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIC8vIERlZmF1bHQgZXZhbHVhdGlvbiBjb25maWd1cmF0aW9uXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHtcbiAgICBpZDogXCJweW9kaWRlLTktY29udGVudHNcIixcbiAgICBlY2hvOiB0cnVlLFxuICAgIG91dHB1dDogdHJ1ZVxuICB9LCBibG9jay5hdHRyKTtcblxuICAvLyBFdmFsdWF0ZSB0aGUgcHJvdmlkZWQgUHl0aG9uIGNvZGVcbiAgY29uc3QgcmVzdWx0ID0gcHlvZGlkZU9qcy5wcm9jZXNzKHtjb2RlOiBibG9jay5jb2RlLCBvcHRpb25zfSwge30pO1xuXG4gIC8vIEVhcmx5IHlpZWxkIHdoaWxlIHdlIHdhaXQgZm9yIHRoZSBmaXJzdCBldmFsdWF0aW9uIGFuZCByZW5kZXJcbiAgaWYgKG9wdGlvbnMub3V0cHV0ICYmICEoXCI5XCIgaW4gcHlvZGlkZU9qcy5yZW5kZXJlZE9qcykpIHtcbiAgICBjb25zdCBjb250YWluZXIgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpO1xuICAgIGNvbnN0IHNwaW5uZXIgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpO1xuXG4gICAgaWYgKG9wdGlvbnMuZWNobykge1xuICAgICAgLy8gU2hvdyBvdXRwdXQgYXMgaGlnaGxpZ2h0ZWQgc291cmNlXG4gICAgICBjb25zdCBwcmVFbGVtID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcInByZVwiKTtcbiAgICAgIGNvbnRhaW5lci5jbGFzc05hbWUgPSBcInNvdXJjZUNvZGVcIjtcbiAgICAgIHByZUVsZW0uY2xhc3NOYW1lID0gXCJzb3VyY2VDb2RlIHB5dGhvblwiO1xuICAgICAgcHJlRWxlbS5hcHBlbmRDaGlsZChoaWdobGlnaHRQeXRob24oYmxvY2suY29kZSkpO1xuICAgICAgc3Bpbm5lci5jbGFzc05hbWUgPSBcInNwaW5uZXItZ3JvdyBzcGlubmVyLWdyb3ctc20gbS0yIHBvc2l0aW9uLWFic29sdXRlIHRvcC0wIGVuZC0wXCI7XG4gICAgICBwcmVFbGVtLmFwcGVuZENoaWxkKHNwaW5uZXIpO1xuICAgICAgY29udGFpbmVyLmFwcGVuZENoaWxkKHByZUVsZW0pO1xuICAgIH0gZWxzZSB7XG4gICAgICBzcGlubmVyLmNsYXNzTmFtZSA9IFwic3Bpbm5lci1ib3JkZXIgc3Bpbm5lci1ib3JkZXItc21cIjtcbiAgICAgIGNvbnRhaW5lci5hcHBlbmRDaGlsZChzcGlubmVyKTtcbiAgICB9XG5cbiAgICB5aWVsZCBjb250YWluZXI7XG4gIH1cblxuICBweW9kaWRlT2pzLnJlbmRlcmVkT2pzW1wiOVwiXSA9IHRydWU7XG4gIHlpZWxkIGF3YWl0IHJlc3VsdDtcbn1cbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTgiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoidmlld29mIF9weW9kaWRlX2VkaXRvcl84ID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS04LWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtOC1jb250ZW50c2AgfSwgYmxvY2suYXR0cik7XG4gIGNvbnN0IGVkaXRvciA9IG5ldyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IoXG4gICAgcHlvZGlkZU9qcy5weW9kaWRlUHJvbWlzZSxcbiAgICBibG9jay5jb2RlLFxuICAgIG9wdGlvbnNcbiAgKTtcblxuICByZXR1cm4gZWRpdG9yLmNvbnRhaW5lcjtcbn1cbl9weW9kaWRlX3ZhbHVlXzggPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzgsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTciLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoidmlld29mIF9weW9kaWRlX2VkaXRvcl83ID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS03LWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtNy1jb250ZW50c2AgfSwgYmxvY2suYXR0cik7XG4gIGNvbnN0IGVkaXRvciA9IG5ldyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IoXG4gICAgcHlvZGlkZU9qcy5weW9kaWRlUHJvbWlzZSxcbiAgICBibG9jay5jb2RlLFxuICAgIG9wdGlvbnNcbiAgKTtcblxuICByZXR1cm4gZWRpdG9yLmNvbnRhaW5lcjtcbn1cbl9weW9kaWRlX3ZhbHVlXzcgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzcsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTYiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoidmlld29mIF9weW9kaWRlX2VkaXRvcl82ID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS02LWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtNi1jb250ZW50c2AgfSwgYmxvY2suYXR0cik7XG4gIGNvbnN0IGVkaXRvciA9IG5ldyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IoXG4gICAgcHlvZGlkZU9qcy5weW9kaWRlUHJvbWlzZSxcbiAgICBibG9jay5jb2RlLFxuICAgIG9wdGlvbnNcbiAgKTtcblxuICByZXR1cm4gZWRpdG9yLmNvbnRhaW5lcjtcbn1cbl9weW9kaWRlX3ZhbHVlXzYgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzYsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTUiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoidmlld29mIF9weW9kaWRlX2VkaXRvcl81ID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS01LWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtNS1jb250ZW50c2AgfSwgYmxvY2suYXR0cik7XG4gIGNvbnN0IGVkaXRvciA9IG5ldyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IoXG4gICAgcHlvZGlkZU9qcy5weW9kaWRlUHJvbWlzZSxcbiAgICBibG9jay5jb2RlLFxuICAgIG9wdGlvbnNcbiAgKTtcblxuICByZXR1cm4gZWRpdG9yLmNvbnRhaW5lcjtcbn1cbl9weW9kaWRlX3ZhbHVlXzUgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzUsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTQiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoidmlld29mIF9weW9kaWRlX2VkaXRvcl80ID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS00LWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtNC1jb250ZW50c2AgfSwgYmxvY2suYXR0cik7XG4gIGNvbnN0IGVkaXRvciA9IG5ldyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IoXG4gICAgcHlvZGlkZU9qcy5weW9kaWRlUHJvbWlzZSxcbiAgICBibG9jay5jb2RlLFxuICAgIG9wdGlvbnNcbiAgKTtcblxuICByZXR1cm4gZWRpdG9yLmNvbnRhaW5lcjtcbn1cbl9weW9kaWRlX3ZhbHVlXzQgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzQsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTMiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoidmlld29mIF9weW9kaWRlX2VkaXRvcl8zID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS0zLWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtMy1jb250ZW50c2AgfSwgYmxvY2suYXR0cik7XG4gIGNvbnN0IGVkaXRvciA9IG5ldyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IoXG4gICAgcHlvZGlkZU9qcy5weW9kaWRlUHJvbWlzZSxcbiAgICBibG9jay5jb2RlLFxuICAgIG9wdGlvbnNcbiAgKTtcblxuICByZXR1cm4gZWRpdG9yLmNvbnRhaW5lcjtcbn1cbl9weW9kaWRlX3ZhbHVlXzMgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzMsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTIiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoidmlld29mIF9weW9kaWRlX2VkaXRvcl8yID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS0yLWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtMi1jb250ZW50c2AgfSwgYmxvY2suYXR0cik7XG4gIGNvbnN0IGVkaXRvciA9IG5ldyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IoXG4gICAgcHlvZGlkZU9qcy5weW9kaWRlUHJvbWlzZSxcbiAgICBibG9jay5jb2RlLFxuICAgIG9wdGlvbnNcbiAgKTtcblxuICByZXR1cm4gZWRpdG9yLmNvbnRhaW5lcjtcbn1cbl9weW9kaWRlX3ZhbHVlXzIgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzIsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTEiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoidmlld29mIF9weW9kaWRlX2VkaXRvcl8xID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS0xLWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtMS1jb250ZW50c2AgfSwgYmxvY2suYXR0cik7XG4gIGNvbnN0IGVkaXRvciA9IG5ldyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IoXG4gICAgcHlvZGlkZU9qcy5weW9kaWRlUHJvbWlzZSxcbiAgICBibG9jay5jb2RlLFxuICAgIG9wdGlvbnNcbiAgKTtcblxuICByZXR1cm4gZWRpdG9yLmNvbnRhaW5lcjtcbn1cbl9weW9kaWRlX3ZhbHVlXzEgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzEsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLXByZWx1ZGUiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0UXVpZXQiLCJzb3VyY2UiOiJweW9kaWRlT2pzID0ge1xuICBjb25zdCB7XG4gICAgUHlvZGlkZUV2YWx1YXRvcixcbiAgICBQeW9kaWRlRW52aXJvbm1lbnRNYW5hZ2VyLFxuICAgIHNldHVwUHl0aG9uLFxuICAgIHN0YXJ0UHlvZGlkZVdvcmtlcixcbiAgICBiNjREZWNvZGUsXG4gICAgY29sbGFwc2VQYXRoLFxuICB9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzdGF0dXNDb250YWluZXIgPSBkb2N1bWVudC5nZXRFbGVtZW50QnlJZChcImV4ZXJjaXNlLWxvYWRpbmctc3RhdHVzXCIpO1xuICBjb25zdCBpbmRpY2F0b3JDb250YWluZXIgPSBkb2N1bWVudC5nZXRFbGVtZW50QnlJZChcImV4ZXJjaXNlLWxvYWRpbmctaW5kaWNhdG9yXCIpO1xuICBpbmRpY2F0b3JDb250YWluZXIuY2xhc3NMaXN0LnJlbW92ZShcImQtbm9uZVwiKTtcblxuICBsZXQgc3RhdHVzVGV4dCA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJkaXZcIilcbiAgc3RhdHVzVGV4dC5jbGFzc0xpc3QgPSBcImV4ZXJjaXNlLWxvYWRpbmctZGV0YWlsc1wiO1xuICBzdGF0dXNUZXh0ID0gc3RhdHVzQ29udGFpbmVyLmFwcGVuZENoaWxkKHN0YXR1c1RleHQpO1xuICBzdGF0dXNUZXh0LnRleHRDb250ZW50ID0gYEluaXRpYWxpc2VgO1xuXG4gIC8vIEhvaXN0IGluZGljYXRvciBvdXQgZnJvbSBmaW5hbCBzbGlkZSB3aGVuIHJ1bm5pbmcgdW5kZXIgcmV2ZWFsXG4gIGNvbnN0IHJldmVhbFN0YXR1cyA9IGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3IoXCIucmV2ZWFsIC5leGVyY2lzZS1sb2FkaW5nLWluZGljYXRvclwiKTtcbiAgaWYgKHJldmVhbFN0YXR1cykge1xuICAgIHJldmVhbFN0YXR1cy5yZW1vdmUoKTtcbiAgICBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKFwiLnJldmVhbCA+IC5zbGlkZXNcIikuYXBwZW5kQ2hpbGQocmV2ZWFsU3RhdHVzKTtcbiAgfVxuXG4gIC8vIE1ha2UgYW55IHJldmVhbCBzbGlkZXMgd2l0aCBsaXZlIGNlbGxzIHNjcm9sbGFibGVcbiAgZG9jdW1lbnQucXVlcnlTZWxlY3RvckFsbChcIi5yZXZlYWwgLmV4ZXJjaXNlLWNlbGxcIikuZm9yRWFjaCgoZWwpID0+IHtcbiAgICBlbC5jbG9zZXN0KCdzZWN0aW9uLnNsaWRlJykuY2xhc3NMaXN0LmFkZChcInNjcm9sbGFibGVcIik7XG4gIH0pXG5cbiAgLy8gUHlvZGlkZSBzdXBwbGVtZW50YWwgZGF0YSBhbmQgb3B0aW9uc1xuICBjb25zdCBkYXRhQ29udGVudCA9IGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3IoYHNjcmlwdFt0eXBlPVxcXCJweW9kaWRlLWRhdGFcXFwiXWApLnRleHRDb250ZW50O1xuICBjb25zdCBkYXRhID0gSlNPTi5wYXJzZShiNjREZWNvZGUoZGF0YUNvbnRlbnQpKTtcblxuICAvLyBHcmFiIGxpc3Qgb2YgcmVzb3VyY2VzIHRvIGJlIGRvd25sb2FkZWRcbiAgY29uc3QgZmlsZXNDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInZmcy1maWxlXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgZmlsZXMgPSBKU09OLnBhcnNlKGI2NERlY29kZShmaWxlc0NvbnRlbnQpKTtcblxuICBsZXQgcHlvZGlkZVByb21pc2UgPSAoYXN5bmMgKCkgPT4ge1xuICAgIHN0YXR1c1RleHQudGV4dENvbnRlbnQgPSBgRG93bmxvYWRpbmcgUHlvZGlkZWA7XG4gICAgY29uc3QgcHlvZGlkZSA9IGF3YWl0IHN0YXJ0UHlvZGlkZVdvcmtlcihkYXRhLm9wdGlvbnMpO1xuXG4gICAgc3RhdHVzVGV4dC50ZXh0Q29udGVudCA9IGBEb3dubG9hZGluZyBwYWNrYWdlOiBtaWNyb3BpcGA7XG4gICAgYXdhaXQgcHlvZGlkZS5sb2FkUGFja2FnZShcIm1pY3JvcGlwXCIpO1xuICAgIGNvbnN0IG1pY3JvcGlwID0gYXdhaXQgcHlvZGlkZS5weWltcG9ydChcIm1pY3JvcGlwXCIpO1xuICAgIGF3YWl0IGRhdGEucGFja2FnZXMucGtncy5tYXAoKHBrZykgPT4gKCkgPT4ge1xuICAgICAgc3RhdHVzVGV4dC50ZXh0Q29udGVudCA9IGBEb3dubG9hZGluZyBwYWNrYWdlOiAke3BrZ31gO1xuICAgICAgcmV0dXJuIG1pY3JvcGlwLmluc3RhbGwocGtnKTtcbiAgICB9KS5yZWR1Y2UoKGN1ciwgbmV4dCkgPT4gY3VyLnRoZW4obmV4dCksIFByb21pc2UucmVzb2x2ZSgpKTtcbiAgICBhd2FpdCBtaWNyb3BpcC5kZXN0cm95KCk7XG5cbiAgICAvLyBEb3dubG9hZCBhbmQgaW5zdGFsbCByZXNvdXJjZXNcbiAgICBhd2FpdCBmaWxlcy5tYXAoKGZpbGUpID0+IGFzeW5jICgpID0+IHtcbiAgICAgIGNvbnN0IG5hbWUgPSBmaWxlLnN1YnN0cmluZyhmaWxlLmxhc3RJbmRleE9mKCcvJykgKyAxKTtcbiAgICAgIHN0YXR1c1RleHQudGV4dENvbnRlbnQgPSBgRG93bmxvYWRpbmcgcmVzb3VyY2U6ICR7bmFtZX1gO1xuICAgICAgY29uc3QgcmVzcG9uc2UgPSBhd2FpdCBmZXRjaChmaWxlKTtcbiAgICAgIGlmICghcmVzcG9uc2Uub2spIHtcbiAgICAgICAgdGhyb3cgbmV3IEVycm9yKGBDYW4ndCBkb3dubG9hZCBcXGAke2ZpbGV9XFxgLiBFcnJvciAke3Jlc3BvbnNlLnN0YXR1c306IFwiJHtyZXNwb25zZS5zdGF0dXNUZXh0fVwiLmApO1xuICAgICAgfVxuICAgICAgY29uc3QgZGF0YSA9IGF3YWl0IHJlc3BvbnNlLmFycmF5QnVmZmVyKCk7XG5cbiAgICAgIC8vIFN0b3JlIFVSTHMgaW4gdGhlIGN3ZCB3aXRob3V0IGFueSBzdWJkaXJlY3Rvcnkgc3RydWN0dXJlXG4gICAgICBpZiAoZmlsZS5pbmNsdWRlcyhcIjovL1wiKSkge1xuICAgICAgICBmaWxlID0gbmFtZTtcbiAgICAgIH1cblxuICAgICAgLy8gQ29sbGFwc2UgaGlnaGVyIGRpcmVjdG9yeSBzdHJ1Y3R1cmVcbiAgICAgIGZpbGUgPSBjb2xsYXBzZVBhdGgoZmlsZSk7XG5cbiAgICAgIC8vIENyZWF0ZSBkaXJlY3RvcnkgdHJlZSwgaWdub3JpbmcgXCJkaXJlY3RvcnkgZXhpc3RzXCIgVkZTIGVycm9yc1xuICAgICAgY29uc3QgcGFydHMgPSBmaWxlLnNwbGl0KCcvJykuc2xpY2UoMCwgLTEpO1xuICAgICAgbGV0IHBhdGggPSAnJztcbiAgICAgIHdoaWxlIChwYXJ0cy5sZW5ndGggPiAwKSB7XG4gICAgICAgIHBhdGggKz0gcGFydHMuc2hpZnQoKSArICcvJztcbiAgICAgICAgdHJ5IHtcbiAgICAgICAgICBhd2FpdCBweW9kaWRlLkZTLm1rZGlyKHBhdGgpO1xuICAgICAgICB9IGNhdGNoIChlKSB7XG4gICAgICAgICAgaWYgKGUubmFtZSAhPT0gXCJFcnJub0Vycm9yXCIpIHRocm93IGU7XG4gICAgICAgICAgaWYgKGUuZXJybm8gIT09IDIwKSB7XG4gICAgICAgICAgICBjb25zdCBlcnJvclRleHRQdHIgPSBhd2FpdCBweW9kaWRlLl9tb2R1bGUuX3N0cmVycm9yKGUuZXJybm8pO1xuICAgICAgICAgICAgY29uc3QgZXJyb3JUZXh0ID0gYXdhaXQgcHlvZGlkZS5fbW9kdWxlLlVURjhUb1N0cmluZyhlcnJvclRleHRQdHIpO1xuICAgICAgICAgICAgdGhyb3cgbmV3IEVycm9yKGBGaWxlc3lzdGVtIEVycm9yICR7ZS5lcnJub30gXCIke2Vycm9yVGV4dH1cIi5gKTtcbiAgICAgICAgICB9XG4gICAgICAgIH1cbiAgICAgIH1cblxuICAgICAgLy8gV3JpdGUgdGhpcyBmaWxlIHRvIHRoZSBWRlNcbiAgICAgIHRyeSB7XG4gICAgICAgIHJldHVybiBhd2FpdCBweW9kaWRlLkZTLndyaXRlRmlsZShmaWxlLCBuZXcgVWludDhBcnJheShkYXRhKSk7XG4gICAgICB9IGNhdGNoIChlKSB7XG4gICAgICAgIGlmIChlLm5hbWUgIT09IFwiRXJybm9FcnJvclwiKSB0aHJvdyBlO1xuICAgICAgICBjb25zdCBlcnJvclRleHRQdHIgPSBhd2FpdCBweW9kaWRlLl9tb2R1bGUuX3N0cmVycm9yKGUuZXJybm8pO1xuICAgICAgICBjb25zdCBlcnJvclRleHQgPSBhd2FpdCBweW9kaWRlLl9tb2R1bGUuVVRGOFRvU3RyaW5nKGVycm9yVGV4dFB0cik7XG4gICAgICAgIHRocm93IG5ldyBFcnJvcihgRmlsZXN5c3RlbSBFcnJvciAke2UuZXJybm99IFwiJHtlcnJvclRleHR9XCIuYCk7XG4gICAgICB9XG4gICAgfSkucmVkdWNlKChjdXIsIG5leHQpID0+IGN1ci50aGVuKG5leHQpLCBQcm9taXNlLnJlc29sdmUoKSk7XG5cbiAgICBzdGF0dXNUZXh0LnRleHRDb250ZW50ID0gYFB5b2RpZGUgZW52aXJvbm1lbnQgc2V0dXBgO1xuICAgIGF3YWl0IHNldHVwUHl0aG9uKHB5b2RpZGUpO1xuXG4gICAgc3RhdHVzVGV4dC5yZW1vdmUoKTtcbiAgICBpZiAoc3RhdHVzQ29udGFpbmVyLmNoaWxkcmVuLmxlbmd0aCA9PSAwKSB7XG4gICAgICBzdGF0dXNDb250YWluZXIucGFyZW50Tm9kZS5yZW1vdmUoKTtcbiAgICB9XG4gICAgcmV0dXJuIHB5b2RpZGU7XG4gIH0pKCkuY2F0Y2goKGVycikgPT4ge1xuICAgIHN0YXR1c1RleHQuc3R5bGUuY29sb3IgPSBcInZhcigtLWV4ZXJjaXNlLWVkaXRvci1obC1lciwgI0FEMDAwMClcIjtcbiAgICBzdGF0dXNUZXh0LnRleHRDb250ZW50ID0gZXJyLm1lc3NhZ2U7XG4gICAgLy9pbmRpY2F0b3JDb250YWluZXIucXVlcnlTZWxlY3RvcihcIi5zcGlubmVyLWdyb3dcIikuY2xhc3NMaXN0LmFkZChcImQtbm9uZVwiKTtcbiAgICB0aHJvdyBlcnI7XG4gIH0pO1xuXG4gIC8vIEtlZXAgdHJhY2sgb2YgaW5pdGlhbCBPSlMgYmxvY2sgcmVuZGVyXG4gIGNvbnN0IHJlbmRlcmVkT2pzID0ge307XG5cbiAgY29uc3QgcHJvY2VzcyA9IGFzeW5jIChjb250ZXh0LCBpbnB1dHMpID0+IHtcbiAgICBjb25zdCBweW9kaWRlID0gYXdhaXQgcHlvZGlkZVByb21pc2U7XG4gICAgY29uc3QgZXZhbHVhdG9yID0gbmV3IFB5b2RpZGVFdmFsdWF0b3IocHlvZGlkZSwgY29udGV4dCk7XG4gICAgYXdhaXQgZXZhbHVhdG9yLnByb2Nlc3MoaW5wdXRzKTtcbiAgICByZXR1cm4gZXZhbHVhdG9yLmNvbnRhaW5lcjtcbiAgfVxuXG4gIHJldHVybiB7XG4gICAgcHlvZGlkZVByb21pc2UsXG4gICAgcmVuZGVyZWRPanMsXG4gICAgcHJvY2VzcyxcbiAgfTtcbn1cbiJ9XX0=
 </script>
 <div id="exercise-loading-indicator" class="exercise-loading-indicator d-none d-flex align-items-center gap-2">
 <div id="exercise-loading-status" class="d-flex gap-2">
@@ -161,6 +737,7 @@ eyJjb250ZW50cyI6W119
 <script type="vfs-file">
 W10=
 </script>
+</section>
 
 </main> <!-- /main -->
 <script type="ojs-module-contents">
@@ -574,9 +1151,21 @@ window._ojs.runtime.interpretFromScriptTags();
     }
   });
   </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="../part-04-validation-model-selection/04-2-validation-set.html" class="pagination-link" aria-label="4.2 The Validation Set Approach">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">4.2 The Validation Set Approach</span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="../part-04-validation-model-selection/04-4-bias-variance.html" class="pagination-link" aria-label="4.4 The Bias–Variance Trade-off">
+        <span class="nav-page-text">4.4 The Bias–Variance Trade-off</span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
 </div> <!-- /content -->
 
 
 
 
-<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions"><ul><li><a href="https://github.com/EnduringChung/ml-interactive-course/edit/main/part-04-validation-model-selection/04-3-cross-validation.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/EnduringChung/ml-interactive-course/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/EnduringChung/ml-interactive-course/edit/main/part-04-validation-model-selection/04-3-cross-validation.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/EnduringChung/ml-interactive-course/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>

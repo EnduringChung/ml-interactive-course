@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>3.1.5 AUPRC for Skewed Datasets – ML, Statistics &amp; LLM — Interactive Course</title>
+<title>2.7 Interaction Terms – ML, Statistics &amp; LLM — Interactive Course</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -33,8 +33,8 @@ ul.task-list li input[type="checkbox"] {
 <script src="../site_libs/quarto-search/fuse.min.js"></script>
 <script src="../site_libs/quarto-search/quarto-search.js"></script>
 <meta name="quarto:offset" content="../">
-<link href="../part-03-classification-glm/03-2-why-not-linear-regression.html" rel="next">
-<link href="../part-03-classification-glm/03-1-classification-fundamentals.html" rel="prev">
+<link href="../part-02-linear-regression/02-8-nonlinear-transformations.html" rel="next">
+<link href="../part-02-linear-regression/02-6-categorical-predictors.html" rel="prev">
 <script src="../site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
 <script src="../site_libs/quarto-html/popper.min.js"></script>
@@ -149,7 +149,7 @@ window.Quarto = {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../part-03-classification-glm/03-1-classification-fundamentals.html">Part 3 — Classification &amp; GLMs</a></li><li class="breadcrumb-item"><a href="../part-03-classification-glm/03-1-5-auprc.html">3.1.5 AUPRC for Skewed Datasets</a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../part-02-linear-regression/02-1-regression-setup.html">Part 2 — Linear Regression &amp; Prediction</a></li><li class="breadcrumb-item"><a href="../part-02-linear-regression/02-7-interaction-terms.html">2.7 Interaction Terms</a></li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -251,13 +251,13 @@ window.Quarto = {
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="false">
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
  <span class="menu-text">Part 2 — Linear Regression &amp; Prediction</span></a>
-          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="false" aria-label="Toggle section">
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
             <i class="bi bi-chevron-right ms-2"></i>
           </a> 
       </div>
-      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 ">  
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../part-02-linear-regression/02-1-regression-setup.html" class="sidebar-item-text sidebar-link">
@@ -296,7 +296,7 @@ window.Quarto = {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../part-02-linear-regression/02-7-interaction-terms.html" class="sidebar-item-text sidebar-link">
+  <a href="../part-02-linear-regression/02-7-interaction-terms.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text">2.7 Interaction Terms</span></a>
   </div>
 </li>
@@ -322,13 +322,13 @@ window.Quarto = {
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="false">
  <span class="menu-text">Part 3 — Classification &amp; GLMs</span></a>
-          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="false" aria-label="Toggle section">
             <i class="bi bi-chevron-right ms-2"></i>
           </a> 
       </div>
-      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 ">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../part-03-classification-glm/03-1-classification-fundamentals.html" class="sidebar-item-text sidebar-link">
@@ -337,7 +337,7 @@ window.Quarto = {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../part-03-classification-glm/03-1-5-auprc.html" class="sidebar-item-text sidebar-link active">
+  <a href="../part-03-classification-glm/03-1-5-auprc.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">3.1.5 AUPRC for Skewed Datasets</span></a>
   </div>
 </li>
@@ -444,14 +444,14 @@ window.Quarto = {
   <li><a href="#complex-questions" id="toc-complex-questions" class="nav-link" data-scroll-target="#complex-questions">6. Complex Questions</a></li>
   <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">7. Summary</a></li>
   </ul>
-<div class="toc-actions"><ul class="collapse"><li><a href="https://github.com/EnduringChung/ml-interactive-course/edit/main/part-03-classification-glm/03-1-5-auprc.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/EnduringChung/ml-interactive-course/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+<div class="toc-actions"><ul class="collapse"><li><a href="https://github.com/EnduringChung/ml-interactive-course/edit/main/part-02-linear-regression/02-7-interaction-terms.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/EnduringChung/ml-interactive-course/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
-<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../part-03-classification-glm/03-1-classification-fundamentals.html">Part 3 — Classification &amp; GLMs</a></li><li class="breadcrumb-item"><a href="../part-03-classification-glm/03-1-5-auprc.html">3.1.5 AUPRC for Skewed Datasets</a></li></ol></nav>
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../part-02-linear-regression/02-1-regression-setup.html">Part 2 — Linear Regression &amp; Prediction</a></li><li class="breadcrumb-item"><a href="../part-02-linear-regression/02-7-interaction-terms.html">2.7 Interaction Terms</a></li></ol></nav>
 <div class="quarto-title">
-<h1 class="title">3.1.5 AUPRC for Skewed Datasets</h1>
+<h1 class="title">2.7 Interaction Terms</h1>
 </div>
 
 
@@ -468,143 +468,53 @@ window.Quarto = {
 </header>
 
 
-<p>When positives are rare (1% disease, 0.1% hits in a screen), ROC-AUC keeps flattering weak classifiers — the huge negative pool absorbs false alarms invisibly. The <strong>precision–recall curve</strong> and its area (<strong>AUPRC</strong> / average precision) put the <em>cost of false alarms in a sparse world</em> back in the picture.</p>
+<p>So far every model assumed additive effects: each predictor shifts y by a fixed amount <em>regardless of the others</em>. An <strong>interaction</strong> lets the effect of one predictor depend on another — the model’s most commonly forgotten question, and the difference between “drug works” and “drug works in women under 60.”</p>
 <blockquote class="blockquote">
 <p><strong>Tier 1 — every cell below runs live.</strong></p>
 </blockquote>
 <section id="basic-concept" class="level2">
 <h2 class="anchored" data-anchor-id="basic-concept">1. Basic Concept</h2>
-<p>Sweeping the threshold from strict to loose traces a curve in <strong>precision</strong> (PPV = TP/(TP+FP)) vs <strong>recall</strong> (TPR) space. The area under it — computed as sklearn’s <em>average precision</em>,</p>
-<p><span class="math display">\[\text{AP} = \sum_n (R_n - R_{n-1})\, P_n\]</span></p>
-<p>i.e., each precision value weighted by the <em>increase in recall</em> it purchased — is the standard scalar (AUPRC).</p>
-<p>Two facts make AUPRC the right lens under skew:</p>
-<ol type="1">
-<li><strong>The baseline is the prevalence</strong>, not 0.5: a random classifier’s PR curve hovers at precision = prevalence. AUPRC = 0.55 at 1% prevalence is <em>massive</em>; AUC = 0.55 would be negligible.</li>
-<li><strong>False positives are priced in the metric</strong>: at low prevalence, each FP slashes precision immediately (denominator TP+FP), while in ROC-land an FP just nudges FPR by 1/(huge N).</li>
-</ol>
-<p>A small worked example, by hand — 5 positives, 5 negatives, ranked by score:</p>
-<table class="caption-top table">
-<thead>
-<tr class="header">
-<th>rank</th>
-<th>score</th>
-<th>label</th>
-<th>precision@k</th>
-<th>recall@k</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>1</td>
-<td>.9</td>
-<td>+</td>
-<td>1.000</td>
-<td>0.2</td>
-</tr>
-<tr class="even">
-<td>2</td>
-<td>.8</td>
-<td>+</td>
-<td>1.000</td>
-<td>0.4</td>
-</tr>
-<tr class="odd">
-<td>3</td>
-<td>.7</td>
-<td>−</td>
-<td>0.667</td>
-<td>0.4</td>
-</tr>
-<tr class="even">
-<td>4</td>
-<td>.6</td>
-<td>+</td>
-<td>0.750</td>
-<td>0.6</td>
-</tr>
-<tr class="odd">
-<td>5</td>
-<td>.5</td>
-<td>−</td>
-<td>0.600</td>
-<td>0.6</td>
-</tr>
-<tr class="even">
-<td>6</td>
-<td>.4</td>
-<td>+</td>
-<td>0.667</td>
-<td>0.8</td>
-</tr>
-<tr class="odd">
-<td>7</td>
-<td>.3</td>
-<td>−</td>
-<td>0.571</td>
-<td>0.8</td>
-</tr>
-<tr class="even">
-<td>8</td>
-<td>.2</td>
-<td>−</td>
-<td>0.500</td>
-<td>0.8</td>
-</tr>
-<tr class="odd">
-<td>9</td>
-<td>.1</td>
-<td>−</td>
-<td>0.444</td>
-<td>0.8</td>
-</tr>
-<tr class="even">
-<td>10</td>
-<td>.0</td>
-<td>+</td>
-<td>0.500</td>
-<td>1.0</td>
-</tr>
-</tbody>
-</table>
-<p><span class="math display">\[\text{AP} = 0.2(1.0) + 0.2(1.0) + 0.2(0.750) + 0.2(0.667) + 0.2(0.500) = 0.783\]</span></p>
-<p>Each of the 5 recall <em>increments</em> (0.2) is weighted by the precision at which it was achieved. Same ranking’s ROC-AUC (concordant pairs, <a href="../part-03-classification-glm/03-1-classification-fundamentals.html">3.1</a>) = 18/25 = <strong>0.72</strong> — the two lenses already disagree.</p>
+<p>Add a product column:</p>
+<p><span class="math display">\[y = \beta_0 + \beta_1 x_1 + \beta_2 x_2 + \beta_3\, x_1 x_2 + \varepsilon\]</span></p>
+<p>Now the effect of <span class="math inline">\(x_1\)</span> is <span class="math inline">\(\beta_1 + \beta_3 x_2\)</span> — a <em>function</em> of <span class="math inline">\(x_2\)</span>, not a number. If <span class="math inline">\(\beta_3 \ne 0\)</span>, the lines/planes tilt against each other; there is no single “effect of <span class="math inline">\(x_1\)</span>” to report.</p>
 <div>
 <div id="pyodide-1" class="exercise-cell">
 
 </div>
 <script type="pyodide-1-contents">
-eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNrbGVhcm4ubWV0cmljcyBpbXBvcnQgcHJlY2lzaW9uX3JlY2FsbF9jdXJ2ZSwgYXZlcmFnZV9wcmVjaXNpb25fc2NvcmUsIHJvY19hdWNfc2NvcmVcblxucyA9IG5wLmFycmF5KFswLjksIDAuOCwgMC43LCAwLjYsIDAuNSwgMC40LCAwLjMsIDAuMiwgMC4xLCAwLjBdKVxueSA9IG5wLmFycmF5KFsxLCAxLCAwLCAxLCAwLCAxLCAwLCAwLCAwLCAxXSlcblxucHJlYywgcmVjLCB0aHIgPSBwcmVjaXNpb25fcmVjYWxsX2N1cnZlKHksIHMpXG5hcCA9IGF2ZXJhZ2VfcHJlY2lzaW9uX3Njb3JlKHksIHMpXG5cbnByaW50KFwicHJlY2lzaW9uczpcIiwgcHJlYy5yb3VuZCgzKSlcbnByaW50KFwicmVjYWxsczogICBcIiwgcmVjLnJvdW5kKDMpKVxucHJpbnQoZlwiQVAgID0ge2FwOi40Zn0gICAoaGFuZDogMC43ODMzKVwiKVxucHJpbnQoZlwiQVVDID0ge3JvY19hdWNfc2NvcmUoeSwgcyk6LjRmfSAgIChoYW5kOiAwLjcyKVwiKSJ9
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWUsImZpZy1oZWlnaHQiOjMuNSwiZmlnLXdpZHRoIjo3fSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuaW1wb3J0IHN0YXRzbW9kZWxzLmZvcm11bGEuYXBpIGFzIHNtZlxuaW1wb3J0IHBhbmRhcyBhcyBwZFxuaW1wb3J0IG1hdHBsb3RsaWIucHlwbG90IGFzIHBsdFxuXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoMClcbm4gPSAxMjBcbmRmID0gcGQuRGF0YUZyYW1lKHtcbiAgICBcImRvc2VcIjogICBybmcudW5pZm9ybSgwLCAxMCwgbiksXG4gICAgXCJmZW1hbGVcIjogcm5nLmludGVnZXJzKDAsIDIsIG4pLCAgICAgICAgICAjIDAvMSBncm91cCBsYWJlbFxufSlcbmRmW1wicmVzcG9uc2VcIl0gPSAoMi4wXG4gICAgICAgICAgICAgICAgICArIDAuOCAqIGRmW1wiZG9zZVwiXSAgICAgICAgICAgICAgICAgICAgICAjIHNsb3BlIGluIG1hbGVzXG4gICAgICAgICAgICAgICAgICAtIDEuMCAqIGRmW1wiZmVtYWxlXCJdICAgICAgICAgICAgICAgICAgICAjIGxldmVsIHNoaWZ0XG4gICAgICAgICAgICAgICAgICAtIDAuMTIgKiBkZltcImRvc2VcIl0gKiBkZltcImZlbWFsZVwiXSAgICAgICMgc2xvcGUgZGlmZmVyZW5jZSFcbiAgICAgICAgICAgICAgICAgICsgcm5nLm5vcm1hbCgwLCAxLCBuKSlcblxuZml0ID0gc21mLm9scyhcInJlc3BvbnNlIH4gZG9zZSAqIGZlbWFsZVwiLCBkYXRhPWRmKS5maXQoKSAgICMgKiA9IG1haW4gKyBpbnRlcmFjdGlvblxucHJpbnQoZml0LnBhcmFtcy5yb3VuZCgzKSlcblxuZmlnLCBheCA9IHBsdC5zdWJwbG90cyhmaWdzaXplPSg3LCAzLjUpKVxueGcgPSBucC5saW5zcGFjZSgwLCAxMCwgNTApXG5mb3IgZiwgc3R5bGUgaW4gWygwLCBcIm1hbGVcIiksICgxLCBcImZlbWFsZVwiKV06XG4gICAgYXgucGxvdCh4ZywgZml0LnBhcmFtc1tcIkludGVyY2VwdFwiXSArIGZpdC5wYXJhbXNbXCJmZW1hbGVcIl0gKiBmXG4gICAgICAgICAgICArIChmaXQucGFyYW1zW1wiZG9zZVwiXSArIGZpdC5wYXJhbXNbXCJkb3NlOmZlbWFsZVwiXSAqIGYpICogeGcsXG4gICAgICAgICAgICBsYWJlbD1zdHlsZSlcbmF4LnNjYXR0ZXIoZGZbXCJkb3NlXCJdLCBkZltcInJlc3BvbnNlXCJdLCBzPTEwLCBhbHBoYT0wLjI1LCBjb2xvcj1cImdyYXlcIilcbmF4LnNldCh4bGFiZWw9XCJkb3NlXCIsIHlsYWJlbD1cInJlc3BvbnNlXCIsIHRpdGxlPVwiSW50ZXJhY3Rpb24gPSB0d28gc2xvcGVzXCIpXG5heC5sZWdlbmQoKVxucGx0LnNob3coKSJ9
 </script>
 </div>
-<p><strong>The flattering-ROC demonstration</strong> — 2% prevalence, a barely-informative score:</p>
+<p>Read the coefficients directly: male slope = <code>dose</code> = 0.80; female slope = <code>dose + dose:female</code> = 0.80 − 0.12 = 0.68; the female <em>level</em> offset at dose 0 = <code>female</code> = −1.0.</p>
+<p><strong>Continuous × continuous</strong> — the effect of one variable changes <em>linearly</em> with the other:</p>
 <div>
 <div id="pyodide-2" class="exercise-cell">
 
 </div>
 <script type="pyodide-2-contents">
-eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWUsImZpZy1oZWlnaHQiOjMuNCwiZmlnLXdpZHRoIjo4fSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuaW1wb3J0IG1hdHBsb3RsaWIucHlwbG90IGFzIHBsdFxuZnJvbSBza2xlYXJuLm1ldHJpY3MgaW1wb3J0IChyb2NfY3VydmUsIHJvY19hdWNfc2NvcmUsXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgIHByZWNpc2lvbl9yZWNhbGxfY3VydmUsIGF2ZXJhZ2VfcHJlY2lzaW9uX3Njb3JlKVxuXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoMClcbm5fcG9zLCBuX25lZyA9IDIwLCA5ODBcbnkgPSBucC5yX1tucC5vbmVzKG5fcG9zKSwgbnAuemVyb3Mobl9uZWcpXVxucyA9IG5wLnJfW3JuZy5ub3JtYWwoMC41NiwgMC4xLCBuX3BvcyksIHJuZy5ub3JtYWwoMC41LCAwLjEsIG5fbmVnKV0gICMgdGlueSBzaWduYWxcblxuZnByLCB0cHIsIF8gPSByb2NfY3VydmUoeSwgcylcbnByZWMsIHJlYywgXyA9IHByZWNpc2lvbl9yZWNhbGxfY3VydmUoeSwgcylcblxuZmlnLCBheGVzID0gcGx0LnN1YnBsb3RzKDEsIDIsIGZpZ3NpemU9KDgsIDMuNCkpXG5heGVzWzBdLnBsb3QoZnByLCB0cHIpXG5heGVzWzBdLnBsb3QoWzAsIDFdLCBbMCwgMV0sIGxzPVwiLS1cIiwgY29sb3I9XCJncmF5XCIpXG5heGVzWzBdLnNldF90aXRsZShmXCJST0MgIEFVQyA9IHtyb2NfYXVjX3Njb3JlKHksIHMpOi4zZn0g4oCUIGxvb2tzIGRlY2VudFwiKVxuYXhlc1sxXS5wbG90KHJlYywgcHJlYylcbmF4ZXNbMV0uYXhobGluZSgwLjAyLCBscz1cIi0tXCIsIGNvbG9yPVwiZ3JheVwiLCBsYWJlbD1cImNoYW5jZSA9IHByZXZhbGVuY2VcIilcbmF4ZXNbMV0uc2V0X3RpdGxlKGZcIlBSICBBUCA9IHthdmVyYWdlX3ByZWNpc2lvbl9zY29yZSh5LCBzKTouM2Z9IOKAlCBiYXJlbHkgYWJvdmUgY2hhbmNlXCIpXG5heGVzWzFdLmxlZ2VuZCgpXG5maWcudGlnaHRfbGF5b3V0KClcbnBsdC5zaG93KCkifQ==
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5pbXBvcnQgc3RhdHNtb2RlbHMuZm9ybXVsYS5hcGkgYXMgc21mXG5pbXBvcnQgcGFuZGFzIGFzIHBkXG5cbnJuZyA9IG5wLnJhbmRvbS5kZWZhdWx0X3JuZygxKVxubiA9IDIwMFxuZGYgPSBwZC5EYXRhRnJhbWUoe1xuICAgIFwidGVtcFwiOiAgcm5nLnVuaWZvcm0oMTAsIDQwLCBuKSxcbiAgICBcImNvbmNcIjogIHJuZy51bmlmb3JtKDAsIDUsIG4pLFxufSlcbmRmW1wieWllbGRfcGN0XCJdID0gMTAgKyAwLjUgKiBkZltcInRlbXBcIl0gKyAxLjAgKiBkZltcImNvbmNcIl0gKyAwLjA1ICogZGZbXCJ0ZW1wXCJdICogZGZbXCJjb25jXCJdIFxcXG4gICAgICAgICAgICAgICAgICArIHJuZy5ub3JtYWwoMCwgMSwgbilcblxuZml0ID0gc21mLm9scyhcInlpZWxkX3BjdCB+IHRlbXAgKiBjb25jXCIsIGRhdGE9ZGYpLmZpdCgpXG5wcmludChmaXQucGFyYW1zLnJvdW5kKDMpKVxucHJpbnQoXCJlZmZlY3Qgb2YgKzEgY29uYyBhdCB0ZW1wPTE1OlwiLCByb3VuZChmbG9hdChmaXQucGFyYW1zW1wiY29uY1wiXSArIDE1ICogZml0LnBhcmFtc1tcInRlbXA6Y29uY1wiXSksIDMpKVxucHJpbnQoXCJlZmZlY3Qgb2YgKzEgY29uYyBhdCB0ZW1wPTM1OlwiLCByb3VuZChmbG9hdChmaXQucGFyYW1zW1wiY29uY1wiXSArIDM1ICogZml0LnBhcmFtc1tcInRlbXA6Y29uY1wiXSksIDMpKSJ9
 </script>
 </div>
 </section>
 <section id="concept-questions" class="level2">
 <h2 class="anchored" data-anchor-id="concept-questions">2. Concept Questions</h2>
 <ol type="1">
-<li>Why is a random classifier’s PR baseline <em>the prevalence</em> while its ROC baseline is the diagonal?</li>
-<li>Two datasets have identical classifier quality; one has 1% prevalence, one 30%. Which metric is comparable across them — AUC, AP, or neither?</li>
-<li>AP = 0.35 at 5% prevalence: translate that into “how much better than random” in one sentence.</li>
-<li>Your model’s PR curve is strictly below the prevalence line everywhere. What does that tell you, and what single transformation rescues the model?</li>
-<li>Why does AP have no nice probabilistic interpretation like AUC’s concordance probability?</li>
+<li>In <code>yield ~ temp * conc</code>, what exactly does the <code>conc</code> coefficient mean <em>now</em>? Why is it “the effect of conc at temp = 0”?</li>
+<li>Your interaction p-value is 0.4 but a main effect’s p-value is 0.001. May you drop the interaction and keep the main effect? May you drop the <em>non-significant main effect</em> and keep a significant interaction?</li>
+<li>Interaction vs correlation between predictors (<a href="../part-02-linear-regression/02-5-multiple-linear-regression.html">2.5</a> collinearity) — what’s the difference in what each breaks?</li>
+<li>The model says the drug×sex interaction is 0.5 (p = 0.01). A headline says “drug works better in women.” What extra number does the headline need?</li>
+<li>Why do people <em>center</em> variables before forming interactions, and what changes vs stays the same?</li>
 </ol>
 <details>
 <summary>
 Answers
 </summary>
 <ol type="1">
-<li>Random scoring means precision ≈ prevalence at <em>every</em> recall level (each retrieved batch is prevalence-random), so the PR “curve” is the horizontal line y = prevalence. In ROC space, random scoring moves TPR and FPR together — the diagonal.</li>
-<li><strong>AUC</strong> (it’s a within-pair probability, prevalence-independent in expectation). AP is prevalence-dependent <em>by design</em> — its baseline moves with prevalence — so absolute AP values don’t transfer across datasets with different class balance. Neither is a substitute for reporting the dataset’s prevalence alongside.</li>
-<li>Random retrieval gets precision 0.05; this model’s precision-recall trade is worth AP = 0.35, i.e.&nbsp;its average precision across recall levels is <strong>7× the random baseline</strong> — strong for a 1-in-20 problem.</li>
-<li>Precision below prevalence at all recalls means the score is <strong>anti-ranked</strong>: top-scored items are <em>less</em> likely to be positive than random. Negate the scores (or flip the sign of the decision function) and the same information becomes a good model — always check this before discarding a model.</li>
-<li>AUC counts a specific, symmetric random experiment (draw one of each, who wins?). AP is a weighted sum of precisions with data-dependent weights (recall increments) — a different, asymmetric summary with no single natural random-pair story; its “meaning” is operational: expected precision averaged over recall levels you choose to chase.</li>
+<li>With the product term present, the conc effect is <span class="math inline">\(\beta_{conc} + \beta_{temp:conc}\,\text{temp}\)</span> — it has no single value; by the algebra of “hold everything else fixed,” the printed <span class="math inline">\(\beta_{conc}\)</span> is the conc effect evaluated at temp = 0. Since temp = 0 may be outside the data, that number can be meaningless — center temp and it becomes “at average temp.”</li>
+<li>Drop the interaction: yes (back to the additive model — standard hierarchy <em>downward</em> is fine after a null result). Drop a main effect while keeping its interaction: <strong>no</strong> — the hierarchy principle: an interaction contains the main effects, and removing them forces the model through artificial constraints (e.g., zero effect at the other variable’s zero) that bias everything.</li>
+<li>Collinearity is about <em>redundant information</em> (identifying coefficients; inflates SEs); interaction is about <em>structure</em> (whether effects multiply/moderate each other). Two collinear predictors can have zero interaction; two interacting predictors can be perfectly independent. Fixing one never fixes the other.</li>
+<li>The two slopes (or the two marginal effects at meaningful values) with CIs: “slope in women = a (b to c), in men = d (e to f)” — the interaction coefficient alone doesn’t say which group is bigger, and “better” needs the scale (also: a significant interaction can mean “less bad in men”!).</li>
+<li>Centering (subtracting means) makes main-effect coefficients interpretable at <em>typical</em> values of the moderator and reduces the correlation between the product column and its ingredients (numerical conditioning). It does <strong>not</strong> change fitted values, R², the interaction coefficient, or its test (with raw quadratic terms, tiny rounding aside).</li>
 </ol>
 </details>
 </section>
@@ -618,7 +528,7 @@ Answers
 
 </div>
 <script type="pyodide-3-contents">
-eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNrbGVhcm4ubWV0cmljcyBpbXBvcnQgYXZlcmFnZV9wcmVjaXNpb25fc2NvcmVcbnkgID0gbnAuYXJyYXkoWzEsIDAsIDEsIDAsIDAsIDAsIDAsIDAsIDAsIDBdKVxuczEgPSBucC5hcnJheShbMC45LCAwLjgsIDAuNywgMC42LCAwLjUsIDAuNCwgMC4zLCAwLjIsIDAuMSwgMC4wXSkgICMgZGVjZW50IHJhbmtcbnMyID0gczFbOjotMV0gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIyBhbnRpLXJhbmtlZCFcbnByaW50KFwiQVAoczEpOlwiLCByb3VuZChhdmVyYWdlX3ByZWNpc2lvbl9zY29yZSh5LCBzMSksIDMpKVxucHJpbnQoXCJBUChzMik6XCIsIHJvdW5kKGF2ZXJhZ2VfcHJlY2lzaW9uX3Njb3JlKHksIHMyKSwgMyksIFwiIDwtIGJlbG93IHByZXZhbGVuY2UgMC4yXCIpIn0=
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wLCBwYW5kYXMgYXMgcGQsIHN0YXRzbW9kZWxzLmZvcm11bGEuYXBpIGFzIHNtZlxucm5nID0gbnAucmFuZG9tLmRlZmF1bHRfcm5nKDIpXG5uID0gMTUwXG5kZiA9IHBkLkRhdGFGcmFtZSh7XCJ4XCI6IHJuZy51bmlmb3JtKDAsIDUsIG4pLCBcImdcIjogcm5nLmludGVnZXJzKDAsIDIsIG4pfSlcbmRmW1wieVwiXSA9IDEgKyAyICogZGZbXCJ4XCJdICsgcm5nLm5vcm1hbCgwLCAxLCBuKSAgICAgIyBOTyBpbnRlcmFjdGlvbiBpbiB0cnV0aFxuZml0ID0gc21mLm9scyhcInkgfiB4ICogZ1wiLCBkYXRhPWRmKS5maXQoKVxucHJpbnQoZml0LnBhcmFtcy5yb3VuZCgzKSlcbnByaW50KFwicCh4OmcpID1cIiwgcm91bmQoZml0LnB2YWx1ZXNbXCJ4OmdcIl0sIDMpLCBcIiA8LSBjb3JyZWN0bHkgPiAwLjA1IG1vc3QgcnVuc1wiKSJ9
 </script>
 </div>
 <div>
@@ -626,7 +536,7 @@ eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5w
 
 </div>
 <script type="pyodide-4-contents">
-eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNrbGVhcm4ubWV0cmljcyBpbXBvcnQgYXZlcmFnZV9wcmVjaXNpb25fc2NvcmVcbnJuZyA9IG5wLnJhbmRvbS5kZWZhdWx0X3JuZygxKVxueSA9IG5wLnJfW25wLm9uZXMoMTApLCBucC56ZXJvcyg5OTApXS5hc3R5cGUoaW50KVxucyA9IHJuZy51bmlmb3JtKDAsIDEsIDEwMDApICAgICAgICAgICAgICAgICAgICAgIyBwdXJlIG5vaXNlXG5hcCA9IGF2ZXJhZ2VfcHJlY2lzaW9uX3Njb3JlKHksIHMpXG5wcmludChcIkFQIG5vaXNlOlwiLCByb3VuZChhcCwgNCksIFwiIOKJiCBwcmV2YWxlbmNlXCIsIHJvdW5kKHkubWVhbigpLCA0KSkifQ==
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wLCBwYW5kYXMgYXMgcGQsIHN0YXRzbW9kZWxzLmZvcm11bGEuYXBpIGFzIHNtZlxucm5nID0gbnAucmFuZG9tLmRlZmF1bHRfcm5nKDMpXG5uID0gMTUwXG5kZiA9IHBkLkRhdGFGcmFtZSh7XCJ4XCI6IHJuZy51bmlmb3JtKDAsIDUsIG4pLCBcImdcIjogcm5nLmludGVnZXJzKDAsIDIsIG4pfSlcbmRmW1wieVwiXSA9IDEgKyAoMiArIDEuNSAqIGRmW1wiZ1wiXSkgKiBkZltcInhcIl0gKyBybmcubm9ybWFsKDAsIDEsIG4pICAgIyBzbG9wZSBkaWZmID0gMS41XG5maXQgPSBzbWYub2xzKFwieSB+IHggKiBnXCIsIGRhdGE9ZGYpLmZpdCgpXG5wcmludChcInNsb3BlIGc9MDpcIiwgZml0LnBhcmFtc1tcInhcIl0ucm91bmQoMykpXG5wcmludChcInNsb3BlIGc9MTpcIiwgKGZpdC5wYXJhbXNbXCJ4XCJdICsgZml0LnBhcmFtc1tcIng6Z1wiXSkucm91bmQoMykpIn0=
 </script>
 </div>
 <div>
@@ -634,7 +544,7 @@ eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5w
 
 </div>
 <script type="pyodide-5-contents">
-eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNrbGVhcm4ubWV0cmljcyBpbXBvcnQgcHJlY2lzaW9uX3JlY2FsbF9jdXJ2ZVxueSA9IG5wLmFycmF5KFsxLCAxLCAwLCAxLCAwLCAwXSlcbnMgPSBucC5hcnJheShbMC45LCAwLjgsIDAuNywgMC42LCAwLjUsIDAuNF0pXG5wcmVjLCByZWMsIHRociA9IHByZWNpc2lvbl9yZWNhbGxfY3VydmUoeSwgcylcbnByaW50KFwicHJlY2lzaW9uOlwiLCBwcmVjLnJvdW5kKDMpKSAgICAgIyBsZW5ndGggPSBuX3BvaW50czsgbGFzdCBlbnRyeSAoMSwgMCkgYW5jaG9yXG5wcmludChcInJlY2FsbDogICBcIiwgcmVjLnJvdW5kKDMpKVxucHJpbnQoXCJ0aHJlc2hvbGRzOlwiLCB0aHIucm91bmQoMikpICAgICAjIG9uZSBmZXdlcjogbm8gdGhyZXNob2xkIGJlbG93IHRoZSBsb3dlc3Qgc2NvcmUifQ==
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wLCBwYW5kYXMgYXMgcGQsIHN0YXRzbW9kZWxzLmZvcm11bGEuYXBpIGFzIHNtZlxucm5nID0gbnAucmFuZG9tLmRlZmF1bHRfcm5nKDQpXG5uID0gMjAwXG5kZiA9IHBkLkRhdGFGcmFtZSh7XCJhXCI6IHJuZy51bmlmb3JtKDAsIDEwLCBuKSwgXCJiXCI6IHJuZy51bmlmb3JtKDAsIDEwLCBuKX0pXG5kZltcInlcIl0gPSAxICsgZGZbXCJhXCJdICsgZGZbXCJiXCJdICsgMC41ICogZGZbXCJhXCJdICogZGZbXCJiXCJdICsgcm5nLm5vcm1hbCgwLCAxLCBuKVxuXG5mX3JhdyA9IHNtZi5vbHMoXCJ5IH4gYSAqIGJcIiwgZGF0YT1kZikuZml0KClcbmQgPSBkZi5jb3B5KCk7IGRbXCJhX2NcIl0gPSBkW1wiYVwiXSAtIGRbXCJhXCJdLm1lYW4oKTsgZFtcImJfY1wiXSA9IGRbXCJiXCJdIC0gZFtcImJcIl0ubWVhbigpXG5mX2N0ciA9IHNtZi5vbHMoXCJ5IH4gYV9jICogYl9jXCIsIGRhdGE9ZCkuZml0KClcbnByaW50KFwiaW50ZXJhY3Rpb24gY29lZiByYXc6ICAgIFwiLCBmX3Jhdy5wYXJhbXNbXCJhOmJcIl0ucm91bmQoNCkpXG5wcmludChcImludGVyYWN0aW9uIGNvZWYgY2VudGVyZWQ6XCIsIGZfY3RyLnBhcmFtc1tcImFfYzpiX2NcIl0ucm91bmQoNCksIFwiIDwtIHVuY2hhbmdlZFwiKVxucHJpbnQoXCJtYWluICdhJyByYXc6XCIsIGZfcmF3LnBhcmFtc1tcImFcIl0ucm91bmQoMyksIFwiIGNlbnRlcmVkOlwiLFxuICAgICAgZl9jdHIucGFyYW1zW1wiYV9jXCJdLnJvdW5kKDMpLCBcIiA8LSBub3cgPSBlZmZlY3QgYXQgbWVhbihiKVwiKSJ9
 </script>
 </div>
 <div>
@@ -642,13 +552,13 @@ eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5w
 
 </div>
 <script type="pyodide-6-contents">
-eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNrbGVhcm4ubWV0cmljcyBpbXBvcnQgYXZlcmFnZV9wcmVjaXNpb25fc2NvcmUsIHJvY19hdWNfc2NvcmVcbiMgc2FtZSByYW5raW5nLCBkaWZmZXJlbnQgY2FsaWJyYXRpb246IEFQL0FVQyBpZGVudGljYWxcbnkgPSBucC5hcnJheShbMSwgMSwgMCwgMSwgMCwgMCwgMSwgMF0pXG5zMSA9IG5wLmFycmF5KFswLjksIDAuOCwgMC43LCAwLjYsIDAuNSwgMC40LCAwLjMsIDAuMl0pXG5zMiA9IHMxICoqIDIgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAjIHNxdWFzaGVkLCBvcmRlciBwcmVzZXJ2ZWRcbnByaW50KHJvdW5kKGF2ZXJhZ2VfcHJlY2lzaW9uX3Njb3JlKHksIHMxKSwgNCksIHJvdW5kKGF2ZXJhZ2VfcHJlY2lzaW9uX3Njb3JlKHksIHMyKSwgNCkpXG5wcmludChyb3VuZChyb2NfYXVjX3Njb3JlKHksIHMxKSwgNCksIHJvdW5kKHJvY19hdWNfc2NvcmUoeSwgczIpLCA0KSkifQ==
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wLCBwYW5kYXMgYXMgcGQsIHN0YXRzbW9kZWxzLmZvcm11bGEuYXBpIGFzIHNtZlxuZnJvbSBzdGF0c21vZGVscy5zdGF0cy5hbm92YSBpbXBvcnQgYW5vdmFfbG1cbnJuZyA9IG5wLnJhbmRvbS5kZWZhdWx0X3JuZyg1KVxubiA9IDE1MFxuZGYgPSBwZC5EYXRhRnJhbWUoe1wieFwiOiBybmcudW5pZm9ybSgwLCA1LCBuKSwgXCJnXCI6IHJuZy5pbnRlZ2VycygwLCAyLCBuKX0pXG5kZltcInlcIl0gPSAxICsgMiAqIGRmW1wieFwiXSArIHJuZy5ub3JtYWwoMCwgMSwgbilcbmFkZCA9IHNtZi5vbHMoXCJ5IH4geCArIGdcIiwgZGF0YT1kZikuZml0KClcbmludF8gPSBzbWYub2xzKFwieSB+IHggKiBnXCIsIGRhdGE9ZGYpLmZpdCgpXG5wcmludChhbm92YV9sbShhZGQsIGludF8pLnJvdW5kKDQpKSAgICAgIyBwYXJ0aWFsIEYgZm9yIHRoZSBpbnRlcmFjdGlvbiJ9
 </script>
 </div>
 </section>
 <section id="exercises-with-solutions" class="level3">
 <h3 class="anchored" data-anchor-id="exercises-with-solutions">Exercises (with solutions)</h3>
-<p><strong>Exercise 1.</strong> By hand, build the full precision–recall table for the ranked list below (compute P@k, R@k for every k), compute AP from the table, and verify against <code>average_precision_score</code>. Then state the single threshold (top-k) you would choose if the budget allows exactly 3 follow-ups, and its precision.</p>
+<p><strong>Exercise 1.</strong> Simulate a <em>cross-over</em> interaction: treatment helps at low severity, harms at high severity (<code>y = 10 + 1.0·sev − 0.8·trt + 0.2·sev·trt + noise</code>). Fit the interaction model; compute the treatment effect at severity 2, 5, 8 with CIs (delta-method-free: refit with re-centered severity); find the severity where the effect crosses zero and verify by plotting both lines.</p>
 <details>
 <summary>
 Solution
@@ -658,12 +568,12 @@ Solution
 
 </div>
 <script type="pyodide-7-contents">
-eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuZnJvbSBza2xlYXJuLm1ldHJpY3MgaW1wb3J0IGF2ZXJhZ2VfcHJlY2lzaW9uX3Njb3JlXG5cbnMgPSBucC5hcnJheShbMC45NSwgMC45MCwgMC44NSwgMC44MCwgMC43NSwgMC43MCwgMC42NSwgMC42MF0pXG55ID0gbnAuYXJyYXkoWzEsICAgIDAsICAgIDEsICAgIDEsICAgIDAsICAgIDEsICAgIDAsICAgIDFdKVxuXG5vcmRlciA9IG5wLmFyZ3NvcnQoLXMpXG55cyA9IHlbb3JkZXJdXG5uX3BvcyA9IHlzLnN1bSgpXG5cbnJvd3MgPSBbXVxudHAgPSAwXG5BUCA9IDAuMFxucHJldl9yZWMgPSAwLjBcbmZvciBrLCB5aSBpbiBlbnVtZXJhdGUoeXMsIHN0YXJ0PTEpOlxuICAgIHRwICs9IHlpXG4gICAgcHJlYyA9IHRwIC8ga1xuICAgIHJlYyA9IHRwIC8gbl9wb3NcbiAgICBBUCArPSAocmVjIC0gcHJldl9yZWMpICogcHJlYyAgICAgICAgICAgICMgdGhlIGRlZmluaXRpb25cbiAgICBwcmV2X3JlYyA9IHJlY1xuICAgIHJvd3MuYXBwZW5kKChrLCBpbnQoeWkpLCByb3VuZChwcmVjLCAzKSwgcm91bmQocmVjLCAzKSkpXG5cbmZvciByIGluIHJvd3M6XG4gICAgcHJpbnQoXCJrPSVkIGxhYmVsPSVkICBQPSUuM2YgIFI9JS4zZlwiICUgcilcbnByaW50KGZcIkFQIGJ5IGhhbmQgPSB7QVA6LjRmfSAgIHNrbGVhcm4gPSB7YXZlcmFnZV9wcmVjaXNpb25fc2NvcmUoeSwgcyk6LjRmfVwiKVxucHJpbnQoXCJUb3AtMyBidWRnZXQ6IHByZWNpc2lvbiA9IDIvMyA9XCIsIHJvdW5kKDIvMywgMykpIn0=
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlLCJmaWctaGVpZ2h0IjozLjUsImZpZy13aWR0aCI6N30sImNvZGUiOiJpbXBvcnQgbnVtcHkgYXMgbnBcbmltcG9ydCBwYW5kYXMgYXMgcGRcbmltcG9ydCBzdGF0c21vZGVscy5mb3JtdWxhLmFwaSBhcyBzbWZcbmltcG9ydCBtYXRwbG90bGliLnB5cGxvdCBhcyBwbHRcblxucm5nID0gbnAucmFuZG9tLmRlZmF1bHRfcm5nKDYpXG5uID0gMjQwXG5kZiA9IHBkLkRhdGFGcmFtZSh7XCJzZXZcIjogcm5nLnVuaWZvcm0oMCwgMTAsIG4pLCBcInRydFwiOiBybmcuaW50ZWdlcnMoMCwgMiwgbil9KVxuZGZbXCJ5XCJdID0gMTAgKyAxLjAgKiBkZltcInNldlwiXSAtIDAuOCAqIGRmW1widHJ0XCJdICsgMC4yICogZGZbXCJzZXZcIl0gKiBkZltcInRydFwiXSBcXFxuICAgICAgICAgICsgcm5nLm5vcm1hbCgwLCAxLCBuKVxuXG5maXQgPSBzbWYub2xzKFwieSB+IHNldiAqIHRydFwiLCBkYXRhPWRmKS5maXQoKVxuXG5mb3IgcyBpbiBbMiwgNSwgOF06XG4gICAgZCA9IGRmLmNvcHkoKVxuICAgIGRbXCJzZXZfY1wiXSA9IGRbXCJzZXZcIl0gLSBzICAgICAgICAgICAgICAgICAgICAgICMgcmUtY2VudGVyOiBtYWluIGVmZmVjdCBBVCBzZXY9c1xuICAgIGYgPSBzbWYub2xzKFwieSB+IHNldl9jICogdHJ0XCIsIGRhdGE9ZCkuZml0KClcbiAgICBjaSA9IGYuY29uZl9pbnQoKS5sb2NbXCJ0cnRcIl1cbiAgICBwcmludChmXCJ0cmVhdG1lbnQgZWZmZWN0IGF0IHNldj17c306IHtmLnBhcmFtc1sndHJ0J106Ky4zZn0gIFwiXG4gICAgICAgICAgZlwiKDk1JSBDSSB7Y2lbMF06Ky4zZn0sIHtjaVsxXTorLjNmfSlcIilcblxuZmlnLCBheCA9IHBsdC5zdWJwbG90cyhmaWdzaXplPSg3LCAzLjUpKVxueGcgPSBucC5saW5zcGFjZSgwLCAxMCwgNTApXG5mb3IgdCBpbiBbMCwgMV06XG4gICAgYXgucGxvdCh4ZywgZml0LnBhcmFtc1tcIkludGVyY2VwdFwiXSArIGZpdC5wYXJhbXNbXCJ0cnRcIl0gKiB0XG4gICAgICAgICAgICArIChmaXQucGFyYW1zW1wic2V2XCJdICsgZml0LnBhcmFtc1tcInNldjp0cnRcIl0gKiB0KSAqIHhnLCBsYWJlbD1mXCJ0cnQ9e3R9XCIpXG5heC5sZWdlbmQoKTsgYXguc2V0KHhsYWJlbD1cInNldmVyaXR5XCIsIHlsYWJlbD1cInlcIiwgdGl0bGU9XCJDcm9zcy1vdmVyOiBsaW5lcyBzd2FwIG9yZGVyXCIpXG5wbHQuc2hvdygpIn0=
 </script>
 </div>
-The budget answer is a <em>decision</em> the curve exists to inform: with 3 slots you catch 2 of 5 positives (precision 0.67); the curve lets management see exactly what the 4th and 5th slot would buy.
+Re-centering the moderator converts “effect at severity s” into a <em>main effect with proper SE and CI</em> — no delta method needed. The cross-over point (≈ 4 here) is where the treatment recommendation flips; interactions are how subgroup medicine becomes honest instead of a fishing expedition.
 </details>
-<p><strong>Exercise 2.</strong> Prevalence surgery: fix one classifier and one score distribution; vary prevalence from 0.5% to 40% by subsampling negatives, and plot AUC and AP against prevalence. Which curve moves, which holds steady, and what does this experiment say about comparing your AP to a published AP from a different cohort?</p>
+<p><strong>Exercise 2.</strong> Test the parallel-slopes assumption from <a href="../part-02-linear-regression/02-6-categorical-predictors.html">2.6 Exercise 3</a> properly: fit the age × tissue model on that cohort, use <code>anova_lm</code> to compare against the additive model, and draw the fitted age-lines per tissue on one plot. Then write the sentence the additive model would have printed if the interaction were real but ignored — what goes wrong in it?</p>
 <details>
 <summary>
 Solution
@@ -673,12 +583,12 @@ Solution
 
 </div>
 <script type="pyodide-8-contents">
-eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlLCJmaWctaGVpZ2h0IjozLjIsImZpZy13aWR0aCI6N30sImNvZGUiOiJpbXBvcnQgbnVtcHkgYXMgbnBcbmltcG9ydCBtYXRwbG90bGliLnB5cGxvdCBhcyBwbHRcbmZyb20gc2tsZWFybi5tZXRyaWNzIGltcG9ydCByb2NfYXVjX3Njb3JlLCBhdmVyYWdlX3ByZWNpc2lvbl9zY29yZVxuXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoMilcbm5fcG9zID0gMjAwXG5zX3BvcyA9IHJuZy5ub3JtYWwoMC42LCAwLjEyLCBuX3BvcylcbnNfbmVnX3Bvb2wgPSBybmcubm9ybWFsKDAuNSwgMC4xMiwgNDAwMDApXG5cbnByZXZhbGVuY2VzID0gWzAuMDA1LCAwLjAxLCAwLjAyLCAwLjA1LCAwLjEsIDAuMiwgMC40XVxuYXVjcywgYXBzID0gW10sIFtdXG5mb3IgcCBpbiBwcmV2YWxlbmNlczpcbiAgICBuX25lZyA9IGludChuX3BvcyAqICgxIC0gcCkgLyBwKVxuICAgIHNfbmVnID0gcm5nLmNob2ljZShzX25lZ19wb29sLCBuX25lZywgcmVwbGFjZT1GYWxzZSlcbiAgICB5ID0gbnAucl9bbnAub25lcyhuX3BvcyksIG5wLnplcm9zKG5fbmVnKV1cbiAgICBzID0gbnAucl9bc19wb3MsIHNfbmVnXVxuICAgIGF1Y3MuYXBwZW5kKHJvY19hdWNfc2NvcmUoeSwgcykpXG4gICAgYXBzLmFwcGVuZChhdmVyYWdlX3ByZWNpc2lvbl9zY29yZSh5LCBzKSlcblxuZmlnLCBheCA9IHBsdC5zdWJwbG90cyhmaWdzaXplPSg3LCAzLjIpKVxuYXguc2VtaWxvZ3gobnAuYXJyYXkocHJldmFsZW5jZXMpICogMTAwLCBhdWNzLCBtYXJrZXI9XCJvXCIsIGxhYmVsPVwiQVVDXCIpXG5heC5zZW1pbG9neChucC5hcnJheShwcmV2YWxlbmNlcykgKiAxMDAsIGFwcywgbWFya2VyPVwic1wiLCBsYWJlbD1cIkFQXCIpXG5heC5zZXQoeGxhYmVsPVwicHJldmFsZW5jZSAoJSlcIiwgdGl0bGU9XCJTYW1lIGNsYXNzaWZpZXIsIGRpZmZlcmVudCBwcmV2YWxlbmNlXCIpXG5heC5sZWdlbmQoKVxucGx0LnNob3coKSJ9
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlLCJmaWctaGVpZ2h0IjozLjUsImZpZy13aWR0aCI6N30sImNvZGUiOiJpbXBvcnQgbnVtcHkgYXMgbnBcbmltcG9ydCBwYW5kYXMgYXMgcGRcbmltcG9ydCBzdGF0c21vZGVscy5mb3JtdWxhLmFwaSBhcyBzbWZcbmZyb20gc3RhdHNtb2RlbHMuc3RhdHMuYW5vdmEgaW1wb3J0IGFub3ZhX2xtXG5pbXBvcnQgbWF0cGxvdGxpYi5weXBsb3QgYXMgcGx0XG5cbnJuZyA9IG5wLnJhbmRvbS5kZWZhdWx0X3JuZygxKVxubiA9IDE1MFxuZGYgPSBwZC5EYXRhRnJhbWUoe1xuICAgIFwidGlzc3VlXCI6IHJuZy5jaG9pY2UoW1wibm9ybWFsXCIsIFwidHVtb3JBXCIsIFwidHVtb3JCXCJdLCBuKSxcbiAgICBcImFnZVwiOiBybmcudW5pZm9ybSgzMCwgODAsIG4pLFxufSlcbmRmW1wiZXhwclwiXSA9ICg4ICsgMC4wMiAqIGRmW1wiYWdlXCJdXG4gICAgICAgICAgICAgICsgMi41ICogKGRmW1widGlzc3VlXCJdID09IFwidHVtb3JBXCIpXG4gICAgICAgICAgICAgICsgNC4wICogKGRmW1widGlzc3VlXCJdID09IFwidHVtb3JCXCIpXG4gICAgICAgICAgICAgICsgMC4xNSAqIGRmW1wiYWdlXCJdICogKGRmW1widGlzc3VlXCJdICE9IFwibm9ybWFsXCIpICAgICAjIGludGVyYWN0aW9uIVxuICAgICAgICAgICAgICArIHJuZy5ub3JtYWwoMCwgMS41LCBuKSlcblxuYWRkID0gc21mLm9scyhcImV4cHIgfiBhZ2UgKyBDKHRpc3N1ZSlcIiwgZGF0YT1kZikuZml0KClcbmZ1bGwgPSBzbWYub2xzKFwiZXhwciB+IGFnZSAqIEModGlzc3VlKVwiLCBkYXRhPWRmKS5maXQoKVxucHJpbnQoYW5vdmFfbG0oYWRkLCBmdWxsKS5yb3VuZCg0KSlcblxuZmlnLCBheCA9IHBsdC5zdWJwbG90cyhmaWdzaXplPSg3LCAzLjUpKVxueGcgPSBucC5saW5zcGFjZSgzMCwgODAsIDQwKVxuZm9yIHQgaW4gW1wibm9ybWFsXCIsIFwidHVtb3JBXCIsIFwidHVtb3JCXCJdOlxuICAgIGdyaWQgPSBwZC5EYXRhRnJhbWUoe1wiYWdlXCI6IHhnLCBcInRpc3N1ZVwiOiB0fSlcbiAgICBheC5wbG90KHhnLCBmdWxsLnByZWRpY3QoZ3JpZCksIGxhYmVsPXQpXG5heC5sZWdlbmQoKTsgYXguc2V0KHhsYWJlbD1cImFnZVwiLCB5bGFiZWw9XCJleHByXCIsIHRpdGxlPVwiQWdlIMOXIHRpc3N1ZTogbm9uLXBhcmFsbGVsIGxpbmVzXCIpXG5wbHQuc2hvdygpXG5cbnByaW50KFwiSWYgaWdub3JlZCwgdGhlIGFkZGl0aXZlIG1vZGVsIHdvdWxkIHJlcG9ydCBPTkUgYXZlcmFnZSBhZ2Ugc2xvcGUsXCIsXG4gICAgICBcIlxcbm1hc2tpbmcgdGhhdCB0dW1vcnMnIGV4cHJlc3Npb24gcmlzZXMgd2l0aCBhZ2Ugd2hpbGUgbm9ybWFsIHRpc3N1ZSBkb2Vzbid0LlwiKSJ9
 </script>
 </div>
-AUC is flat (prevalence-free by construction); AP falls as prevalence falls — the baseline sinks with it. Consequence: AP values are <strong>cohort-specific</strong>; compare APs only within the same prevalence regime, or convert to “multiple of prevalence baseline” (AP / prevalence) for a rough cross-cohort normalized statement.
+The pooled slope is a precision-weighted average of <em>different</em> per-group slopes; an “age effect” headline from the additive model would be an artifact of group composition — Simpson-adjacent, and invisible without the interaction test.
 </details>
-<p><strong>Exercise 3.</strong> Metric face-off on a realistic screen: build a 1%-positive dataset with a mildly informative score; compute (a) accuracy at 0.5, (b) balanced accuracy, (c) AUC, (d) AP, (e) precision at recall = 0.5. Rank the metrics by how <em>usefully</em> each describes the model for a screening manager who can only follow up 50 samples. Justify the ranking in two sentences per metric.</p>
+<p><strong>Exercise 3.</strong> Continuous × continuous as a surface: fit <code>yield ~ temp * conc</code> (data regenerated below), then plot the <em>marginal effect of conc</em> (with 95% CI) as a function of temp using the re-centering trick at a grid of temperatures. At which temperatures is conc’s effect significantly positive? This “moderated effect plot” is the professional alternative to staring at coefficient tables.</p>
 <details>
 <summary>
 Solution
@@ -688,49 +598,49 @@ Solution
 
 </div>
 <script type="pyodide-9-contents">
-eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuZnJvbSBza2xlYXJuLm1ldHJpY3MgaW1wb3J0IChhY2N1cmFjeV9zY29yZSwgYmFsYW5jZWRfYWNjdXJhY3lfc2NvcmUsXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgIHJvY19hdWNfc2NvcmUsIGF2ZXJhZ2VfcHJlY2lzaW9uX3Njb3JlLFxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICBwcmVjaXNpb25fcmVjYWxsX2N1cnZlKVxuXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoMylcbm5fcG9zID0gMzBcbnkgPSBucC5yX1tucC5vbmVzKG5fcG9zKSwgbnAuemVyb3MoMjk3MCldLmFzdHlwZShpbnQpXG5zID0gbnAucl9bcm5nLm5vcm1hbCgwLjU1LCAwLjEsIG5fcG9zKSwgcm5nLm5vcm1hbCgwLjUsIDAuMSwgMjk3MCldXG5wcmVkID0gKHMgPj0gMC41KS5hc3R5cGUoaW50KVxuXG5wcmVjLCByZWMsIHRociA9IHByZWNpc2lvbl9yZWNhbGxfY3VydmUoeSwgcylcbmlfaGFsZiA9IG5wLmFyZ21pbihucC5hYnMocmVjIC0gMC41KSlcblxucHJpbnQoZlwiKGEpIGFjY3VyYWN5ICAgICAgID0ge2FjY3VyYWN5X3Njb3JlKHksIHByZWQpOi40Zn1cIilcbnByaW50KGZcIihiKSBiYWxhbmNlZCBhY2MgICA9IHtiYWxhbmNlZF9hY2N1cmFjeV9zY29yZSh5LCBwcmVkKTouNGZ9XCIpXG5wcmludChmXCIoYykgQVVDICAgICAgICAgICAgPSB7cm9jX2F1Y19zY29yZSh5LCBzKTouNGZ9XCIpXG5wcmludChmXCIoZCkgQVAgICAgICAgICAgICAgPSB7YXZlcmFnZV9wcmVjaXNpb25fc2NvcmUoeSwgcyk6LjRmfVwiKVxucHJpbnQoZlwiKGUpIHByZWNpc2lvbkBSPTAuNSA9IHtwcmVjW2lfaGFsZl06LjRmfVwiKSJ9
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlLCJmaWctaGVpZ2h0IjozLjUsImZpZy13aWR0aCI6N30sImNvZGUiOiJpbXBvcnQgbnVtcHkgYXMgbnBcbmltcG9ydCBwYW5kYXMgYXMgcGRcbmltcG9ydCBzdGF0c21vZGVscy5mb3JtdWxhLmFwaSBhcyBzbWZcbmltcG9ydCBtYXRwbG90bGliLnB5cGxvdCBhcyBwbHRcblxucm5nID0gbnAucmFuZG9tLmRlZmF1bHRfcm5nKDcpXG5uID0gMjUwXG5kZiA9IHBkLkRhdGFGcmFtZSh7XCJ0ZW1wXCI6IHJuZy51bmlmb3JtKDEwLCA0MCwgbiksIFwiY29uY1wiOiBybmcudW5pZm9ybSgwLCA1LCBuKX0pXG5kZltcInlpZWxkX3BjdFwiXSA9IDEwICsgMC41ICogZGZbXCJ0ZW1wXCJdICsgMS4wICogZGZbXCJjb25jXCJdICsgMC4wNSAqIGRmW1widGVtcFwiXSAqIGRmW1wiY29uY1wiXSBcXFxuICAgICAgICAgICAgICAgICAgKyBybmcubm9ybWFsKDAsIDEsIG4pXG5cbnRlbXBzID0gbnAuYXJhbmdlKDEwLCA0MSwgMi41KVxuZWZmZWN0cywgbG9zLCBoaXMgPSBbXSwgW10sIFtdXG5mb3IgdCBpbiB0ZW1wczpcbiAgICBkID0gZGYuY29weSgpXG4gICAgZFtcInRlbXBfY1wiXSA9IGRbXCJ0ZW1wXCJdIC0gdFxuICAgIGYgPSBzbWYub2xzKFwieWllbGRfcGN0IH4gdGVtcF9jICogY29uY1wiLCBkYXRhPWQpLmZpdCgpXG4gICAgbG8sIGhpID0gZi5jb25mX2ludCgpLmxvY1tcImNvbmNcIl1cbiAgICBlZmZlY3RzLmFwcGVuZChmLnBhcmFtc1tcImNvbmNcIl0pOyBsb3MuYXBwZW5kKGxvKTsgaGlzLmFwcGVuZChoaSlcblxuZmlnLCBheCA9IHBsdC5zdWJwbG90cyhmaWdzaXplPSg3LCAzLjUpKVxuYXgucGxvdCh0ZW1wcywgZWZmZWN0cywgbWFya2VyPVwib1wiLCBtcz0zKVxuYXguZmlsbF9iZXR3ZWVuKHRlbXBzLCBsb3MsIGhpcywgYWxwaGE9MC4yNSwgbGFiZWw9XCI5NSUgQ0lcIilcbmF4LmF4aGxpbmUoMCwgY29sb3I9XCJncmF5XCIsIGx3PTAuOClcbmF4LnNldCh4bGFiZWw9XCJ0ZW1wZXJhdHVyZVwiLCB5bGFiZWw9XCJlZmZlY3Qgb2YgKzEgY29uY1wiLCB0aXRsZT1cIk1hcmdpbmFsIGVmZmVjdCBvZiBjb25jIHZzIHRlbXBcIilcbmF4LmxlZ2VuZCgpXG5wbHQuc2hvdygpIn0=
 </script>
 </div>
-Usefulness ranking for the manager: (e) precision@recall-0.5 — an <em>operating point</em>, exactly what “we follow up 50” means; (d) AP — the full-curve summary, prevalence-anchored; (c) AUC — ranks well but abstracts away the FP flood; (b) balanced accuracy — treats classes symmetrically when the budget doesn’t; (a) accuracy — tells the manager nothing (it’s the prevalence in disguise). The general law: the closer a metric sits to the actual decision (budget, costs, threshold), the more decisions it can improve.
+The effect grows linearly with temp (that IS the interaction) and its CI clears zero everywhere here — but the <em>plot</em> is what a collaborator can read: “the concentration benefit ranges from ~1.5 at 10° to ~3 at 40°.” Tables report; plots convince.
 </details>
 </section>
 </section>
 <section id="advanced-information-pitfalls" class="level2">
 <h2 class="anchored" data-anchor-id="advanced-information-pitfalls">4. Advanced Information &amp; Pitfalls</h2>
 <ul>
-<li><strong>Three names, one thing (mostly)</strong>: AUPRC (area under PR curve), AP (sklearn’s interpolated area), mean average precision (mAP — averaged over queries, the retrieval convention). sklearn’s <code>average_precision_score</code> uses the recall-increment weighting — not the trapezoidal rule — so hand-trapezoiding your PR points gives slightly different numbers (the worked table uses the sklearn definition; the trapezoid variant appears in Appendix A.7’s worked example).</li>
-<li><strong>AP is not comparable across cohorts with different prevalence</strong> (Exercise 2) — report prevalence next to every AP, always.</li>
-<li><strong>The last point of the PR curve</strong>: <code>precision_recall_curve</code> appends the anchor (recall 0, precision 1); the thresholds array is one shorter — off-by-one errors when zip()-ing live here.</li>
-<li><strong>Interpolated “best PR” curves</strong> (as in some leaderboards) paint an upper envelope that no actual threshold achieves; be explicit which convention you report.</li>
-<li><strong>AUPRC noise</strong>: with few positives the curve is jagged and AP’s sampling variance is large — bootstrap it (<a href="../part-01-statistics-bridge/01-5-resampling-intuition.html">1.5</a>) before declaring one model better than another.</li>
-<li><strong>PR wins under skew; ROC still wins for</strong>: cost-symmetric ranking questions, prevalence-robust reporting, and comparing against chance (0.5) — the metrics answer different questions; report both under skew.</li>
+<li><strong>Hierarchy principle</strong>: keep main effects whenever their interaction is present (dropping them constrains effects at the origin and biases estimates). Adding a <em>non-significant</em> interaction downward (simplifying) is fine; building interaction-only models is not.</li>
+<li><strong>“No significant interaction” ≠ “no interaction”</strong> — power for interactions is famously low (you’re estimating a difference of slopes); absence of evidence again (<a href="../part-01-statistics-bridge/01-4-statistical-inference.html">1.4</a>). Check what effect size the CI <em>rules out</em>.</li>
+<li><strong>Interpretability of main effects dies with the interaction</strong> — the printed β̂_x is the effect at moderator = 0, often outside data. Center, or report effects at grid values (Exercise 1/3 pattern).</li>
+<li><strong>Polynomial terms are self-interactions</strong>: x² is “x interacting with x” (curvature), x³ more so — everything on this page (centering, hierarchy, interpretation at values) applies to <a href="../part-02-linear-regression/02-8-nonlinear-transformations.html">2.8</a>.</li>
+<li><strong>Multiplicative hypotheses hide in logs</strong>: <code>log(y) ~ x * g</code> interactions are ratios of ratios — a significant interaction can mean “proportional effect differs,” which looks different back on the raw scale.</li>
+<li><strong>Multiple interactions multiply the search space</strong> — each added product is another test (Part 12’s problem in miniature); pre-specify the interactions theory predicts rather than sweeping all pairs.</li>
 </ul>
 <section id="read-refactor-ai-code" class="level3">
 <h3 class="anchored" data-anchor-id="read-refactor-ai-code">Read &amp; Refactor AI Code</h3>
-<p>This AI-generated “screen performance” report has <strong>three bugs</strong>. Run, diagnose, fix.</p>
+<p>This AI-generated subgroup analysis has <strong>three bugs</strong>. Run, diagnose, fix.</p>
 <div>
 <div id="pyodide-10" class="exercise-cell">
 
 </div>
 <script type="pyodide-10-contents">
-eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNrbGVhcm4ubWV0cmljcyBpbXBvcnQgKGFjY3VyYWN5X3Njb3JlLCByb2NfYXVjX3Njb3JlLFxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICBwcmVjaXNpb25fcmVjYWxsX2N1cnZlKVxuXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoNClcbnkgPSBucC5yX1tucC5vbmVzKDE1KSwgbnAuemVyb3MoMTQ4NSldLmFzdHlwZShpbnQpICAgICAgIyAxJSBwcmV2YWxlbmNlXG5zID0gbnAucl9bcm5nLm5vcm1hbCgwLjUyLCAwLjEsIDE1KSwgcm5nLm5vcm1hbCgwLjUsIDAuMSwgMTQ4NSldXG5wcmVkID0gKHMgPj0gMC41KS5hc3R5cGUoaW50KVxuXG4jIEJVRyAxOiBoZWFkbGluZVxucHJpbnQoXCJhY2N1cmFjeTpcIiwgcm91bmQoYWNjdXJhY3lfc2NvcmUoeSwgcHJlZCksIDQpKVxuXG4jIEJVRyAyOiBQUiBjb21wdXRlZCBvbiBoYXJkIHByZWRpY3Rpb25zXG5wcmVjLCByZWMsIF8gPSBwcmVjaXNpb25fcmVjYWxsX2N1cnZlKHksIHByZWQpXG5wcmludChcIkFQIG9uIGhhcmQgcHJlZHM6XCIsIHJvdW5kKGZsb2F0KG5wLnRyYXBlem9pZChwcmVjLCByZWMpKSwgMykpXG5cbiMgQlVHIDM6IGNyb3NzLWNvaG9ydCBjb21wYXJpc29uXG5wcmludChcIm91ciBBUCAwLjA3IHZzIHRoZWlyIHB1Ymxpc2hlZCBBUCAwLjM1IC0+ICd0aGV5IGFyZSA1eCBiZXR0ZXInXCIpIn0=
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5pbXBvcnQgcGFuZGFzIGFzIHBkXG5pbXBvcnQgc3RhdHNtb2RlbHMuZm9ybXVsYS5hcGkgYXMgc21mXG5cbnJuZyA9IG5wLnJhbmRvbS5kZWZhdWx0X3JuZyg4KVxubiA9IDMwMFxuZGYgPSBwZC5EYXRhRnJhbWUoe1wiZG9zZVwiOiBybmcudW5pZm9ybSgwLCAxMCwgbiksIFwic2V4XCI6IHJuZy5pbnRlZ2VycygwLCAyLCBuKX0pXG5kZltcInJlc3BcIl0gPSA1ICsgMS4wICogZGZbXCJkb3NlXCJdIC0gMC42ICogZGZbXCJzZXhcIl0gKyBybmcubm9ybWFsKDAsIDEuNSwgbikgICMgbm8gaW50ZXJhY3Rpb25cblxuIyBCVUcgMTogc3ViZ3JvdXAgYW5hbHlzZXMgaW5zdGVhZCBvZiBhIHRlc3RlZCBpbnRlcmFjdGlvblxuZm9yIHMgaW4gWzAsIDFdOlxuICAgIHN1YiA9IGRmW2RmW1wic2V4XCJdID09IHNdXG4gICAgZiA9IHNtZi5vbHMoXCJyZXNwIH4gZG9zZVwiLCBkYXRhPXN1YikuZml0KClcbiAgICBwcmludChmXCJzZXg9e3N9OiBkb3NlIHNsb3BlID0ge2YucGFyYW1zWydkb3NlJ106LjNmfSAocD17Zi5wdmFsdWVzWydkb3NlJ106LjRmfSlcIilcblxuIyBCVUcgMjogaW50ZXJhY3Rpb24gbW9kZWwgbWlzc2luZyBhIG1haW4gZWZmZWN0XG5maXQgPSBzbWYub2xzKFwicmVzcCB+IGRvc2UgKyBkb3NlOnNleFwiLCBkYXRhPWRmKS5maXQoKVxucHJpbnQoZml0LnBhcmFtcy5yb3VuZCgzKSlcblxuIyBCVUcgMzogaW50ZXJwcmV0aW5nIG1haW4gZWZmZWN0cyB3aXRoIGludGVyYWN0aW9uIHByZXNlbnRcbnByaW50KFwiZG9zZSBlZmZlY3QgaXMgKzEuMCBmb3IgZXZlcnlvbmVcIikifQ==
 </script>
 </div>
 <details>
 <summary>
-What’s wrong, and the fix
+What’s wrong, and the fixed version
 </summary>
 <ol type="1">
-<li><strong>Accuracy at 1% prevalence</strong> ≈ 0.99 for anything — replace with AP/precision@budget and always print the prevalence.</li>
-<li><strong>PR machinery on 0/1 predictions</strong>: at most two distinct thresholds exist; the “curve” is a line and trapz is not the AP definition (and on hard labels it’s meaningless). Feed continuous scores to <code>average_precision_score</code>.</li>
-<li><strong>Cross-cohort AP comparison without prevalences</strong>: their cohort may be 30% positive (AP baseline 0.30) while yours is 1% (baseline 0.01) — 0.07 may be the <em>stronger</em> result. Normalize (AP/prevalence) or recompute both on a common prevalence.</li>
+<li><strong>Two subgroup fits test slopes informally and underpowered</strong>: comparing two p-values (“significant here, not there”) is <em>not</em> an interaction test — differences of significant/non-significant are themselves noisy. Fix: one model with <code>dose * sex</code>, interaction tested once with full power.</li>
+<li><strong><code>dose + dose:sex</code> violates hierarchy</strong>: no <code>sex</code> main effect forces both groups’ lines through the same intercept — a strong, unjustified constraint that biases the interaction estimate itself.</li>
+<li><strong>“+1.0 for everyone” contradicts the model being fit</strong>: with an interaction, the dose effect is slope + interaction×sex — the sentence is only true for sex = 0 (and the printed main effect is at sex = 0 by construction).</li>
 </ol>
 <div>
 <div id="pyodide-11" class="exercise-cell">
 
 </div>
 <script type="pyodide-11-contents">
-eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuZnJvbSBza2xlYXJuLm1ldHJpY3MgaW1wb3J0IGF2ZXJhZ2VfcHJlY2lzaW9uX3Njb3JlLCBwcmVjaXNpb25fc2NvcmVcblxucm5nID0gbnAucmFuZG9tLmRlZmF1bHRfcm5nKDQpXG55ID0gbnAucl9bbnAub25lcygxNSksIG5wLnplcm9zKDE0ODUpXS5hc3R5cGUoaW50KVxucyA9IG5wLnJfW3JuZy5ub3JtYWwoMC41MiwgMC4xLCAxNSksIHJuZy5ub3JtYWwoMC41LCAwLjEsIDE0ODUpXVxuXG5hcCA9IGF2ZXJhZ2VfcHJlY2lzaW9uX3Njb3JlKHksIHMpXG50b3A1MCA9IG5wLmFyZ3NvcnQoLXMpWzo1MF1cbnByZWQ1MCA9IG5wLnplcm9zX2xpa2UoeSlcbnByZWQ1MFt0b3A1MF0gPSAxXG5wcmVjX2F0XzUwID0gcHJlY2lzaW9uX3Njb3JlKHksIHByZWQ1MClcbnByaW50KGZcInByZXZhbGVuY2Uge3kubWVhbigpOi4zZn1cIilcbnByaW50KGZcIkFQID0ge2FwOi40Zn0gICh7YXAgLyB5Lm1lYW4oKTouMWZ9eCB0aGUgcmFuZG9tIGJhc2VsaW5lKVwiKVxucHJpbnQoZlwicHJlY2lzaW9uIGlmIHdlIGZvbGxvdyB1cCB0aGUgdG9wIDUwOiB7cHJlY19hdF81MDouM2Z9IHZzIGJhc2VsaW5lIDAuMDFcIilcbnByaW50KFwiQ3Jvc3MtY29ob3J0IGNsYWltczogb25seSBhZnRlciBub3JtYWxpemluZyBib3RoIEFQcyBieSBwcmV2YWxlbmNlLlwiKSJ9
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuaW1wb3J0IHBhbmRhcyBhcyBwZFxuaW1wb3J0IHN0YXRzbW9kZWxzLmZvcm11bGEuYXBpIGFzIHNtZlxuZnJvbSBzdGF0c21vZGVscy5zdGF0cy5hbm92YSBpbXBvcnQgYW5vdmFfbG1cblxucm5nID0gbnAucmFuZG9tLmRlZmF1bHRfcm5nKDgpXG5uID0gMzAwXG5kZiA9IHBkLkRhdGFGcmFtZSh7XCJkb3NlXCI6IHJuZy51bmlmb3JtKDAsIDEwLCBuKSwgXCJzZXhcIjogcm5nLmludGVnZXJzKDAsIDIsIG4pfSlcbmRmW1wicmVzcFwiXSA9IDUgKyAxLjAgKiBkZltcImRvc2VcIl0gLSAwLjYgKiBkZltcInNleFwiXSArIHJuZy5ub3JtYWwoMCwgMS41LCBuKVxuXG5hZGQgPSBzbWYub2xzKFwicmVzcCB+IGRvc2UgKyBzZXhcIiwgZGF0YT1kZikuZml0KClcbmZ1bGwgPSBzbWYub2xzKFwicmVzcCB+IGRvc2UgKiBzZXhcIiwgZGF0YT1kZikuZml0KClcbnByaW50KFwiaW50ZXJhY3Rpb24gcCA9XCIsIHJvdW5kKGFub3ZhX2xtKGFkZCwgZnVsbCkuaWxvY1sxXVtcIlByKD5GKVwiXSwgMyksXG4gICAgICBcIiA8LSBvbmUgdGVzdCwgYW5zd2VycyB0aGUgc3ViZ3JvdXAgcXVlc3Rpb25cIilcbnByaW50KGFkZC5wYXJhbXMucm91bmQoMykpXG5wcmludChmXCJzbG9wZSBmb3Igc2V4PTE6IHthZGQucGFyYW1zWydkb3NlJ106LjNmfSAoYWRkaXRpdmUgbW9kZWw6IHNoYXJlZCBzbG9wZSlcIikifQ==
 </script>
 </div>
 </details>
@@ -738,20 +648,20 @@ eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBu
 </section>
 <section id="advanced-questions" class="level2">
 <h2 class="anchored" data-anchor-id="advanced-questions">5. Advanced Questions</h2>
-<p><strong>Q1.</strong> Prove the AP formula <span class="math inline">\(\text{AP} = \sum_n (R_n - R_{n-1})P_n\)</span> equals the precision <em>averaged over the recall axis</em> for the step-function PR curve, and show that for a single threshold operating point (R₀, P₀) the formula contributes <span class="math inline">\(R_0 P_0 = TP_0 / N_+\)</span> — connecting AP to the raw hit count. What does this imply about AP’s sensitivity to the <em>last</em> positives retrieved (high recall, low precision region)?</p>
+<p><strong>Q1.</strong> Show algebraically that centering both predictors before forming the product leaves the fitted values, R², and the interaction coefficient unchanged, and derive exactly what happens to the main-effect coefficients. Then state the one situation in which centering changes <em>conclusions</em>.</p>
 <details>
 <summary>
 Hint
 </summary>
-Write each recall increment as ΔTP/N₊ and multiply by precision = TP/(TP+FP) at that step.
+Write <span class="math inline">\(x_1 = \tilde x_1 + m_1\)</span> (m = mean), expand the product term, and match coefficients between parameterizations.
 </details>
 <details>
 <summary>
 Solution
 </summary>
-<span class="math inline">\(R_n - R_{n-1} = \Delta TP_n / N_+\)</span> and <span class="math inline">\(P_n = TP_n/(TP_n + FP_n)\)</span>, so each term counts positives gained weighted by their purity; summed, AP = (1/N₊) Σ ΔTP·P = mean precision per positive retrieved. For a model that puts all TPs first at one shot: one increment with <span class="math inline">\(R_0 = TP_0/N_+\)</span>, <span class="math inline">\(P_0 = 1\)</span>, contributing <span class="math inline">\(TP_0/N_+\)</span> = fraction of positives found perfectly. Consequence: the tail matters — retrieving the final positives at precision ~prevalence adds <span class="math inline">\((R=1 - R_{prev}) \times \text{prevalence}\)</span>-ish mass; with 5 positives, each late hit adds ~0.2 × 0.1 = 0.02. AP rewards getting <em>most</em> positives <em>cleanly</em>; it is forgiving of the last scrappy recoveries exactly in proportion to how few positives remain — a feature under skew, and the reason AP &gt; AUC Rankings shuffles rarely change AP’s tail.
+With <span class="math inline">\(x_1 = \tilde x_1 + m_1\)</span>, <span class="math inline">\(x_2 = \tilde x_2 + m_2\)</span>: <span class="math inline">\(x_1x_2 = \tilde x_1\tilde x_2 + m_2\tilde x_1 + m_1\tilde x_2 + m_1m_2\)</span>. Substituting and regrouping shows the new model is a <em>reparameterization</em> of the same column space (each new column is a combination of old columns), so fitted values and R² are identical; the interaction coefficient is unchanged (<span class="math inline">\(\tilde\beta_{12} = \beta_{12}\)</span>) while new mains absorb shifts: <span class="math inline">\(\tilde\beta_1 = \beta_1 + m_2\beta_{12}\)</span> — precisely “the x₁ effect at <span class="math inline">\(x_2 = m_2\)</span>.” The SEs of the mains change (they estimate different quantities at different points). Conclusions change only when you <em>interpret</em> the main effects: at moderator = 0 (raw, possibly absurd) vs moderator = mean (centered, meaningful). Same model, different sentences — which is why centering is an interpretation tool, not a statistics fix.
 </details>
-<p><strong>Q2.</strong> Your team must choose between Model A (AP = 0.21, AUC = 0.85) and Model B (AP = 0.24, AUC = 0.80) at 2% prevalence, with a fixed budget of 100 follow-ups per 10,000 screened. Design the decision experiment: what single metric or plot settles it, how do you quantify uncertainty (bootstrap), and how should the budget constraint enter the comparison? Implement it.</p>
+<p><strong>Q2.</strong> An interaction is significant in a discovery cohort (n = 400) and you plan a confirmatory cohort (n = 400). Given that interaction power is low, design the confirmation: what is tested, what alpha, what counts as replication (same sign? CI overlap? pre-registered effect size?), and what does the “winner’s curse” of the discovery estimate imply for the expected confirmatory effect size? Demonstrate the winner’s curse by simulation.</p>
 <details>
 <summary>
 Solution
@@ -761,32 +671,32 @@ Solution
 
 </div>
 <script type="pyodide-12-contents">
-eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoNSlcbiMgMTAsMDAwIHNjcmVlbmVkLCAyJSBwcmV2YWxlbmNlOyB0d28gc2NvcmUgbW9kZWxzXG55ID0gbnAucl9bbnAub25lcygyMDApLCBucC56ZXJvcyg5ODAwKV0uYXN0eXBlKGludClcbnNBID0gbnAucl9bcm5nLm5vcm1hbCgwLjU1LCAwLjEyLCAyMDApLCBybmcubm9ybWFsKDAuNSwgMC4xMiwgOTgwMCldXG5zQiA9IG5wLnJfW3JuZy5ub3JtYWwoMC42MCwgMC4yNSwgMjAwKSwgcm5nLm5vcm1hbCgwLjUsIDAuMjUsIDk4MDApXSAgIyBzaGFycGVyIHRvcCwgd29yc2UgdGFpbFxuXG5kZWYgdG9wa19oaXRzKHMsIHksIGs9MTAwKTpcbiAgICByZXR1cm4geVtucC5hcmdzb3J0KC1zKVs6a11dLnN1bSgpXG5cbnByaW50KFwiaGl0cyBpbiB0b3AtMTAwOiBBID1cIiwgdG9wa19oaXRzKHNBLCB5KSwgXCIgQiA9XCIsIHRvcGtfaGl0cyhzQiwgeSkpXG5cbmJvb3QgPSBbXVxuZm9yIF8gaW4gcmFuZ2UoMjAwMCk6XG4gICAgaWR4ID0gcm5nLmludGVnZXJzKDAsIGxlbih5KSwgbGVuKHkpKVxuICAgIGRpZmYgPSB0b3BrX2hpdHMoc0JbaWR4XSwgeVtpZHhdKSAtIHRvcGtfaGl0cyhzQVtpZHhdLCB5W2lkeF0pXG4gICAgYm9vdC5hcHBlbmQoZGlmZilcbmxvLCBoaSA9IG5wLnBlcmNlbnRpbGUoYm9vdCwgWzIuNSwgOTcuNV0pXG5wcmludChmXCJCIC0gQSB0b3AtMTAwIGhpdHM6IDk1JSBDSSAoe2xvOi4wZn0sIHtoaTouMGZ9KVwiKSJ9
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuaW1wb3J0IHN0YXRzbW9kZWxzLmFwaSBhcyBzbVxuXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoOSlcbiMgc2ltdWxhdGUgbWFueSBkaXNjb3ZlcnkgY29ob3J0cyB3aXRoIGEgVFJVRSBudWxsIGludGVyYWN0aW9uOyByZWNvcmQgb25seSBwPDAuMDUgaGl0c1xuaGl0cyA9IFtdXG5mb3IgXyBpbiByYW5nZSgzMDAwKTpcbiAgICB4ID0gcm5nLm5vcm1hbCgwLCAxLCA0MDApOyBnID0gcm5nLmludGVnZXJzKDAsIDIsIDQwMClcbiAgICB5ID0gMSArIHggKyBnICsgcm5nLm5vcm1hbCgwLCAyLCA0MDApICAgICAgICAgICAgICAjIG5vIGludGVyYWN0aW9uIGluIHRydXRoXG4gICAgWCA9IHNtLmFkZF9jb25zdGFudChucC5jX1t4LCBnLCB4ICogZ10pXG4gICAgYiwgcCA9IHNtLk9MUyh5LCBYKS5maXQoKS5wYXJhbXNbM10sIHNtLk9MUyh5LCBYKS5maXQoKS5wdmFsdWVzWzNdXG4gICAgaWYgcCA8IDAuMDU6XG4gICAgICAgIGhpdHMuYXBwZW5kKGIpXG5wcmludChmXCJmYWxzZS1wb3NpdGl2ZSBpbnRlcmFjdGlvbnMgZm91bmQ6IHtsZW4oaGl0cyl9LzMwMDBcIilcbnByaW50KGZcIm1lYW4gfGVmZmVjdHwgYW1vbmcgaGl0czoge25wLm1lYW4obnAuYWJzKGhpdHMpKTouM2Z9ICh0cnVlID0gMCDigJQgcHVyZSBzZWxlY3Rpb24pXCIpIn0=
 </script>
 </div>
-The budget turns the comparison into <strong>precision@k</strong> (top-100 hits) — AUC and AP both summarize the whole curve, but only k = 100 will be <em>operated</em>. The bootstrap CI on the hit difference says whether B’s sharper head is real or noise (here B wins at the operating point despite losing on AUC — a decisive, budget-aware answer). Generalize the pattern: choose the metric that mirrors the deployment constraint, then attach uncertainty to that metric, not to a curve-wide scalar that no one will ever operate.
+Design: (1) test the <em>same, pre-registered</em> interaction in the confirmation cohort at one-sided α = 0.05 in the pre-stated direction; (2) replication = significant <em>and</em> same sign, ideally with effect size inside the discovery CI’s plausible range; CI overlap alone is far too weak (overlapping CIs are consistent with significant differences); (3) the winner’s curse: conditional on being selected for p &lt; 0.05 under the null, the discovery estimate averages ~1 SE in magnitude (simulation above: false hits with mean |β̂| ≈ 0.1 SD against truth 0) — so <em>shrink expectations</em>: the confirmatory estimate will typically be smaller than the discovery headline even when real. Report both cohorts’ estimates side by side, never the discovery estimate alone as “the effect.”
 </details>
 </section>
 <section id="complex-questions" class="level2">
 <h2 class="anchored" data-anchor-id="complex-questions">6. Complex Questions</h2>
-<p><strong>C1 (AUPRC × <a href="../part-03-classification-glm/03-1-classification-fundamentals.html">3.1 metrics</a> × <a href="../part-01-statistics-bridge/01-4-statistical-inference.html">1.4 inference</a>).</strong> Generate 200 resampled test sets (bootstrap the same test data) and compute AP and AUC distributions for one fixed model. Which metric’s CI is wider at 1% prevalence, and does the ordering of two competing models (by either metric) survive the uncertainty? Write the reporting rule that follows: when do you need the bootstrap before comparing two classifiers, and what sample size of positives makes single-number AP comparisons defensible?</p>
-<p><strong>C2 (AUPRC × <a href="#">12.x multiple testing</a> preview).</strong> A biomarker screen tests 20,000 candidates and reports “14 significant hits.” Reinterpret the screen as a classifier: define scores, prevalence, and AP for the hit list, then compute the precision you’d need for the list to beat <em>random</em> selection by a factor of 10. Connect to the FDR viewpoint: precision of a hit list at fixed size <em>is</em> 1 − FDR of that list — the two vocabularies are the same object seen from the ranking and the testing side.</p>
+<p><strong>C1 (interaction × <a href="../part-02-linear-regression/02-6-categorical-predictors.html">2.6 Categorical</a> × <a href="../part-01-statistics-bridge/01-2-relationships.html">1.2 Simpson</a>).</strong> Construct data where: pooled slope is positive, every group’s slope is negative, and the group×x interaction is significant. This is Simpson’s paradox <em>with heterogeneous slopes</em> — show the three nested models (pooled, dummies, dummies×x) and write which model each of three stakeholders (hospital administrator, per-site clinician, meta-analyst) should read.</p>
+<p><strong>C2 (interaction × <a href="../part-04-validation-model-selection/04-6-hyperparameter-tuning.html">4.6 Tuning</a> preview).</strong> Generate data with a true interaction and compare the <em>out-of-sample</em> performance of (a) the additive model, (b) the correctly specified interaction model, (c) the all-pairs-interactions model (x1:x2, x1:x3, x2:x3, x1:x2:x3 with 4 predictors), across n = 40, 100, 400. Which model wins at each n, and what does this tell you about interaction hunting as a function of sample size — before you ever look at a p-value?</p>
 </section>
 <section id="summary" class="level2">
 <h2 class="anchored" data-anchor-id="summary">7. Summary</h2>
 <ul>
-<li>Under class skew, PR curves price false alarms honestly; ROC’s huge negative pool hides them.</li>
-<li>AP = Σ Δrecall × precision: mean precision weighted by positives gained; baseline = prevalence.</li>
-<li>AUC stays comparable across prevalences; AP does not — report prevalence beside every AP.</li>
-<li>Below-baseline PR curve = anti-ranked scores: flip before you discard.</li>
-<li>The metric that mirrors the deployment constraint (precision@budget) beats any curve-wide scalar for decisions.</li>
-<li>With few positives, bootstrap AP differences before believing them.</li>
-<li>With both metric families in hand, ask the orthogonal question — why not just use linear regression on 0/1 labels? — <a href="../part-03-classification-glm/03-2-why-not-linear-regression.html">3.2 Why not linear regression for categories?</a></li>
+<li>An interaction makes an effect a function: β₃ ≠ 0 means “the effect of x₁ depends on x₂.”</li>
+<li>Report effects at meaningful moderator values (re-center and read main effects) — never the raw table alone.</li>
+<li>Hierarchy principle: keep main effects with their interaction; simplify downward only.</li>
+<li>Subgroup p-value comparisons are not interaction tests; one product term, tested once, has the power.</li>
+<li>Centering changes interpretation, never fit; polynomial curvature is interaction with itself.</li>
+<li>Interaction power is low; absence of evidence needs the CI’s effect-size statement.</li>
+<li>Linearity itself is now the last standing structural assumption — <a href="../part-02-linear-regression/02-8-nonlinear-transformations.html">2.8 Nonlinear feature transformations</a> bends the line without leaving the linear-model world.</li>
 </ul>
 
 
 <script type="pyodide-data">
-eyJvcHRpb25zIjp7ImVudiI6eyJQTE9UTFlfUkVOREVSRVIiOiJwbG90bHlfbWltZXR5cGUifSwiaW5kZXhVUkwiOiJodHRwczovL2Nkbi5qc2RlbGl2ci5uZXQvcHlvZGlkZS92MC4yOC4xL2Z1bGwvIn0sInBhY2thZ2VzIjp7InBrZ3MiOlsicHlvZGlkZV9odHRwIiwibWljcm9waXAiLCJpcHl0aG9uIiwibnVtcHkiLCJzY2lraXQtbGVhcm4iLCJtYXRwbG90bGliIl19fQ==
+eyJvcHRpb25zIjp7ImVudiI6eyJQTE9UTFlfUkVOREVSRVIiOiJwbG90bHlfbWltZXR5cGUifSwiaW5kZXhVUkwiOiJodHRwczovL2Nkbi5qc2RlbGl2ci5uZXQvcHlvZGlkZS92MC4yOC4xL2Z1bGwvIn0sInBhY2thZ2VzIjp7InBrZ3MiOlsicHlvZGlkZV9odHRwIiwibWljcm9waXAiLCJpcHl0aG9uIiwibnVtcHkiLCJwYW5kYXMiLCJzdGF0c21vZGVscyIsInBhdHN5IiwibWF0cGxvdGxpYiJdfX0=
 </script>
 <script type="ojs-module-contents">
 eyJjb250ZW50cyI6W3siY2VsbE5hbWUiOiJweW9kaWRlLTEyIiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6Il9weW9kaWRlX3ZhbHVlXzEyID0ge1xuICBjb25zdCB7IGhpZ2hsaWdodFB5dGhvbiwgYjY0RGVjb2RlfSA9IHdpbmRvdy5fZXhlcmNpc2Vfb2pzX3J1bnRpbWU7XG5cbiAgY29uc3Qgc2NyaXB0Q29udGVudCA9IGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3IoYHNjcmlwdFt0eXBlPVxcXCJweW9kaWRlLTEyLWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgLy8gRGVmYXVsdCBldmFsdWF0aW9uIGNvbmZpZ3VyYXRpb25cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oe1xuICAgIGlkOiBcInB5b2RpZGUtMTItY29udGVudHNcIixcbiAgICBlY2hvOiB0cnVlLFxuICAgIG91dHB1dDogdHJ1ZVxuICB9LCBibG9jay5hdHRyKTtcblxuICAvLyBFdmFsdWF0ZSB0aGUgcHJvdmlkZWQgUHl0aG9uIGNvZGVcbiAgY29uc3QgcmVzdWx0ID0gcHlvZGlkZU9qcy5wcm9jZXNzKHtjb2RlOiBibG9jay5jb2RlLCBvcHRpb25zfSwge30pO1xuXG4gIC8vIEVhcmx5IHlpZWxkIHdoaWxlIHdlIHdhaXQgZm9yIHRoZSBmaXJzdCBldmFsdWF0aW9uIGFuZCByZW5kZXJcbiAgaWYgKG9wdGlvbnMub3V0cHV0ICYmICEoXCIxMlwiIGluIHB5b2RpZGVPanMucmVuZGVyZWRPanMpKSB7XG4gICAgY29uc3QgY29udGFpbmVyID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcImRpdlwiKTtcbiAgICBjb25zdCBzcGlubmVyID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcImRpdlwiKTtcblxuICAgIGlmIChvcHRpb25zLmVjaG8pIHtcbiAgICAgIC8vIFNob3cgb3V0cHV0IGFzIGhpZ2hsaWdodGVkIHNvdXJjZVxuICAgICAgY29uc3QgcHJlRWxlbSA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJwcmVcIik7XG4gICAgICBjb250YWluZXIuY2xhc3NOYW1lID0gXCJzb3VyY2VDb2RlXCI7XG4gICAgICBwcmVFbGVtLmNsYXNzTmFtZSA9IFwic291cmNlQ29kZSBweXRob25cIjtcbiAgICAgIHByZUVsZW0uYXBwZW5kQ2hpbGQoaGlnaGxpZ2h0UHl0aG9uKGJsb2NrLmNvZGUpKTtcbiAgICAgIHNwaW5uZXIuY2xhc3NOYW1lID0gXCJzcGlubmVyLWdyb3cgc3Bpbm5lci1ncm93LXNtIG0tMiBwb3NpdGlvbi1hYnNvbHV0ZSB0b3AtMCBlbmQtMFwiO1xuICAgICAgcHJlRWxlbS5hcHBlbmRDaGlsZChzcGlubmVyKTtcbiAgICAgIGNvbnRhaW5lci5hcHBlbmRDaGlsZChwcmVFbGVtKTtcbiAgICB9IGVsc2Uge1xuICAgICAgc3Bpbm5lci5jbGFzc05hbWUgPSBcInNwaW5uZXItYm9yZGVyIHNwaW5uZXItYm9yZGVyLXNtXCI7XG4gICAgICBjb250YWluZXIuYXBwZW5kQ2hpbGQoc3Bpbm5lcik7XG4gICAgfVxuXG4gICAgeWllbGQgY29udGFpbmVyO1xuICB9XG5cbiAgcHlvZGlkZU9qcy5yZW5kZXJlZE9qc1tcIjEyXCJdID0gdHJ1ZTtcbiAgeWllbGQgYXdhaXQgcmVzdWx0O1xufVxuIn0seyJjZWxsTmFtZSI6InB5b2RpZGUtMTEiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoiX3B5b2RpZGVfdmFsdWVfMTEgPSB7XG4gIGNvbnN0IHsgaGlnaGxpZ2h0UHl0aG9uLCBiNjREZWNvZGV9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtMTEtY29udGVudHNcXFwiXWApLnRleHRDb250ZW50O1xuICBjb25zdCBibG9jayA9IEpTT04ucGFyc2UoYjY0RGVjb2RlKHNjcmlwdENvbnRlbnQpKTtcblxuICAvLyBEZWZhdWx0IGV2YWx1YXRpb24gY29uZmlndXJhdGlvblxuICBjb25zdCBvcHRpb25zID0gT2JqZWN0LmFzc2lnbih7XG4gICAgaWQ6IFwicHlvZGlkZS0xMS1jb250ZW50c1wiLFxuICAgIGVjaG86IHRydWUsXG4gICAgb3V0cHV0OiB0cnVlXG4gIH0sIGJsb2NrLmF0dHIpO1xuXG4gIC8vIEV2YWx1YXRlIHRoZSBwcm92aWRlZCBQeXRob24gY29kZVxuICBjb25zdCByZXN1bHQgPSBweW9kaWRlT2pzLnByb2Nlc3Moe2NvZGU6IGJsb2NrLmNvZGUsIG9wdGlvbnN9LCB7fSk7XG5cbiAgLy8gRWFybHkgeWllbGQgd2hpbGUgd2Ugd2FpdCBmb3IgdGhlIGZpcnN0IGV2YWx1YXRpb24gYW5kIHJlbmRlclxuICBpZiAob3B0aW9ucy5vdXRwdXQgJiYgIShcIjExXCIgaW4gcHlvZGlkZU9qcy5yZW5kZXJlZE9qcykpIHtcbiAgICBjb25zdCBjb250YWluZXIgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpO1xuICAgIGNvbnN0IHNwaW5uZXIgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpO1xuXG4gICAgaWYgKG9wdGlvbnMuZWNobykge1xuICAgICAgLy8gU2hvdyBvdXRwdXQgYXMgaGlnaGxpZ2h0ZWQgc291cmNlXG4gICAgICBjb25zdCBwcmVFbGVtID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcInByZVwiKTtcbiAgICAgIGNvbnRhaW5lci5jbGFzc05hbWUgPSBcInNvdXJjZUNvZGVcIjtcbiAgICAgIHByZUVsZW0uY2xhc3NOYW1lID0gXCJzb3VyY2VDb2RlIHB5dGhvblwiO1xuICAgICAgcHJlRWxlbS5hcHBlbmRDaGlsZChoaWdobGlnaHRQeXRob24oYmxvY2suY29kZSkpO1xuICAgICAgc3Bpbm5lci5jbGFzc05hbWUgPSBcInNwaW5uZXItZ3JvdyBzcGlubmVyLWdyb3ctc20gbS0yIHBvc2l0aW9uLWFic29sdXRlIHRvcC0wIGVuZC0wXCI7XG4gICAgICBwcmVFbGVtLmFwcGVuZENoaWxkKHNwaW5uZXIpO1xuICAgICAgY29udGFpbmVyLmFwcGVuZENoaWxkKHByZUVsZW0pO1xuICAgIH0gZWxzZSB7XG4gICAgICBzcGlubmVyLmNsYXNzTmFtZSA9IFwic3Bpbm5lci1ib3JkZXIgc3Bpbm5lci1ib3JkZXItc21cIjtcbiAgICAgIGNvbnRhaW5lci5hcHBlbmRDaGlsZChzcGlubmVyKTtcbiAgICB9XG5cbiAgICB5aWVsZCBjb250YWluZXI7XG4gIH1cblxuICBweW9kaWRlT2pzLnJlbmRlcmVkT2pzW1wiMTFcIl0gPSB0cnVlO1xuICB5aWVsZCBhd2FpdCByZXN1bHQ7XG59XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS0xMCIsImlubGluZSI6ZmFsc2UsIm1ldGhvZE5hbWUiOiJpbnRlcnByZXQiLCJzb3VyY2UiOiJ2aWV3b2YgX3B5b2RpZGVfZWRpdG9yXzEwID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS0xMC1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHsgaWQ6IGBweW9kaWRlLTEwLWNvbnRlbnRzYCB9LCBibG9jay5hdHRyKTtcbiAgY29uc3QgZWRpdG9yID0gbmV3IFB5b2RpZGVFeGVyY2lzZUVkaXRvcihcbiAgICBweW9kaWRlT2pzLnB5b2RpZGVQcm9taXNlLFxuICAgIGJsb2NrLmNvZGUsXG4gICAgb3B0aW9uc1xuICApO1xuXG4gIHJldHVybiBlZGl0b3IuY29udGFpbmVyO1xufVxuX3B5b2RpZGVfdmFsdWVfMTAgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzEwLCB7fSk7XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS05IiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6Il9weW9kaWRlX3ZhbHVlXzkgPSB7XG4gIGNvbnN0IHsgaGlnaGxpZ2h0UHl0aG9uLCBiNjREZWNvZGV9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtOS1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIC8vIERlZmF1bHQgZXZhbHVhdGlvbiBjb25maWd1cmF0aW9uXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHtcbiAgICBpZDogXCJweW9kaWRlLTktY29udGVudHNcIixcbiAgICBlY2hvOiB0cnVlLFxuICAgIG91dHB1dDogdHJ1ZVxuICB9LCBibG9jay5hdHRyKTtcblxuICAvLyBFdmFsdWF0ZSB0aGUgcHJvdmlkZWQgUHl0aG9uIGNvZGVcbiAgY29uc3QgcmVzdWx0ID0gcHlvZGlkZU9qcy5wcm9jZXNzKHtjb2RlOiBibG9jay5jb2RlLCBvcHRpb25zfSwge30pO1xuXG4gIC8vIEVhcmx5IHlpZWxkIHdoaWxlIHdlIHdhaXQgZm9yIHRoZSBmaXJzdCBldmFsdWF0aW9uIGFuZCByZW5kZXJcbiAgaWYgKG9wdGlvbnMub3V0cHV0ICYmICEoXCI5XCIgaW4gcHlvZGlkZU9qcy5yZW5kZXJlZE9qcykpIHtcbiAgICBjb25zdCBjb250YWluZXIgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpO1xuICAgIGNvbnN0IHNwaW5uZXIgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpO1xuXG4gICAgaWYgKG9wdGlvbnMuZWNobykge1xuICAgICAgLy8gU2hvdyBvdXRwdXQgYXMgaGlnaGxpZ2h0ZWQgc291cmNlXG4gICAgICBjb25zdCBwcmVFbGVtID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcInByZVwiKTtcbiAgICAgIGNvbnRhaW5lci5jbGFzc05hbWUgPSBcInNvdXJjZUNvZGVcIjtcbiAgICAgIHByZUVsZW0uY2xhc3NOYW1lID0gXCJzb3VyY2VDb2RlIHB5dGhvblwiO1xuICAgICAgcHJlRWxlbS5hcHBlbmRDaGlsZChoaWdobGlnaHRQeXRob24oYmxvY2suY29kZSkpO1xuICAgICAgc3Bpbm5lci5jbGFzc05hbWUgPSBcInNwaW5uZXItZ3JvdyBzcGlubmVyLWdyb3ctc20gbS0yIHBvc2l0aW9uLWFic29sdXRlIHRvcC0wIGVuZC0wXCI7XG4gICAgICBwcmVFbGVtLmFwcGVuZENoaWxkKHNwaW5uZXIpO1xuICAgICAgY29udGFpbmVyLmFwcGVuZENoaWxkKHByZUVsZW0pO1xuICAgIH0gZWxzZSB7XG4gICAgICBzcGlubmVyLmNsYXNzTmFtZSA9IFwic3Bpbm5lci1ib3JkZXIgc3Bpbm5lci1ib3JkZXItc21cIjtcbiAgICAgIGNvbnRhaW5lci5hcHBlbmRDaGlsZChzcGlubmVyKTtcbiAgICB9XG5cbiAgICB5aWVsZCBjb250YWluZXI7XG4gIH1cblxuICBweW9kaWRlT2pzLnJlbmRlcmVkT2pzW1wiOVwiXSA9IHRydWU7XG4gIHlpZWxkIGF3YWl0IHJlc3VsdDtcbn1cbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTgiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoiX3B5b2RpZGVfdmFsdWVfOCA9IHtcbiAgY29uc3QgeyBoaWdobGlnaHRQeXRob24sIGI2NERlY29kZX0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS04LWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgLy8gRGVmYXVsdCBldmFsdWF0aW9uIGNvbmZpZ3VyYXRpb25cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oe1xuICAgIGlkOiBcInB5b2RpZGUtOC1jb250ZW50c1wiLFxuICAgIGVjaG86IHRydWUsXG4gICAgb3V0cHV0OiB0cnVlXG4gIH0sIGJsb2NrLmF0dHIpO1xuXG4gIC8vIEV2YWx1YXRlIHRoZSBwcm92aWRlZCBQeXRob24gY29kZVxuICBjb25zdCByZXN1bHQgPSBweW9kaWRlT2pzLnByb2Nlc3Moe2NvZGU6IGJsb2NrLmNvZGUsIG9wdGlvbnN9LCB7fSk7XG5cbiAgLy8gRWFybHkgeWllbGQgd2hpbGUgd2Ugd2FpdCBmb3IgdGhlIGZpcnN0IGV2YWx1YXRpb24gYW5kIHJlbmRlclxuICBpZiAob3B0aW9ucy5vdXRwdXQgJiYgIShcIjhcIiBpbiBweW9kaWRlT2pzLnJlbmRlcmVkT2pzKSkge1xuICAgIGNvbnN0IGNvbnRhaW5lciA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJkaXZcIik7XG4gICAgY29uc3Qgc3Bpbm5lciA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJkaXZcIik7XG5cbiAgICBpZiAob3B0aW9ucy5lY2hvKSB7XG4gICAgICAvLyBTaG93IG91dHB1dCBhcyBoaWdobGlnaHRlZCBzb3VyY2VcbiAgICAgIGNvbnN0IHByZUVsZW0gPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwicHJlXCIpO1xuICAgICAgY29udGFpbmVyLmNsYXNzTmFtZSA9IFwic291cmNlQ29kZVwiO1xuICAgICAgcHJlRWxlbS5jbGFzc05hbWUgPSBcInNvdXJjZUNvZGUgcHl0aG9uXCI7XG4gICAgICBwcmVFbGVtLmFwcGVuZENoaWxkKGhpZ2hsaWdodFB5dGhvbihibG9jay5jb2RlKSk7XG4gICAgICBzcGlubmVyLmNsYXNzTmFtZSA9IFwic3Bpbm5lci1ncm93IHNwaW5uZXItZ3Jvdy1zbSBtLTIgcG9zaXRpb24tYWJzb2x1dGUgdG9wLTAgZW5kLTBcIjtcbiAgICAgIHByZUVsZW0uYXBwZW5kQ2hpbGQoc3Bpbm5lcik7XG4gICAgICBjb250YWluZXIuYXBwZW5kQ2hpbGQocHJlRWxlbSk7XG4gICAgfSBlbHNlIHtcbiAgICAgIHNwaW5uZXIuY2xhc3NOYW1lID0gXCJzcGlubmVyLWJvcmRlciBzcGlubmVyLWJvcmRlci1zbVwiO1xuICAgICAgY29udGFpbmVyLmFwcGVuZENoaWxkKHNwaW5uZXIpO1xuICAgIH1cblxuICAgIHlpZWxkIGNvbnRhaW5lcjtcbiAgfVxuXG4gIHB5b2RpZGVPanMucmVuZGVyZWRPanNbXCI4XCJdID0gdHJ1ZTtcbiAgeWllbGQgYXdhaXQgcmVzdWx0O1xufVxuIn0seyJjZWxsTmFtZSI6InB5b2RpZGUtNyIsImlubGluZSI6ZmFsc2UsIm1ldGhvZE5hbWUiOiJpbnRlcnByZXQiLCJzb3VyY2UiOiJfcHlvZGlkZV92YWx1ZV83ID0ge1xuICBjb25zdCB7IGhpZ2hsaWdodFB5dGhvbiwgYjY0RGVjb2RlfSA9IHdpbmRvdy5fZXhlcmNpc2Vfb2pzX3J1bnRpbWU7XG5cbiAgY29uc3Qgc2NyaXB0Q29udGVudCA9IGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3IoYHNjcmlwdFt0eXBlPVxcXCJweW9kaWRlLTctY29udGVudHNcXFwiXWApLnRleHRDb250ZW50O1xuICBjb25zdCBibG9jayA9IEpTT04ucGFyc2UoYjY0RGVjb2RlKHNjcmlwdENvbnRlbnQpKTtcblxuICAvLyBEZWZhdWx0IGV2YWx1YXRpb24gY29uZmlndXJhdGlvblxuICBjb25zdCBvcHRpb25zID0gT2JqZWN0LmFzc2lnbih7XG4gICAgaWQ6IFwicHlvZGlkZS03LWNvbnRlbnRzXCIsXG4gICAgZWNobzogdHJ1ZSxcbiAgICBvdXRwdXQ6IHRydWVcbiAgfSwgYmxvY2suYXR0cik7XG5cbiAgLy8gRXZhbHVhdGUgdGhlIHByb3ZpZGVkIFB5dGhvbiBjb2RlXG4gIGNvbnN0IHJlc3VsdCA9IHB5b2RpZGVPanMucHJvY2Vzcyh7Y29kZTogYmxvY2suY29kZSwgb3B0aW9uc30sIHt9KTtcblxuICAvLyBFYXJseSB5aWVsZCB3aGlsZSB3ZSB3YWl0IGZvciB0aGUgZmlyc3QgZXZhbHVhdGlvbiBhbmQgcmVuZGVyXG4gIGlmIChvcHRpb25zLm91dHB1dCAmJiAhKFwiN1wiIGluIHB5b2RpZGVPanMucmVuZGVyZWRPanMpKSB7XG4gICAgY29uc3QgY29udGFpbmVyID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcImRpdlwiKTtcbiAgICBjb25zdCBzcGlubmVyID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcImRpdlwiKTtcblxuICAgIGlmIChvcHRpb25zLmVjaG8pIHtcbiAgICAgIC8vIFNob3cgb3V0cHV0IGFzIGhpZ2hsaWdodGVkIHNvdXJjZVxuICAgICAgY29uc3QgcHJlRWxlbSA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJwcmVcIik7XG4gICAgICBjb250YWluZXIuY2xhc3NOYW1lID0gXCJzb3VyY2VDb2RlXCI7XG4gICAgICBwcmVFbGVtLmNsYXNzTmFtZSA9IFwic291cmNlQ29kZSBweXRob25cIjtcbiAgICAgIHByZUVsZW0uYXBwZW5kQ2hpbGQoaGlnaGxpZ2h0UHl0aG9uKGJsb2NrLmNvZGUpKTtcbiAgICAgIHNwaW5uZXIuY2xhc3NOYW1lID0gXCJzcGlubmVyLWdyb3cgc3Bpbm5lci1ncm93LXNtIG0tMiBwb3NpdGlvbi1hYnNvbHV0ZSB0b3AtMCBlbmQtMFwiO1xuICAgICAgcHJlRWxlbS5hcHBlbmRDaGlsZChzcGlubmVyKTtcbiAgICAgIGNvbnRhaW5lci5hcHBlbmRDaGlsZChwcmVFbGVtKTtcbiAgICB9IGVsc2Uge1xuICAgICAgc3Bpbm5lci5jbGFzc05hbWUgPSBcInNwaW5uZXItYm9yZGVyIHNwaW5uZXItYm9yZGVyLXNtXCI7XG4gICAgICBjb250YWluZXIuYXBwZW5kQ2hpbGQoc3Bpbm5lcik7XG4gICAgfVxuXG4gICAgeWllbGQgY29udGFpbmVyO1xuICB9XG5cbiAgcHlvZGlkZU9qcy5yZW5kZXJlZE9qc1tcIjdcIl0gPSB0cnVlO1xuICB5aWVsZCBhd2FpdCByZXN1bHQ7XG59XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS02IiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6InZpZXdvZiBfcHlvZGlkZV9lZGl0b3JfNiA9IHtcbiAgY29uc3QgeyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IsIGI2NERlY29kZSB9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtNi1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHsgaWQ6IGBweW9kaWRlLTYtY29udGVudHNgIH0sIGJsb2NrLmF0dHIpO1xuICBjb25zdCBlZGl0b3IgPSBuZXcgUHlvZGlkZUV4ZXJjaXNlRWRpdG9yKFxuICAgIHB5b2RpZGVPanMucHlvZGlkZVByb21pc2UsXG4gICAgYmxvY2suY29kZSxcbiAgICBvcHRpb25zXG4gICk7XG5cbiAgcmV0dXJuIGVkaXRvci5jb250YWluZXI7XG59XG5fcHlvZGlkZV92YWx1ZV82ID0gcHlvZGlkZU9qcy5wcm9jZXNzKF9weW9kaWRlX2VkaXRvcl82LCB7fSk7XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS01IiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6InZpZXdvZiBfcHlvZGlkZV9lZGl0b3JfNSA9IHtcbiAgY29uc3QgeyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IsIGI2NERlY29kZSB9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtNS1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHsgaWQ6IGBweW9kaWRlLTUtY29udGVudHNgIH0sIGJsb2NrLmF0dHIpO1xuICBjb25zdCBlZGl0b3IgPSBuZXcgUHlvZGlkZUV4ZXJjaXNlRWRpdG9yKFxuICAgIHB5b2RpZGVPanMucHlvZGlkZVByb21pc2UsXG4gICAgYmxvY2suY29kZSxcbiAgICBvcHRpb25zXG4gICk7XG5cbiAgcmV0dXJuIGVkaXRvci5jb250YWluZXI7XG59XG5fcHlvZGlkZV92YWx1ZV81ID0gcHlvZGlkZU9qcy5wcm9jZXNzKF9weW9kaWRlX2VkaXRvcl81LCB7fSk7XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS00IiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6InZpZXdvZiBfcHlvZGlkZV9lZGl0b3JfNCA9IHtcbiAgY29uc3QgeyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IsIGI2NERlY29kZSB9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtNC1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHsgaWQ6IGBweW9kaWRlLTQtY29udGVudHNgIH0sIGJsb2NrLmF0dHIpO1xuICBjb25zdCBlZGl0b3IgPSBuZXcgUHlvZGlkZUV4ZXJjaXNlRWRpdG9yKFxuICAgIHB5b2RpZGVPanMucHlvZGlkZVByb21pc2UsXG4gICAgYmxvY2suY29kZSxcbiAgICBvcHRpb25zXG4gICk7XG5cbiAgcmV0dXJuIGVkaXRvci5jb250YWluZXI7XG59XG5fcHlvZGlkZV92YWx1ZV80ID0gcHlvZGlkZU9qcy5wcm9jZXNzKF9weW9kaWRlX2VkaXRvcl80LCB7fSk7XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS0zIiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6InZpZXdvZiBfcHlvZGlkZV9lZGl0b3JfMyA9IHtcbiAgY29uc3QgeyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IsIGI2NERlY29kZSB9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtMy1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHsgaWQ6IGBweW9kaWRlLTMtY29udGVudHNgIH0sIGJsb2NrLmF0dHIpO1xuICBjb25zdCBlZGl0b3IgPSBuZXcgUHlvZGlkZUV4ZXJjaXNlRWRpdG9yKFxuICAgIHB5b2RpZGVPanMucHlvZGlkZVByb21pc2UsXG4gICAgYmxvY2suY29kZSxcbiAgICBvcHRpb25zXG4gICk7XG5cbiAgcmV0dXJuIGVkaXRvci5jb250YWluZXI7XG59XG5fcHlvZGlkZV92YWx1ZV8zID0gcHlvZGlkZU9qcy5wcm9jZXNzKF9weW9kaWRlX2VkaXRvcl8zLCB7fSk7XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS0yIiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6InZpZXdvZiBfcHlvZGlkZV9lZGl0b3JfMiA9IHtcbiAgY29uc3QgeyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IsIGI2NERlY29kZSB9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtMi1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHsgaWQ6IGBweW9kaWRlLTItY29udGVudHNgIH0sIGJsb2NrLmF0dHIpO1xuICBjb25zdCBlZGl0b3IgPSBuZXcgUHlvZGlkZUV4ZXJjaXNlRWRpdG9yKFxuICAgIHB5b2RpZGVPanMucHlvZGlkZVByb21pc2UsXG4gICAgYmxvY2suY29kZSxcbiAgICBvcHRpb25zXG4gICk7XG5cbiAgcmV0dXJuIGVkaXRvci5jb250YWluZXI7XG59XG5fcHlvZGlkZV92YWx1ZV8yID0gcHlvZGlkZU9qcy5wcm9jZXNzKF9weW9kaWRlX2VkaXRvcl8yLCB7fSk7XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS0xIiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6InZpZXdvZiBfcHlvZGlkZV9lZGl0b3JfMSA9IHtcbiAgY29uc3QgeyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IsIGI2NERlY29kZSB9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtMS1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHsgaWQ6IGBweW9kaWRlLTEtY29udGVudHNgIH0sIGJsb2NrLmF0dHIpO1xuICBjb25zdCBlZGl0b3IgPSBuZXcgUHlvZGlkZUV4ZXJjaXNlRWRpdG9yKFxuICAgIHB5b2RpZGVPanMucHlvZGlkZVByb21pc2UsXG4gICAgYmxvY2suY29kZSxcbiAgICBvcHRpb25zXG4gICk7XG5cbiAgcmV0dXJuIGVkaXRvci5jb250YWluZXI7XG59XG5fcHlvZGlkZV92YWx1ZV8xID0gcHlvZGlkZU9qcy5wcm9jZXNzKF9weW9kaWRlX2VkaXRvcl8xLCB7fSk7XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS1wcmVsdWRlIiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldFF1aWV0Iiwic291cmNlIjoicHlvZGlkZU9qcyA9IHtcbiAgY29uc3Qge1xuICAgIFB5b2RpZGVFdmFsdWF0b3IsXG4gICAgUHlvZGlkZUVudmlyb25tZW50TWFuYWdlcixcbiAgICBzZXR1cFB5dGhvbixcbiAgICBzdGFydFB5b2RpZGVXb3JrZXIsXG4gICAgYjY0RGVjb2RlLFxuICAgIGNvbGxhcHNlUGF0aCxcbiAgfSA9IHdpbmRvdy5fZXhlcmNpc2Vfb2pzX3J1bnRpbWU7XG5cbiAgY29uc3Qgc3RhdHVzQ29udGFpbmVyID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoXCJleGVyY2lzZS1sb2FkaW5nLXN0YXR1c1wiKTtcbiAgY29uc3QgaW5kaWNhdG9yQ29udGFpbmVyID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoXCJleGVyY2lzZS1sb2FkaW5nLWluZGljYXRvclwiKTtcbiAgaW5kaWNhdG9yQ29udGFpbmVyLmNsYXNzTGlzdC5yZW1vdmUoXCJkLW5vbmVcIik7XG5cbiAgbGV0IHN0YXR1c1RleHQgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpXG4gIHN0YXR1c1RleHQuY2xhc3NMaXN0ID0gXCJleGVyY2lzZS1sb2FkaW5nLWRldGFpbHNcIjtcbiAgc3RhdHVzVGV4dCA9IHN0YXR1c0NvbnRhaW5lci5hcHBlbmRDaGlsZChzdGF0dXNUZXh0KTtcbiAgc3RhdHVzVGV4dC50ZXh0Q29udGVudCA9IGBJbml0aWFsaXNlYDtcblxuICAvLyBIb2lzdCBpbmRpY2F0b3Igb3V0IGZyb20gZmluYWwgc2xpZGUgd2hlbiBydW5uaW5nIHVuZGVyIHJldmVhbFxuICBjb25zdCByZXZlYWxTdGF0dXMgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKFwiLnJldmVhbCAuZXhlcmNpc2UtbG9hZGluZy1pbmRpY2F0b3JcIik7XG4gIGlmIChyZXZlYWxTdGF0dXMpIHtcbiAgICByZXZlYWxTdGF0dXMucmVtb3ZlKCk7XG4gICAgZG9jdW1lbnQucXVlcnlTZWxlY3RvcihcIi5yZXZlYWwgPiAuc2xpZGVzXCIpLmFwcGVuZENoaWxkKHJldmVhbFN0YXR1cyk7XG4gIH1cblxuICAvLyBNYWtlIGFueSByZXZlYWwgc2xpZGVzIHdpdGggbGl2ZSBjZWxscyBzY3JvbGxhYmxlXG4gIGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3JBbGwoXCIucmV2ZWFsIC5leGVyY2lzZS1jZWxsXCIpLmZvckVhY2goKGVsKSA9PiB7XG4gICAgZWwuY2xvc2VzdCgnc2VjdGlvbi5zbGlkZScpLmNsYXNzTGlzdC5hZGQoXCJzY3JvbGxhYmxlXCIpO1xuICB9KVxuXG4gIC8vIFB5b2RpZGUgc3VwcGxlbWVudGFsIGRhdGEgYW5kIG9wdGlvbnNcbiAgY29uc3QgZGF0YUNvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS1kYXRhXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgZGF0YSA9IEpTT04ucGFyc2UoYjY0RGVjb2RlKGRhdGFDb250ZW50KSk7XG5cbiAgLy8gR3JhYiBsaXN0IG9mIHJlc291cmNlcyB0byBiZSBkb3dubG9hZGVkXG4gIGNvbnN0IGZpbGVzQ29udGVudCA9IGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3IoYHNjcmlwdFt0eXBlPVxcXCJ2ZnMtZmlsZVxcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGZpbGVzID0gSlNPTi5wYXJzZShiNjREZWNvZGUoZmlsZXNDb250ZW50KSk7XG5cbiAgbGV0IHB5b2RpZGVQcm9taXNlID0gKGFzeW5jICgpID0+IHtcbiAgICBzdGF0dXNUZXh0LnRleHRDb250ZW50ID0gYERvd25sb2FkaW5nIFB5b2RpZGVgO1xuICAgIGNvbnN0IHB5b2RpZGUgPSBhd2FpdCBzdGFydFB5b2RpZGVXb3JrZXIoZGF0YS5vcHRpb25zKTtcblxuICAgIHN0YXR1c1RleHQudGV4dENvbnRlbnQgPSBgRG93bmxvYWRpbmcgcGFja2FnZTogbWljcm9waXBgO1xuICAgIGF3YWl0IHB5b2RpZGUubG9hZFBhY2thZ2UoXCJtaWNyb3BpcFwiKTtcbiAgICBjb25zdCBtaWNyb3BpcCA9IGF3YWl0IHB5b2RpZGUucHlpbXBvcnQoXCJtaWNyb3BpcFwiKTtcbiAgICBhd2FpdCBkYXRhLnBhY2thZ2VzLnBrZ3MubWFwKChwa2cpID0+ICgpID0+IHtcbiAgICAgIHN0YXR1c1RleHQudGV4dENvbnRlbnQgPSBgRG93bmxvYWRpbmcgcGFja2FnZTogJHtwa2d9YDtcbiAgICAgIHJldHVybiBtaWNyb3BpcC5pbnN0YWxsKHBrZyk7XG4gICAgfSkucmVkdWNlKChjdXIsIG5leHQpID0+IGN1ci50aGVuKG5leHQpLCBQcm9taXNlLnJlc29sdmUoKSk7XG4gICAgYXdhaXQgbWljcm9waXAuZGVzdHJveSgpO1xuXG4gICAgLy8gRG93bmxvYWQgYW5kIGluc3RhbGwgcmVzb3VyY2VzXG4gICAgYXdhaXQgZmlsZXMubWFwKChmaWxlKSA9PiBhc3luYyAoKSA9PiB7XG4gICAgICBjb25zdCBuYW1lID0gZmlsZS5zdWJzdHJpbmcoZmlsZS5sYXN0SW5kZXhPZignLycpICsgMSk7XG4gICAgICBzdGF0dXNUZXh0LnRleHRDb250ZW50ID0gYERvd25sb2FkaW5nIHJlc291cmNlOiAke25hbWV9YDtcbiAgICAgIGNvbnN0IHJlc3BvbnNlID0gYXdhaXQgZmV0Y2goZmlsZSk7XG4gICAgICBpZiAoIXJlc3BvbnNlLm9rKSB7XG4gICAgICAgIHRocm93IG5ldyBFcnJvcihgQ2FuJ3QgZG93bmxvYWQgXFxgJHtmaWxlfVxcYC4gRXJyb3IgJHtyZXNwb25zZS5zdGF0dXN9OiBcIiR7cmVzcG9uc2Uuc3RhdHVzVGV4dH1cIi5gKTtcbiAgICAgIH1cbiAgICAgIGNvbnN0IGRhdGEgPSBhd2FpdCByZXNwb25zZS5hcnJheUJ1ZmZlcigpO1xuXG4gICAgICAvLyBTdG9yZSBVUkxzIGluIHRoZSBjd2Qgd2l0aG91dCBhbnkgc3ViZGlyZWN0b3J5IHN0cnVjdHVyZVxuICAgICAgaWYgKGZpbGUuaW5jbHVkZXMoXCI6Ly9cIikpIHtcbiAgICAgICAgZmlsZSA9IG5hbWU7XG4gICAgICB9XG5cbiAgICAgIC8vIENvbGxhcHNlIGhpZ2hlciBkaXJlY3Rvcnkgc3RydWN0dXJlXG4gICAgICBmaWxlID0gY29sbGFwc2VQYXRoKGZpbGUpO1xuXG4gICAgICAvLyBDcmVhdGUgZGlyZWN0b3J5IHRyZWUsIGlnbm9yaW5nIFwiZGlyZWN0b3J5IGV4aXN0c1wiIFZGUyBlcnJvcnNcbiAgICAgIGNvbnN0IHBhcnRzID0gZmlsZS5zcGxpdCgnLycpLnNsaWNlKDAsIC0xKTtcbiAgICAgIGxldCBwYXRoID0gJyc7XG4gICAgICB3aGlsZSAocGFydHMubGVuZ3RoID4gMCkge1xuICAgICAgICBwYXRoICs9IHBhcnRzLnNoaWZ0KCkgKyAnLyc7XG4gICAgICAgIHRyeSB7XG4gICAgICAgICAgYXdhaXQgcHlvZGlkZS5GUy5ta2RpcihwYXRoKTtcbiAgICAgICAgfSBjYXRjaCAoZSkge1xuICAgICAgICAgIGlmIChlLm5hbWUgIT09IFwiRXJybm9FcnJvclwiKSB0aHJvdyBlO1xuICAgICAgICAgIGlmIChlLmVycm5vICE9PSAyMCkge1xuICAgICAgICAgICAgY29uc3QgZXJyb3JUZXh0UHRyID0gYXdhaXQgcHlvZGlkZS5fbW9kdWxlLl9zdHJlcnJvcihlLmVycm5vKTtcbiAgICAgICAgICAgIGNvbnN0IGVycm9yVGV4dCA9IGF3YWl0IHB5b2RpZGUuX21vZHVsZS5VVEY4VG9TdHJpbmcoZXJyb3JUZXh0UHRyKTtcbiAgICAgICAgICAgIHRocm93IG5ldyBFcnJvcihgRmlsZXN5c3RlbSBFcnJvciAke2UuZXJybm99IFwiJHtlcnJvclRleHR9XCIuYCk7XG4gICAgICAgICAgfVxuICAgICAgICB9XG4gICAgICB9XG5cbiAgICAgIC8vIFdyaXRlIHRoaXMgZmlsZSB0byB0aGUgVkZTXG4gICAgICB0cnkge1xuICAgICAgICByZXR1cm4gYXdhaXQgcHlvZGlkZS5GUy53cml0ZUZpbGUoZmlsZSwgbmV3IFVpbnQ4QXJyYXkoZGF0YSkpO1xuICAgICAgfSBjYXRjaCAoZSkge1xuICAgICAgICBpZiAoZS5uYW1lICE9PSBcIkVycm5vRXJyb3JcIikgdGhyb3cgZTtcbiAgICAgICAgY29uc3QgZXJyb3JUZXh0UHRyID0gYXdhaXQgcHlvZGlkZS5fbW9kdWxlLl9zdHJlcnJvcihlLmVycm5vKTtcbiAgICAgICAgY29uc3QgZXJyb3JUZXh0ID0gYXdhaXQgcHlvZGlkZS5fbW9kdWxlLlVURjhUb1N0cmluZyhlcnJvclRleHRQdHIpO1xuICAgICAgICB0aHJvdyBuZXcgRXJyb3IoYEZpbGVzeXN0ZW0gRXJyb3IgJHtlLmVycm5vfSBcIiR7ZXJyb3JUZXh0fVwiLmApO1xuICAgICAgfVxuICAgIH0pLnJlZHVjZSgoY3VyLCBuZXh0KSA9PiBjdXIudGhlbihuZXh0KSwgUHJvbWlzZS5yZXNvbHZlKCkpO1xuXG4gICAgc3RhdHVzVGV4dC50ZXh0Q29udGVudCA9IGBQeW9kaWRlIGVudmlyb25tZW50IHNldHVwYDtcbiAgICBhd2FpdCBzZXR1cFB5dGhvbihweW9kaWRlKTtcblxuICAgIHN0YXR1c1RleHQucmVtb3ZlKCk7XG4gICAgaWYgKHN0YXR1c0NvbnRhaW5lci5jaGlsZHJlbi5sZW5ndGggPT0gMCkge1xuICAgICAgc3RhdHVzQ29udGFpbmVyLnBhcmVudE5vZGUucmVtb3ZlKCk7XG4gICAgfVxuICAgIHJldHVybiBweW9kaWRlO1xuICB9KSgpLmNhdGNoKChlcnIpID0+IHtcbiAgICBzdGF0dXNUZXh0LnN0eWxlLmNvbG9yID0gXCJ2YXIoLS1leGVyY2lzZS1lZGl0b3ItaGwtZXIsICNBRDAwMDApXCI7XG4gICAgc3RhdHVzVGV4dC50ZXh0Q29udGVudCA9IGVyci5tZXNzYWdlO1xuICAgIC8vaW5kaWNhdG9yQ29udGFpbmVyLnF1ZXJ5U2VsZWN0b3IoXCIuc3Bpbm5lci1ncm93XCIpLmNsYXNzTGlzdC5hZGQoXCJkLW5vbmVcIik7XG4gICAgdGhyb3cgZXJyO1xuICB9KTtcblxuICAvLyBLZWVwIHRyYWNrIG9mIGluaXRpYWwgT0pTIGJsb2NrIHJlbmRlclxuICBjb25zdCByZW5kZXJlZE9qcyA9IHt9O1xuXG4gIGNvbnN0IHByb2Nlc3MgPSBhc3luYyAoY29udGV4dCwgaW5wdXRzKSA9PiB7XG4gICAgY29uc3QgcHlvZGlkZSA9IGF3YWl0IHB5b2RpZGVQcm9taXNlO1xuICAgIGNvbnN0IGV2YWx1YXRvciA9IG5ldyBQeW9kaWRlRXZhbHVhdG9yKHB5b2RpZGUsIGNvbnRleHQpO1xuICAgIGF3YWl0IGV2YWx1YXRvci5wcm9jZXNzKGlucHV0cyk7XG4gICAgcmV0dXJuIGV2YWx1YXRvci5jb250YWluZXI7XG4gIH1cblxuICByZXR1cm4ge1xuICAgIHB5b2RpZGVQcm9taXNlLFxuICAgIHJlbmRlcmVkT2pzLFxuICAgIHByb2Nlc3MsXG4gIH07XG59XG4ifV19
@@ -810,7 +720,7 @@ eyJjb250ZW50cyI6W119
 </script>
 <script type="module">
 if (window.location.protocol === "file:") { alert("The OJS runtime does not work with file:// URLs. Please use a web server to view this document."); }
-window._ojs.paths.runtimeToDoc = "../../part-03-classification-glm";
+window._ojs.paths.runtimeToDoc = "../../part-02-linear-regression";
 window._ojs.paths.runtimeToRoot = "../..";
 window._ojs.paths.docToRoot = "..";
 window._ojs.selfContained = false;
@@ -1218,13 +1128,13 @@ window._ojs.runtime.interpretFromScriptTags();
   </script>
 <nav class="page-navigation">
   <div class="nav-page nav-page-previous">
-      <a href="../part-03-classification-glm/03-1-classification-fundamentals.html" class="pagination-link" aria-label="3.1 Classification Fundamentals">
-        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">3.1 Classification Fundamentals</span>
+      <a href="../part-02-linear-regression/02-6-categorical-predictors.html" class="pagination-link" aria-label="2.6 Categorical Predictors">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">2.6 Categorical Predictors</span>
       </a>          
   </div>
   <div class="nav-page nav-page-next">
-      <a href="../part-03-classification-glm/03-2-why-not-linear-regression.html" class="pagination-link" aria-label="3.2 Why Not Linear Regression for Categories?">
-        <span class="nav-page-text">3.2 Why Not Linear Regression for Categories?</span> <i class="bi bi-arrow-right-short"></i>
+      <a href="../part-02-linear-regression/02-8-nonlinear-transformations.html" class="pagination-link" aria-label="2.8 Nonlinear Feature Transformations">
+        <span class="nav-page-text">2.8 Nonlinear Feature Transformations</span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>
@@ -1233,4 +1143,4 @@ window._ojs.runtime.interpretFromScriptTags();
 
 
 
-<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/EnduringChung/ml-interactive-course/edit/main/part-03-classification-glm/03-1-5-auprc.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/EnduringChung/ml-interactive-course/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/EnduringChung/ml-interactive-course/edit/main/part-02-linear-regression/02-7-interaction-terms.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/EnduringChung/ml-interactive-course/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
