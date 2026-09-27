@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>6.5 Smoothing Splines – ML, Statistics &amp; LLM — Interactive Course</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../">
+<link href="../part-06-nonlinear-regression/06-6-local-regression.html" rel="next">
+<link href="../part-06-nonlinear-regression/06-4-regression-splines.html" rel="prev">
+<script src="../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../site_libs/quarto-html/popper.min.js"></script>
+<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../site_libs/bootstrap/bootstrap-84cfdeff8e8ddd510a79be3971e85af5.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script src="../site_libs/quarto-contrib/live-runtime/live-runtime.js" type="module"></script>
+<link href="../site_libs/quarto-contrib/live-runtime/live-runtime.css" rel="stylesheet">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<script type="module" src="../site_libs/quarto-ojs/quarto-ojs-runtime.js"></script>
+<link href="../site_libs/quarto-ojs/quarto-ojs.css" rel="stylesheet">
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+
+<body class="nav-sidebar floating nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="../index.html">
+    <span class="navbar-title">ML, Statistics &amp; LLM — Interactive Course</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll me-auto">
+  <li class="nav-item">
+    <a class="nav-link active" href="../index.html" aria-current="page"> 
+<span class="menu-text">Home</span></a>
+  </li>  
+</ul>
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/EnduringChung/ml-interactive-course"> <i class="bi bi-github" role="img">
+</i> 
+<span class="menu-text"></span></a>
+  </li>  
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../part-06-nonlinear-regression/06-1-polynomial-regression.html">Part 6 — Nonlinear Regression</a></li><li class="breadcrumb-item"><a href="../part-06-nonlinear-regression/06-5-smoothing-splines.html">6.5 Smoothing Splines</a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">ML, Statistics &amp; LLM — Interactive Course</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 0 — Python &amp; Data Foundations</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-00-python-foundations/00-1-python-basics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">0.1 Python for Numerical Work</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-00-python-foundations/00-2-numpy.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">0.2 NumPy</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-00-python-foundations/00-3-pandas.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">0.3 pandas</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-00-python-foundations/00-4-visualization-eda.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">0.4 Visualisation &amp; Exploratory Analysis</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-00-python-foundations/00-5-data-splitting.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">0.5 Data Splitting</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 1 — Statistics Bridge for ML</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-01-statistics-bridge/01-1-descriptive-statistics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">1.1 Descriptive Statistics</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-01-statistics-bridge/01-2-relationships.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">1.2 Relationships Between Variables</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-01-statistics-bridge/01-3-probability-essentials.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">1.3 Probability Essentials</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-01-statistics-bridge/01-4-statistical-inference.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">1.4 Statistical Inference</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-01-statistics-bridge/01-5-resampling-intuition.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">1.5 Resampling Intuition</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 2 — Linear Regression &amp; Prediction</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-1-regression-setup.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.1 The Regression Problem</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-2-simple-linear-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.2 Simple Linear Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-3-accuracy-of-coefficients.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.3 Accuracy of the Coefficients</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-4-accuracy-of-model.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.4 Accuracy of the Full Model</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-5-multiple-linear-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.5 Multiple Linear Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-6-categorical-predictors.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.6 Categorical Predictors</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-7-interaction-terms.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.7 Interaction Terms</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-8-nonlinear-transformations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.8 Nonlinear Feature Transformations</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-9-knn-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.9 KNN Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-10-regression-assumptions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.10 Regression Assumptions &amp; Diagnostics</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 3 — Classification &amp; GLMs</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-1-classification-fundamentals.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.1 Classification Fundamentals</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-1-5-auprc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.1.5 AUPRC for Skewed Datasets</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-2-why-not-linear-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.2 Why Not Linear Regression for Categories?</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-3-logistic-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.3 Logistic Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-4-generative-classifiers.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.4 Generative Classifiers: LDA, QDA, Naive Bayes</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-5-knn-classification.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.5 KNN Classification</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-6-generalized-linear-models.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.6 Generalized Linear Models</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-7-model-comparison.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.7 Classification Model Comparison</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 4 — Validation &amp; Model Selection</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-04-validation-model-selection/04-1-generalization-problem.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">4.1 The Generalization Problem</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-04-validation-model-selection/04-2-validation-set.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">4.2 The Validation Set Approach</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-04-validation-model-selection/04-3-cross-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">4.3 Cross-Validation</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-04-validation-model-selection/04-4-bias-variance.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">4.4 The Bias–Variance Trade-off</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-04-validation-model-selection/04-5-bootstrap.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">4.5 The Bootstrap</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-04-validation-model-selection/04-6-hyperparameter-tuning.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">4.6 Hyperparameter Tuning</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 5 — Regularization &amp; High Dimensions</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-05-regularization-high-dimensions/05-1-feature-selection.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">5.1 Feature Selection</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-05-regularization-high-dimensions/05-2-ridge-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">5.2 Ridge Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-05-regularization-high-dimensions/05-3-lasso-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">5.3 Lasso Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-05-regularization-high-dimensions/05-4-elastic-net.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">5.4 Elastic Net</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-05-regularization-high-dimensions/05-5-pcr-pls.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">5.5 PCR and PLS</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-05-regularization-high-dimensions/05-6-high-dimensional.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">5.6 High-Dimensional Data</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part 6 — Nonlinear Regression</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-7" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-06-nonlinear-regression/06-1-polynomial-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">6.1 Polynomial Regression — Beyond the Line</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-06-nonlinear-regression/06-2-step-functions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">6.2 Step Functions</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-06-nonlinear-regression/06-3-basis-functions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">6.3 Basis Functions — The General Recipe</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-06-nonlinear-regression/06-4-regression-splines.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">6.4 Regression Splines</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-06-nonlinear-regression/06-5-smoothing-splines.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">6.5 Smoothing Splines</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-06-nonlinear-regression/06-6-local-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">6.6 Local Regression (LOESS)</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-06-nonlinear-regression/06-7-gam.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">6.7 Generalized Additive Models</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 7 — Trees &amp; Ensembles</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-8" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-07-trees-ensembles/07-1-decision-trees.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">7.1 Decision Trees</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-07-trees-ensembles/07-2-advantages-limitations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">7.2 Advantages and Limitations of Trees</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-07-trees-ensembles/07-3-bagging.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">7.3 Bagging</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-07-trees-ensembles/07-4-random-forests.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">7.4 Random Forests</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-07-trees-ensembles/07-5-gradient-boosting.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">7.5 Gradient Boosting</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-07-trees-ensembles/07-6-modern-boosting.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">7.6 Modern Boosting Libraries</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-07-trees-ensembles/07-7-bart.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">7.7 Bayesian Additive Regression Trees (BART)</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-9" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 8 — Support Vector Machines</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-9" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-9" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-08-svm/08-1-geometry.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">8.1 Geometry Essentials</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-08-svm/08-2-maximal-margin.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">8.2 The Maximal-Margin Classifier</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-08-svm/08-3-soft-margin.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">8.3 The Soft-Margin Classifier</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-08-svm/08-4-kernel-svm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">8.4 Kernel SVM</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-08-svm/08-5-svm-vs-logistic.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">8.5 SVM vs Logistic Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-08-svm/08-6-multiclass-svm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">8.6 Multiclass SVM</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-10" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 9 — Unsupervised Learning</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-10" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-10" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-09-unsupervised-learning/09-1-unsupervised-mindset.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">9.1 The Unsupervised Mindset</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-09-unsupervised-learning/09-2-principal-component-analysis.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">9.2 Principal Component Analysis</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-09-unsupervised-learning/09-3-missing-values.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">9.3 Missing Values &amp; Matrix Completion</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-09-unsupervised-learning/09-4-k-means.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">9.4 K-means Clustering</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-09-unsupervised-learning/09-5-hierarchical-clustering.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">9.5 Hierarchical Clustering</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-09-unsupervised-learning/09-6-practical-clustering.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">9.6 Practical Clustering Issues</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul class="collapse">
+  <li><a href="#basic-concept" id="toc-basic-concept" class="nav-link active" data-scroll-target="#basic-concept">1. Basic Concept</a></li>
+  <li><a href="#concept-questions" id="toc-concept-questions" class="nav-link" data-scroll-target="#concept-questions">2. Concept Questions</a></li>
+  <li><a href="#drills-exercises" id="toc-drills-exercises" class="nav-link" data-scroll-target="#drills-exercises">3. Drills &amp; Exercises</a></li>
+  <li><a href="#advanced-information-pitfalls" id="toc-advanced-information-pitfalls" class="nav-link" data-scroll-target="#advanced-information-pitfalls">4. Advanced Information &amp; Pitfalls</a></li>
+  <li><a href="#advanced-questions" id="toc-advanced-questions" class="nav-link" data-scroll-target="#advanced-questions">5. Advanced Questions</a></li>
+  <li><a href="#complex-questions" id="toc-complex-questions" class="nav-link" data-scroll-target="#complex-questions">6. Complex Questions</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">7. Summary</a></li>
+  </ul>
+<div class="toc-actions"><ul class="collapse"><li><a href="https://github.com/EnduringChung/ml-interactive-course/edit/main/part-06-nonlinear-regression/06-5-smoothing-splines.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/EnduringChung/ml-interactive-course/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../part-06-nonlinear-regression/06-1-polynomial-regression.html">Part 6 — Nonlinear Regression</a></li><li class="breadcrumb-item"><a href="../part-06-nonlinear-regression/06-5-smoothing-splines.html">6.5 Smoothing Splines</a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title">6.5 Smoothing Splines</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p>Instead of choosing where to put knots, put a knot at <strong>every data point</strong> and pay a penalty for roughness. The smoothing spline minimizes</p>
+<p><span class="math display">\[\sum_i (y_i - f(x_i))^2 + \lambda \int \big(f''(t)\big)^2 dt\]</span></p>
+<p>— fit the data, but pay for wiggling. One continuous dial, λ, replaces knot placement: the elegance that makes this the statistician’s smoothing benchmark.</p>
+<blockquote class="blockquote">
+<p><strong>Tier 1 — every cell below runs live.</strong></p>
+</blockquote>
+<section id="basic-concept" class="level2">
+<h2 class="anchored" data-anchor-id="basic-concept">1. Basic Concept</h2>
+<p>The minimizer of that criterion is a <strong>natural cubic spline with knots at every distinct x</strong> — the penalty converts “how many knots” into “how much bending,” λ trading fidelity against roughness: λ = 0 interpolates, λ = ∞ returns the least-squares straight line.</p>
+<div>
+<div id="pyodide-1" class="exercise-cell">
+
+</div>
+<script type="pyodide-1-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWUsImZpZy1oZWlnaHQiOjMuNCwiZmlnLXdpZHRoIjo3fSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuZnJvbSBzY2lweS5pbnRlcnBvbGF0ZSBpbXBvcnQgVW5pdmFyaWF0ZVNwbGluZVxuaW1wb3J0IG1hdHBsb3RsaWIucHlwbG90IGFzIHBsdFxuXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoMClcbnggPSBucC5zb3J0KHJuZy51bmlmb3JtKDAsIDEwLCA4MCkpXG55ID0gbnAuc2luKHgpICsgcm5nLm5vcm1hbCgwLCAwLjQsIHguc2l6ZSlcbnhnID0gbnAubGluc3BhY2UoMCwgMTAsIDQwMClcblxuZmlnLCBheCA9IHBsdC5zdWJwbG90cyhmaWdzaXplPSg3LCAzLjQpKVxuYXguc2NhdHRlcih4LCB5LCBzPTE0LCBhbHBoYT0wLjUsIGxhYmVsPVwiZGF0YVwiKVxuZm9yIHNfZmFjdG9yLCBjb2xvciBpbiBbKDAuMDEsIFwicmVkXCIpLCAoMS4wLCBcImdyZWVuXCIpLCAoNTAuMCwgXCJwdXJwbGVcIildOlxuICAgIHNwbCA9IFVuaXZhcmlhdGVTcGxpbmUoeCwgeSwgaz0zLCBzPXNfZmFjdG9yICogbGVuKHgpKVxuICAgIGF4LnBsb3QoeGcsIHNwbCh4ZyksIGNvbG9yPWNvbG9yLCBsdz0yLCBsYWJlbD1mXCJzID0ge3NfZmFjdG9yfcK3blwiKVxuYXgucGxvdCh4ZywgbnAuc2luKHhnKSwgXCJrLS1cIiwgbHc9MSwgbGFiZWw9XCJ0cnV0aFwiKVxuYXguc2V0KHhsYWJlbD1cInhcIiwgeWxhYmVsPVwieVwiLCB0aXRsZT1cIk9uZSBkaWFsOiB0aGUgc21vb3RoaW5nIHBhcmFtZXRlclwiKVxuYXgubGVnZW5kKGZvbnRzaXplPTgpXG5wbHQuc2hvdygpIn0=
+</script>
+</div>
+<p><code>UnivariateSpline</code>’s <code>s</code> is a <em>sum-of-squared-residuals allowance</em> (not λ itself): s ≈ nσ² targets the truth’s smoothness. Tune it by CV like any hyperparameter:</p>
+<div>
+<div id="pyodide-2" class="exercise-cell">
+
+</div>
+<script type="pyodide-2-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNjaXB5LmludGVycG9sYXRlIGltcG9ydCBVbml2YXJpYXRlU3BsaW5lXG5mcm9tIHNrbGVhcm4ubW9kZWxfc2VsZWN0aW9uIGltcG9ydCBLRm9sZFxuXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoMSlcbnggPSBucC5zb3J0KHJuZy51bmlmb3JtKDAsIDEwLCA4MCkpXG55ID0gbnAuc2luKHgpICsgcm5nLm5vcm1hbCgwLCAwLjQsIHguc2l6ZSlcblxuY3YgPSBLRm9sZCg1LCBzaHVmZmxlPVRydWUsIHJhbmRvbV9zdGF0ZT0yKVxucmVzdWx0cyA9IFtdXG5mb3Igc19mYWN0b3IgaW4gWzAuMDEsIDAuMSwgMC41LCAxLjAsIDIuMCwgNS4wXTpcbiAgICBtc2VzID0gW11cbiAgICBmb3IgdHIsIHZhIGluIGN2LnNwbGl0KHgpOlxuICAgICAgICBzcGwgPSBVbml2YXJpYXRlU3BsaW5lKHhbdHJdLCB5W3RyXSwgaz0zLCBzPXNfZmFjdG9yICogbGVuKHRyKSlcbiAgICAgICAgbXNlcy5hcHBlbmQobnAubWVhbigoeVt2YV0gLSBzcGwoeFt2YV0pKSoqMikpXG4gICAgcmVzdWx0cy5hcHBlbmQoKHNfZmFjdG9yLCBucC5tZWFuKG1zZXMpKSlcblxuZm9yIHNfZiwgbXNlIGluIHJlc3VsdHM6XG4gICAgcHJpbnQoZlwicyA9IHtzX2Y6PjR9wrduOiBDViBNU0UgPSB7bXNlOi40Zn1cIilcbmJlc3QgPSBtaW4ocmVzdWx0cywga2V5PWxhbWJkYSByOiByWzFdKVxucHJpbnQoZlwiY2hvc2VuOiBzID0ge2Jlc3RbMF19wrduICAodGhlb3J5IHN1Z2dlc3RzIOKJiCDPg8KyID0gMC4xNiBwZXIgcG9pbnQpXCIpIn0=
+</script>
+</div>
+</section>
+<section id="concept-questions" class="level2">
+<h2 class="anchored" data-anchor-id="concept-questions">2. Concept Questions</h2>
+<ol type="1">
+<li>Why must the roughness penalty use the <em>second</em> derivative (and not the first or the function itself)?</li>
+<li>λ = 0 and λ = ∞: state both endpoints precisely, including what the penalty’s null space contributes.</li>
+<li><code>UnivariateSpline</code>’s <code>s</code> is not λ. What is the relationship, and why does the “s ≈ nσ²” heuristic make sense?</li>
+<li>What are the effective degrees of freedom of a smoothing spline, and how does it behave as λ moves?</li>
+<li>Your data has 80 points but you know the first 10 are from a different regime (batch artifact). Why is a single global λ the wrong tool, and what are the two standard remedies?</li>
+</ol>
+<details>
+<summary>
+Answers
+</summary>
+<ol type="1">
+<li>Penalizing f itself would fight the data’s level; f′ would penalize any slope (linear functions cost infinitely). f″ is the <em>curvature</em> — zero for lines (so lines are free, matching the penalty’s null space) and growing with wiggliness: it measures exactly what “too wiggly” means.</li>
+<li>λ = 0: pure interpolation — the natural cubic spline through every point (n df). λ = ∞: f″ ≡ 0 forced → f is any straight line, fitted by least squares (2 df). The linear functions sit in the penalty’s null space and are never penalized.</li>
+<li>The criterion balances RSS + λ·∫f″²; <code>s</code> bounds the RSS directly, so s ≈ n·(per-point noise variance) reproduces the λ that an honest bias–variance trade would pick when σ² is known — a heuristic starting point, still tuned by CV.</li>
+<li>df(λ) = tr(S_λ) for the smoother matrix S_λ — a continuous quantity sliding from n (λ=0) to 2 (λ=∞). Report it alongside any smoothing-spline fit: it is the model’s honest complexity.</li>
+<li>A global λ imposes one smoothness everywhere, but the artifact region needs <em>different</em> smoothness (or exclusion). Remedies: (a) regime-wise smoothing (fit separately / include regime covariates), (b) adaptive/variable-knot penalty methods — or fix the data issue upstream.</li>
+</ol>
+</details>
+</section>
+<section id="drills-exercises" class="level2">
+<h2 class="anchored" data-anchor-id="drills-exercises">3. Drills &amp; Exercises</h2>
+<section id="drills" class="level3">
+<h3 class="anchored" data-anchor-id="drills">Drills</h3>
+<p>Predict, then run.</p>
+<div>
+<div id="pyodide-3" class="exercise-cell">
+
+</div>
+<script type="pyodide-3-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNjaXB5LmludGVycG9sYXRlIGltcG9ydCBVbml2YXJpYXRlU3BsaW5lXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoMylcbnggPSBucC5saW5zcGFjZSgwLCAxLCAzMClcbnlfY2xlYW4gPSB4KioyXG55ID0geV9jbGVhbiArIHJuZy5ub3JtYWwoMCwgMC4wNSwgMzApXG5zX2ludCA9IFVuaXZhcmlhdGVTcGxpbmUoeCwgeSwgaz0zLCBzPTApICAgICAgICAgICMgcz0wOiBpbnRlcnBvbGF0ZXNcbnByaW50KFwicz0wIHJlc2lkdWFsIFNEOlwiLCBucC5zdGQoeSAtIHNfaW50KHgpKS5yb3VuZCgxMikpXG5wcmludChcInNwbGluZSBhdCBrbm90cyA9PSBkYXRhOlwiLCBucC5hbGxjbG9zZShzX2ludCh4KSwgeSkpIn0=
+</script>
+</div>
+<div>
+<div id="pyodide-4" class="exercise-cell">
+
+</div>
+<script type="pyodide-4-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNjaXB5LmludGVycG9sYXRlIGltcG9ydCBVbml2YXJpYXRlU3BsaW5lXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoNClcbnggPSBucC5saW5zcGFjZSgwLCAxMCwgMTAwKVxueSA9IDMgKyAyICogeCArIHJuZy5ub3JtYWwoMCwgMSwgMTAwKSAgICAgICAgICAgICAjIExJTkVBUiB0cnV0aFxuYmlnID0gVW5pdmFyaWF0ZVNwbGluZSh4LCB5LCBrPTMsIHM9MWU2KSAgICAgICAgICAjIGh1Z2UgczogfiBzdHJhaWdodCBsaW5lXG5wcmludChcImxhcmdlLXMgZml0IHZzIE9MUyBsaW5lOiBtYXggZGlmZiA9XCIsXG4gICAgICBucC5hYnMoYmlnKHgpIC0gbnAucG9seXZhbChucC5wb2x5Zml0KHgsIHksIDEpLCB4KSkubWF4KCkucm91bmQoNCkpXG5wcmludChcIihib3RoIOKJiCBsZWFzdC1zcXVhcmVzIGxpbmU6IHRoZSBudWxsIHNwYWNlIGF0IHdvcmspXCIpIn0=
+</script>
+</div>
+<div>
+<div id="pyodide-5" class="exercise-cell">
+
+</div>
+<script type="pyodide-5-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNjaXB5LmludGVycG9sYXRlIGltcG9ydCBVbml2YXJpYXRlU3BsaW5lXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoNSlcbnggPSBucC5zb3J0KHJuZy51bmlmb3JtKDAsIDEsIDQwKSlcbnkgPSBucC5zaW4oMiAqIG5wLnBpICogeCkgKyBybmcubm9ybWFsKDAsIDAuMywgeC5zaXplKVxuZm9yIHNfZiBpbiBbMC4wMDEsIDAuMSwgMC41LCAyLjAsIDEwLjBdOlxuICAgIHNwbCA9IFVuaXZhcmlhdGVTcGxpbmUoeCwgeSwgaz0zLCBzPXNfZiAqIGxlbih4KSlcbiAgICByc3MgPSBucC5zdW0oKHkgLSBzcGwoeCkpKioyKVxuICAgIHRzcyA9IG5wLnN1bSgoeSAtIHkubWVhbigpKSoqMilcbiAgICBwcmludChmXCJzPXtzX2Y6PjV9Lm46IFJTUyA9IHtyc3M6Ni4yZn0gIG9mIFRTUyA9IHt0c3M6LjJmfVwiKVxucHJpbnQoXCJzdGlmZmVuaW5nIHRoZSBwZW5hbHR5IHdhbGtzIHRoZSBmaXQgZnJvbSBpbnRlcnBvbGF0aW9uIHRvd2FyZCBhIHN0cmFpZ2h0IGxpbmVcIikifQ==
+</script>
+</div>
+<div>
+<div id="pyodide-6" class="exercise-cell">
+
+</div>
+<script type="pyodide-6-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNjaXB5LmludGVycG9sYXRlIGltcG9ydCBVbml2YXJpYXRlU3BsaW5lXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoNilcbnggPSBucC5zb3J0KHJuZy51bmlmb3JtKDAsIDEsIDUwKSlcbnkgPSBucC5zaW4oMiAqIG5wLnBpICogeCkgKyBybmcubm9ybWFsKDAsIDAuMywgeC5zaXplKVxuc3BsID0gVW5pdmFyaWF0ZVNwbGluZSh4LCB5LCBrPTMsIHM9MC41ICogbGVuKHgpKVxuc2Vjb25kX2Rlcml2ID0gc3BsLmRlcml2YXRpdmUoMikoeClcbnByaW50KFwibWF4IHxmJyd8OlwiLCBucC5hYnMoc2Vjb25kX2Rlcml2KS5tYXgoKS5yb3VuZCgzKSxcbiAgICAgIFwiIDwtIHJvdWdobmVzcyB0aGUgcGVuYWx0eSAnc2VlcydcIilcbnByaW50KFwibWVhbiBzcXVhcmVkIGN1cnZhdHVyZTpcIiwgcm91bmQoZmxvYXQobnAubWVhbihzZWNvbmRfZGVyaXYqKjIpKSwgNCkpIn0=
+</script>
+</div>
+</section>
+<section id="exercises-with-solutions" class="level3">
+<h3 class="anchored" data-anchor-id="exercises-with-solutions">Exercises (with solutions)</h3>
+<p><strong>Exercise 1.</strong> The σ² connection, tested: for σ ∈ {0.1, 0.3, 1.0} (sinusoid, n = 80), tune the smoothing parameter by 5-fold CV and report the chosen <code>s</code> in units of nσ². Does the optimal s/n track σ²? Then verify the converse use: given a well-tuned fit, estimate σ² as RSS/n and check it against the truth.</p>
+<details>
+<summary>
+Solution
+</summary>
+<div>
+<div id="pyodide-7" class="exercise-cell">
+
+</div>
+<script type="pyodide-7-contents">
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuZnJvbSBzY2lweS5pbnRlcnBvbGF0ZSBpbXBvcnQgVW5pdmFyaWF0ZVNwbGluZVxuZnJvbSBza2xlYXJuLm1vZGVsX3NlbGVjdGlvbiBpbXBvcnQgS0ZvbGRcblxuY3YgPSBLRm9sZCg1LCBzaHVmZmxlPVRydWUsIHJhbmRvbV9zdGF0ZT03KVxuZm9yIHNpZ21hIGluIFswLjEsIDAuMywgMS4wXTpcbiAgICBybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoaW50KHNpZ21hICogMTAwKSlcbiAgICB4ID0gbnAuc29ydChybmcudW5pZm9ybSgwLCAxMCwgODApKVxuICAgIHkgPSBucC5zaW4oeCkgKyBybmcubm9ybWFsKDAsIHNpZ21hLCB4LnNpemUpXG4gICAgYmVzdF9zLCBiZXN0X21zZSA9IE5vbmUsIG5wLmluZlxuICAgIGZvciBzX2YgaW4gMTAuMCAqKiBucC5hcmFuZ2UoLTIsIDEuNSwgMC4yNSk6XG4gICAgICAgIG1zZXMgPSBbXVxuICAgICAgICBmb3IgdHIsIHZhIGluIGN2LnNwbGl0KHgpOlxuICAgICAgICAgICAgc3BsID0gVW5pdmFyaWF0ZVNwbGluZSh4W3RyXSwgeVt0cl0sIGs9Mywgcz1zX2YgKiBsZW4odHIpKVxuICAgICAgICAgICAgbXNlcy5hcHBlbmQobnAubWVhbigoeVt2YV0gLSBzcGwoeFt2YV0pKSoqMikpXG4gICAgICAgIGlmIG5wLm1lYW4obXNlcykgPCBiZXN0X21zZTpcbiAgICAgICAgICAgIGJlc3RfcywgYmVzdF9tc2UgPSBzX2YsIG5wLm1lYW4obXNlcylcbiAgICBwcmludChmXCJzaWdtYT17c2lnbWF9OiBvcHRpbWFsIHMvbiA9IHtiZXN0X3M6LjNmfSAgKM+DwrIgPSB7c2lnbWEqKjI6LjJmfSlcIilcblxuIyBjb252ZXJzZTogc2lnbWEtaGF0IGZyb20gYSB0dW5lZCBmaXRcbnggPSBucC5zb3J0KHJuZy51bmlmb3JtKDAsIDEwLCA4MCkpXG55ID0gbnAuc2luKHgpICsgcm5nLm5vcm1hbCgwLCAwLjMsIHguc2l6ZSlcbnNwbCA9IFVuaXZhcmlhdGVTcGxpbmUoeCwgeSwgaz0zLCBzPTEuMCAqIGxlbih4KSlcbnNpZ21hMl9oYXQgPSBucC5zdW0oKHkgLSBzcGwoeCkpKioyKSAvIGxlbih4KVxucHJpbnQoZlwic2lnbWEtaGF0XjIgZnJvbSByZXNpZHVhbHM6IHtzaWdtYTJfaGF0Oi4zZn0gKHRydXRoIDAuMDk7IHNsaWdodCB1bmRlcmVzdGltYXRlIGlzIGV4cGVjdGVkKVwiKSJ9
+</script>
+</div>
+The optimal s/n rises roughly with σ² — noisier data tolerates (needs) rougher-penalized, smoother fits. And the tuned fit’s residual variance estimates σ² (slightly downward — the smoother absorbs some noise, the classic df-shrunk underestimate; honest versions divide by n − df).
+</details>
+<p><strong>Exercise 2.</strong> Effective df, measured properly: compute the smoothing spline’s hat matrix by evaluating fits at <em>fixed design points</em> across many y-draws (S_λ via covariance: E[ŷ] = S_λ f under fixed x, σ known) — or, cheaply, via <code>spl.get_coeffs()</code> and the B-spline basis. Simpler and rigorous: for 300 draws of y = f + ε at the <em>same</em> x, estimate df(λ) = Σᵢ Cov(ŷᵢ, yᵢ)/σ². Trace df against λ for λ ∈ {small, medium, large} and confirm the slide from n toward 2.</p>
+<details>
+<summary>
+Solution
+</summary>
+<div>
+<div id="pyodide-8" class="exercise-cell">
+
+</div>
+<script type="pyodide-8-contents">
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuZnJvbSBzY2lweS5pbnRlcnBvbGF0ZSBpbXBvcnQgVW5pdmFyaWF0ZVNwbGluZVxuXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoOClcbnggPSBucC5zb3J0KHJuZy51bmlmb3JtKDAsIDEsIDUwKSlcbmYgPSBucC5zaW4oMiAqIG5wLnBpICogeClcbnNpZ21hID0gMC4zXG5SID0gNDAwMFxuXG5mb3Igc19mIGluIFswLjAyLCAwLjUsIDEwLjBdOlxuICAgIHByZWRzID0gbnAuemVyb3MoKFIsIGxlbih4KSkpXG4gICAgeXMgPSBucC56ZXJvcygoUiwgbGVuKHgpKSlcbiAgICBmb3IgciBpbiByYW5nZShSKTpcbiAgICAgICAgeSA9IGYgKyBybmcubm9ybWFsKDAsIHNpZ21hLCBsZW4oeCkpXG4gICAgICAgIHlzW3JdID0geVxuICAgICAgICBzcGwgPSBVbml2YXJpYXRlU3BsaW5lKHgsIHksIGs9Mywgcz1zX2YgKiBsZW4oeCkpXG4gICAgICAgIHByZWRzW3JdID0gc3BsKHgpXG4gICAgY292X3Rlcm0gPSBzdW0obnAuY292KHByZWRzWzosIGldLCB5c1s6LCBpXSlbMCwgMV0gZm9yIGkgaW4gcmFuZ2UobGVuKHgpKSlcbiAgICBkZl9lZmYgPSBjb3ZfdGVybSAvIHNpZ21hKioyXG4gICAgcHJpbnQoZlwicyA9IHtzX2Y6PjV9wrduOiBlZmZlY3RpdmUgZGYgPSB7ZGZfZWZmOi4xZn0gIChuID0ge2xlbih4KX0sIG1pbiAyKVwiKSJ9
+</script>
+</div>
+The covariance estimator (the same E[df] = Σ Cov(ŷᵢ, yᵢ)/σ² used for the lasso in <a href="../part-05-regularization-high-dimensions/05-3-lasso-regression.html">5.3 Q2</a>) slides smoothly from ≈ 50 down toward the linear model’s 2 — smoothing splines genuinely <em>are</em> a continuous family of models between interpolation and the mean line, with df as the honest complexity meter.
+</details>
+<p><strong>Exercise 3.</strong> Confidence bands for the smooth: using the bootstrap (resample rows, refit at fixed λ, percentile bands — <a href="../part-04-validation-model-selection/04-5-bootstrap.html">4.5</a>), build 95% bands for the smoothing-spline fit at σ = 0.3. Overlay the <em>pointwise</em> band and check its coverage of the truth across x (fraction of grid points where truth lies inside). Then explain why these are confidence bands for the <em>function</em> and not prediction intervals for new points — and widen one into the other.</p>
+<details>
+<summary>
+Solution
+</summary>
+<div>
+<div id="pyodide-9" class="exercise-cell">
+
+</div>
+<script type="pyodide-9-contents">
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuZnJvbSBzY2lweS5pbnRlcnBvbGF0ZSBpbXBvcnQgVW5pdmFyaWF0ZVNwbGluZVxuXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoOSlcbnggPSBucC5zb3J0KHJuZy51bmlmb3JtKDAsIDEwLCA4MCkpXG5mID0gbnAuc2luKHgpXG55ID0gZiArIHJuZy5ub3JtYWwoMCwgMC4zLCB4LnNpemUpXG54ZyA9IG5wLmxpbnNwYWNlKDAsIDEwLCAyMDApXG5cbmJvb3QgPSBucC56ZXJvcygoNTAwLCAyMDApKVxuZm9yIGIgaW4gcmFuZ2UoNTAwKTpcbiAgICBpZHggPSBybmcuaW50ZWdlcnMoMCwgbGVuKHgpLCBsZW4oeCkpXG4gICAgeHMgPSBucC5zb3J0KHhbaWR4XSlcbiAgICBzcGwgPSBVbml2YXJpYXRlU3BsaW5lKHhzLCB5W2lkeF0sIGs9Mywgcz0xLjAgKiBsZW4oeCkpXG4gICAgYm9vdFtiXSA9IHNwbCh4ZylcblxubG8sIGhpID0gbnAucGVyY2VudGlsZShib290LCBbMi41LCA5Ny41XSwgYXhpcz0wKVxudHJ1dGhfZyA9IG5wLnNpbih4ZylcbmNvdmVyZWQgPSBucC5tZWFuKCh0cnV0aF9nID49IGxvKSAmICh0cnV0aF9nIDw9IGhpKSlcbnByaW50KGZcInBvaW50d2lzZSBiYW5kIGNvdmVyYWdlIG9mIHRydXRoOiB7Y292ZXJlZDouMmZ9XCIpXG5cbnNpZ21hID0gMC4zXG5wcmVkX2xvID0gbG8gLSAxLjk2ICogc2lnbWFcbnByZWRfaGkgPSBoaSArIDEuOTYgKiBzaWdtYVxubmV3X3kgPSB0cnV0aF9nICsgcm5nLm5vcm1hbCgwLCBzaWdtYSwgMjAwKVxucHJpbnQoXCJuZXctcG9pbnQgY292ZXJhZ2U6XCIsIHJvdW5kKGZsb2F0KG5wLm1lYW4oKG5ld195ID49IHByZWRfbG8pICYgKG5ld195IDw9IHByZWRfaGkpKSksIDIpKSJ9
+</script>
+</div>
+The bootstrap band quantifies uncertainty of the <em>estimated curve</em> (mean response) — narrow, and its truth-coverage is the confidence-band claim. New observations add irreducible σ on top: the widened band is the prediction interval, the same mean-vs-new-point distinction as <a href="../part-02-linear-regression/02-2-simple-linear-regression.html">2.2 Exercise 3</a>, now for curves.
+</details>
+</section>
+</section>
+<section id="advanced-information-pitfalls" class="level2">
+<h2 class="anchored" data-anchor-id="advanced-information-pitfalls">4. Advanced Information &amp; Pitfalls</h2>
+<ul>
+<li><strong><code>s</code> vs λ confusion</strong> is the top <code>UnivariateSpline</code> trap: <code>s</code> bounds residual mass (so it scales with n and σ²), while the textbook λ multiplies roughness. Translate once, tune by CV, document which you report.</li>
+<li><strong>Replicate x values</strong>: smoothing splines assume unique x; with repeated x, average within duplicates or use weights (<code>w=</code>) — <code>UnivariateSpline</code> errors otherwise.</li>
+<li><strong>Weights ≠ frequencies alone</strong>: <code>w</code> multiplies each residual’s penalty; for known heteroscedastic variances pass w = 1/σᵢ — the weighted criterion from <a href="../part-02-linear-regression/02-10-regression-assumptions.html">2.10</a>’s repair menu.</li>
+<li><strong>Effective df should accompany every smooth</strong>: a fit is not described by λ/s alone; “smoothed with 7.3 df” is the reproducible statement.</li>
+<li><strong>Boundary behavior</strong>: natural-spline structure keeps tails linear, but tail estimates still lean on few points — report where the data actually supports the curve (or shade the bands honestly, Exercise 3).</li>
+<li><strong>Multivariate smoothing splines</strong> exist (thin-plate splines) but explode computationally with dimension — the practical route to multiple smooths is the additive model (<a href="../part-06-nonlinear-regression/06-7-gam.html">6.7</a>).</li>
+</ul>
+<section id="read-refactor-ai-code" class="level3">
+<h3 class="anchored" data-anchor-id="read-refactor-ai-code">Read &amp; Refactor AI Code</h3>
+<p>This AI-generated smoother has <strong>three bugs</strong>. Run, diagnose, fix.</p>
+<div>
+<div id="pyodide-10" class="exercise-cell">
+
+</div>
+<script type="pyodide-10-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5mcm9tIHNjaXB5LmludGVycG9sYXRlIGltcG9ydCBVbml2YXJpYXRlU3BsaW5lXG5cbnJuZyA9IG5wLnJhbmRvbS5kZWZhdWx0X3JuZygxMClcbnggPSBucC5zb3J0KHJuZy51bmlmb3JtKDAsIDEsIDEwMCkpXG54WzVdID0geFs0XSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICMgYSBkdXBsaWNhdGVkIGRlc2lnbiBwb2ludFxueSA9IG5wLnNpbigyICogbnAucGkgKiB4KSArIHJuZy5ub3JtYWwoMCwgMC4zLCAxMDApXG5cbiMgQlVHIDE6IGR1cGxpY2F0ZWQgeCB3aXRoIGRlZmF1bHQgY2FsbFxudHJ5OlxuICAgIHNwbCA9IFVuaXZhcmlhdGVTcGxpbmUoeCwgeSwgaz0zLCBzPTEuMClcbiAgICBwcmludChcImZpdCBva1wiKVxuZXhjZXB0IEV4Y2VwdGlvbiBhcyBlOlxuICAgIHByaW50KFwiY3Jhc2hlZDpcIiwgdHlwZShlKS5fX25hbWVfXylcblxuIyBCVUcgMjogcyB0cmVhdGVkIGFzIGxhbWJkYSAoYWJzb2x1dGUgdGlueSB2YWx1ZSwgbiBpZ25vcmVkKVxuc3BsMiA9IFVuaXZhcmlhdGVTcGxpbmUoeCwgeSwgaz0zLCBzPTAuMDAxKVxuXG4jIEJVRyAzOiB3IHBhc3NlZCBhcyByYXcgdmFyaWFuY2VzIGluc3RlYWQgb2YgaW52ZXJzZS1zZCB3ZWlnaHRzXG53ID0gbnAuZnVsbCgxMDAsIDAuMDkpXG50cnk6XG4gICAgc3BsMyA9IFVuaXZhcmlhdGVTcGxpbmUoeCwgeSwgdz13LCBrPTMsIHM9MS4wKVxuICAgIHByaW50KFwid2VpZ2h0ZWQgZml0IG9rIChidXQgd2VpZ2h0cyBhcmUgaW52ZXJ0ZWQpXCIpXG5leGNlcHQgRXhjZXB0aW9uIGFzIGU6XG4gICAgcHJpbnQoXCJjcmFzaGVkOlwiLCB0eXBlKGUpLl9fbmFtZV9fKSJ9
+</script>
+</div>
+<details>
+<summary>
+What’s wrong, and the fix
+</summary>
+<ol type="1">
+<li><strong>Duplicate x</strong>: the interpolating structure needs distinct abscissae. Average duplicates (with combined weight) or jitter-and-disclose.</li>
+<li><strong>s as λ</strong>: s = 0.001 <em>allows almost no residual mass</em> → near-interpolation regardless of n; the allowance must scale like nσ² (then be tuned).</li>
+<li><strong>Weights inverted</strong>: w multiplies each squared residual — high-variance points should get <em>small</em> w. Passing variances upweights the noisiest points, exactly backwards (<a href="../part-02-linear-regression/02-10-regression-assumptions.html">2.10</a>’s WLS logic).</li>
+</ol>
+<div>
+<div id="pyodide-11" class="exercise-cell">
+
+</div>
+<script type="pyodide-11-contents">
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuZnJvbSBzY2lweS5pbnRlcnBvbGF0ZSBpbXBvcnQgVW5pdmFyaWF0ZVNwbGluZVxuXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoMTApXG54ID0gbnAuc29ydChybmcudW5pZm9ybSgwLCAxLCAxMDApKVxueFs1XSA9IHhbNF1cbnkgPSBucC5zaW4oMiAqIG5wLnBpICogeCkgKyBybmcubm9ybWFsKDAsIDAuMywgMTAwKVxuXG4jIGRlZHVwbGljYXRlOiBhdmVyYWdlIHkgYXQgdGllZCB4LCB3ZWlnaHQgMiB0aGVyZVxueHUsIGludmVyc2UgPSBucC51bmlxdWUoeCwgcmV0dXJuX2ludmVyc2U9VHJ1ZSlcbnl1ID0gbnAuemVyb3MobGVuKHh1KSlcbnd1ID0gbnAuemVyb3MobGVuKHh1KSlcbmZvciBpIGluIHJhbmdlKGxlbih4dSkpOlxuICAgIG0gPSBpbnZlcnNlID09IGlcbiAgICB5dVtpXSA9IHlbbV0ubWVhbigpXG4gICAgd3VbaV0gPSBtLnN1bSgpXG5cbnNwbCA9IFVuaXZhcmlhdGVTcGxpbmUoeHUsIHl1LCB3PXd1LCBrPTMsIHM9bGVuKHh1KSAqIDAuMDkpICAgIyB+IG4gKiBzaWdtYV4yXG5wcmludChcImZpdCBvazsgcmVzaWR1YWwgU0QgPVwiLCByb3VuZChmbG9hdChucC5zdGQoeXUgLSBzcGwoeHUpKSksIDMpKSJ9
+</script>
+</div>
+</details>
+</section>
+</section>
+<section id="advanced-questions" class="level2">
+<h2 class="anchored" data-anchor-id="advanced-questions">5. Advanced Questions</h2>
+<p><strong>Q1.</strong> Sketch the variational argument: among all twice-differentiable f minimizing RSS + λ∫f″², argue the minimizer must be a natural cubic spline with knots at the data points. (Hint: on any interval between consecutive x’s, the Euler–Lagrange condition for the integrand (f″)² forces f⁗ = 0 — a cubic; the boundary conditions at the extreme data force naturality.) What role does λ play in this derivation, and what does the result <em>not</em> tell you (name one thing CV still must decide)?</p>
+<details>
+<summary>
+Hint
+</summary>
+Variation f → f + εg vanishing at data points; integrate ∫f″g″ by parts twice; the ODE f⁗ = 0 emerges between knots with natural boundary conditions f″ = f‴ = 0 at the ends.
+</details>
+<details>
+<summary>
+Solution
+</summary>
+Perturbing f by smooth g with g(xᵢ) = 0 and setting the first variation to zero: ∫(f″g″)dx + λ∑-terms give, after integrating by parts, ∫f⁗g = 0 for all admissible g between consecutive data — hence f⁗ ≡ 0 there (cubic pieces). At the boundary intervals the natural conditions f″ = f‴ = 0 appear (no outside data to balance them), making the spline <em>natural</em>. λ scales the trade-off inside this fixed family — the family itself is λ-independent. What the derivation doesn’t decide: σ² / the absolute scale of residual tolerance (where on the λ-path to stop) — that is CV’s job, exactly as in Exercise 1; theory gives the shape of the model space, validation picks the point in it.
+</details>
+<p><strong>Q2.</strong> Reinsch/GCV without GCV: the generalized cross-validation score is <span class="math inline">\(\text{GCV}(\lambda) = \frac{n\,\text{RSS}(\lambda)}{(n - \text{df}(\lambda))^2}\)</span>. Implement GCV for the smoothing spline using the covariance-based df estimator (Exercise 2, at reduced R for cost), sweep λ, and compare GCV-chosen s against 5-fold-CV-chosen s over 100 simulated datasets. Report agreement rates and which is cheaper. When do they disagree systematically (heteroscedastic data)?</p>
+<details>
+<summary>
+Solution
+</summary>
+<div>
+<div id="pyodide-12" class="exercise-cell">
+
+</div>
+<script type="pyodide-12-contents">
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuZnJvbSBzY2lweS5pbnRlcnBvbGF0ZSBpbXBvcnQgVW5pdmFyaWF0ZVNwbGluZVxuZnJvbSBza2xlYXJuLm1vZGVsX3NlbGVjdGlvbiBpbXBvcnQgS0ZvbGRcblxuZGVmIGdjdl9jaG9vc2UoeCwgeSwgc2lnbWE9MC4zLCBSPTE1MCk6XG4gICAgYmVzdF9zLCBiZXN0X3Njb3JlID0gTm9uZSwgbnAuaW5mXG4gICAgZm9yIHNfZiBpbiAxMC4wICoqIG5wLmFyYW5nZSgtMiwgMS4xLCAwLjUpOlxuICAgICAgICBwcmVkcywgeXMgPSBucC56ZXJvcygoUiwgbGVuKHgpKSksIG5wLnplcm9zKChSLCBsZW4oeCkpKVxuICAgICAgICByciA9IG5wLnJhbmRvbS5kZWZhdWx0X3JuZygwKVxuICAgICAgICBmb3IgciBpbiByYW5nZShSKTpcbiAgICAgICAgICAgIHliID0geSArIHJyLm5vcm1hbCgwLCBzaWdtYSwgbGVuKHkpKSAgICMgcGFyYW1ldHJpYyBib290c3RyYXAgYXJvdW5kIHlcbiAgICAgICAgICAgIHNwbCA9IFVuaXZhcmlhdGVTcGxpbmUoeCwgeWIsIGs9Mywgcz1zX2YgKiBsZW4oeCkpXG4gICAgICAgICAgICBwcmVkc1tyXSA9IHNwbCh4KVxuICAgICAgICAgICAgeXNbcl0gPSB5YlxuICAgICAgICBkZiA9IHN1bShucC5jb3YocHJlZHNbOiwgaV0sIHlzWzosIGldKVswLCAxXSBmb3IgaSBpbiByYW5nZShsZW4oeCkpKSAvIHNpZ21hKioyXG4gICAgICAgIHJzcyA9IG5wLnN1bSgoeSAtIFVuaXZhcmlhdGVTcGxpbmUoeCwgeSwgaz0zLCBzPXNfZiAqIGxlbih4KSkoeCkpKioyKVxuICAgICAgICBzY29yZSA9IGxlbih4KSAqIHJzcyAvIChsZW4oeCkgLSBkZikqKjJcbiAgICAgICAgaWYgc2NvcmUgPCBiZXN0X3Njb3JlOlxuICAgICAgICAgICAgYmVzdF9zLCBiZXN0X3Njb3JlID0gc19mLCBzY29yZVxuICAgIHJldHVybiBiZXN0X3Ncblxucm5nID0gbnAucmFuZG9tLmRlZmF1bHRfcm5nKDE0KVxuYWdyZWUsIGN2X3NfbGlzdCwgZ2N2X3NfbGlzdCA9IDAsIFtdLCBbXVxuZm9yIHJlcCBpbiByYW5nZSgzMCk6XG4gICAgeCA9IG5wLnNvcnQocm5nLnVuaWZvcm0oMCwgMSwgNjApKVxuICAgIHkgPSBucC5zaW4oMiAqIG5wLnBpICogeCkgKyBybmcubm9ybWFsKDAsIDAuMywgeC5zaXplKVxuICAgIGN2ID0gS0ZvbGQoNSwgc2h1ZmZsZT1UcnVlLCByYW5kb21fc3RhdGU9cmVwKVxuICAgIGJlc3RfY3YsIGJlc3RfbSA9IE5vbmUsIG5wLmluZlxuICAgIGZvciBzX2YgaW4gMTAuMCAqKiBucC5hcmFuZ2UoLTIsIDEuMSwgMC41KTpcbiAgICAgICAgbXNlcyA9IFtdXG4gICAgICAgIGZvciB0ciwgdmEgaW4gY3Yuc3BsaXQoeCk6XG4gICAgICAgICAgICBzcGwgPSBVbml2YXJpYXRlU3BsaW5lKHhbdHJdLCB5W3RyXSwgaz0zLCBzPXNfZiAqIGxlbih0cikpXG4gICAgICAgICAgICBtc2VzLmFwcGVuZChucC5tZWFuKCh5W3ZhXSAtIHNwbCh4W3ZhXSkpKioyKSlcbiAgICAgICAgaWYgbnAubWVhbihtc2VzKSA8IGJlc3RfbTpcbiAgICAgICAgICAgIGJlc3RfY3YsIGJlc3RfbSA9IHNfZiwgbnAubWVhbihtc2VzKVxuICAgIHNfZyA9IGdjdl9jaG9vc2UoeCwgeSlcbiAgICBjdl9zX2xpc3QuYXBwZW5kKGJlc3RfY3YpOyBnY3Zfc19saXN0LmFwcGVuZChzX2cpXG4gICAgYWdyZWUgKz0gYWJzKG5wLmxvZzEwKGJlc3RfY3YpIC0gbnAubG9nMTAoc19nKSkgPCAwLjVcblxucHJpbnQoZlwiR0NWIGFuZCA1LWZvbGQgQ1YgYWdyZWUgKHdpdGhpbiB+MC41IGxvZzEwIHMpOiB7YWdyZWV9LzMwXCIpXG5wcmludChcIkdDViBuZWVkcyBubyByZWZpdC1wZXItZm9sZCwgYnV0IGFzc3VtZXMgaG9tb3NjZWRhc3RpYyBub2lzZSDigJRcIilcbnByaW50KFwidW5kZXIgaGV0ZXJvc2NlZGFzdGljaXR5LCBmb2xkLWJhc2VkIENWIHJlbWFpbnMgdGhlIHRydXN0d29ydGh5IGRpYWwuXCIpIn0=
+</script>
+</div>
+GCV is the closed-form cousin of CV (cheaper: one fit per λ, not per fold) and typically lands within a notch of CV on homoscedastic data. Under heteroscedasticity GCV’s implicit uniform-σ assumption biases the choice — the same fragility as every analytic criterion vs the empirical honesty of cross-validation.
+</details>
+</section>
+<section id="complex-questions" class="level2">
+<h2 class="anchored" data-anchor-id="complex-questions">6. Complex Questions</h2>
+<p><strong>C1 (smoothing × <a href="../part-05-regularization-high-dimensions/05-2-ridge-regression.html">5.2 ridge</a> × <a href="../part-06-nonlinear-regression/06-4-regression-splines.html">6.4</a>).</strong> Prove-by-construction the identity: a smoothing spline is ridge regression on a rich spline basis (fine knot grid) with a penalty tailored to the basis. Implement ridge-on-SplineTransformer (many knots), tune α by CV, and compare against UnivariateSpline tuned by CV: fitted curves, effective df, CV MSE. Where they differ, explain via the penalty’s form (coefficient shrinkage vs derivative integral) and boundary handling.</p>
+<p><strong>C2 (smoothing × <a href="../part-03-classification-glm/03-6-generalized-linear-models.html">3.6 GLM</a> × <a href="../part-06-nonlinear-regression/06-7-gam.html">6.7</a> preview).</strong> Smoothing for non-Gaussian responses: binary outcome with smooth logit truth logit(p(x)) = sin(2πx). Fit (a) a Gaussian-error smoothing spline to the 0/1 y (wrong likelihood), (b) a binned-response spline (bin x into 15 cells, smooth the empirical logits), (c) plain logistic with polynomial basis. Compare CV log-loss. This ad-hoc tour is exactly the problem generalized additive logistic models solve properly — write down what (b) gets right and where it still falls short of a true GAM.</p>
+</section>
+<section id="summary" class="level2">
+<h2 class="anchored" data-anchor-id="summary">7. Summary</h2>
+<ul>
+<li>Smoothing splines: knots everywhere, roughness penalized — knot placement becomes one continuous dial.</li>
+<li>The minimizer is a natural cubic spline through the data; λ slides df continuously from n to 2.</li>
+<li><code>s</code> (residual allowance ≈ nσ²) vs λ (roughness weight): know which your library exposes; tune by CV either way.</li>
+<li>Report effective df — the honest complexity of a smooth.</li>
+<li>Bands: bootstrap for the function; add σ for new points.</li>
+<li>GCV is the cheap analytic dial; heteroscedasticity breaks it — CV stays the referee.</li>
+<li>One smooth of one variable is a toy; real data has many x’s: additive models — <a href="../part-06-nonlinear-regression/06-7-gam.html">6.7 GAMs</a> — after the local-regression way station: <a href="../part-06-nonlinear-regression/06-6-local-regression.html">6.6 Local regression</a>.</li>
+</ul>
+
+
+<script type="pyodide-data">
+eyJvcHRpb25zIjp7ImVudiI6eyJQTE9UTFlfUkVOREVSRVIiOiJwbG90bHlfbWltZXR5cGUifSwiaW5kZXhVUkwiOiJodHRwczovL2Nkbi5qc2RlbGl2ci5uZXQvcHlvZGlkZS92MC4yOC4xL2Z1bGwvIn0sInBhY2thZ2VzIjp7InBrZ3MiOlsicHlvZGlkZV9odHRwIiwibWljcm9waXAiLCJpcHl0aG9uIiwibnVtcHkiLCJzY2lweSIsInNjaWtpdC1sZWFybiIsIm1hdHBsb3RsaWIiXX19
+</script>
+<script type="ojs-module-contents">
+eyJjb250ZW50cyI6W3siY2VsbE5hbWUiOiJweW9kaWRlLTEyIiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6Il9weW9kaWRlX3ZhbHVlXzEyID0ge1xuICBjb25zdCB7IGhpZ2hsaWdodFB5dGhvbiwgYjY0RGVjb2RlfSA9IHdpbmRvdy5fZXhlcmNpc2Vfb2pzX3J1bnRpbWU7XG5cbiAgY29uc3Qgc2NyaXB0Q29udGVudCA9IGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3IoYHNjcmlwdFt0eXBlPVxcXCJweW9kaWRlLTEyLWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgLy8gRGVmYXVsdCBldmFsdWF0aW9uIGNvbmZpZ3VyYXRpb25cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oe1xuICAgIGlkOiBcInB5b2RpZGUtMTItY29udGVudHNcIixcbiAgICBlY2hvOiB0cnVlLFxuICAgIG91dHB1dDogdHJ1ZVxuICB9LCBibG9jay5hdHRyKTtcblxuICAvLyBFdmFsdWF0ZSB0aGUgcHJvdmlkZWQgUHl0aG9uIGNvZGVcbiAgY29uc3QgcmVzdWx0ID0gcHlvZGlkZU9qcy5wcm9jZXNzKHtjb2RlOiBibG9jay5jb2RlLCBvcHRpb25zfSwge30pO1xuXG4gIC8vIEVhcmx5IHlpZWxkIHdoaWxlIHdlIHdhaXQgZm9yIHRoZSBmaXJzdCBldmFsdWF0aW9uIGFuZCByZW5kZXJcbiAgaWYgKG9wdGlvbnMub3V0cHV0ICYmICEoXCIxMlwiIGluIHB5b2RpZGVPanMucmVuZGVyZWRPanMpKSB7XG4gICAgY29uc3QgY29udGFpbmVyID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcImRpdlwiKTtcbiAgICBjb25zdCBzcGlubmVyID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcImRpdlwiKTtcblxuICAgIGlmIChvcHRpb25zLmVjaG8pIHtcbiAgICAgIC8vIFNob3cgb3V0cHV0IGFzIGhpZ2hsaWdodGVkIHNvdXJjZVxuICAgICAgY29uc3QgcHJlRWxlbSA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJwcmVcIik7XG4gICAgICBjb250YWluZXIuY2xhc3NOYW1lID0gXCJzb3VyY2VDb2RlXCI7XG4gICAgICBwcmVFbGVtLmNsYXNzTmFtZSA9IFwic291cmNlQ29kZSBweXRob25cIjtcbiAgICAgIHByZUVsZW0uYXBwZW5kQ2hpbGQoaGlnaGxpZ2h0UHl0aG9uKGJsb2NrLmNvZGUpKTtcbiAgICAgIHNwaW5uZXIuY2xhc3NOYW1lID0gXCJzcGlubmVyLWdyb3cgc3Bpbm5lci1ncm93LXNtIG0tMiBwb3NpdGlvbi1hYnNvbHV0ZSB0b3AtMCBlbmQtMFwiO1xuICAgICAgcHJlRWxlbS5hcHBlbmRDaGlsZChzcGlubmVyKTtcbiAgICAgIGNvbnRhaW5lci5hcHBlbmRDaGlsZChwcmVFbGVtKTtcbiAgICB9IGVsc2Uge1xuICAgICAgc3Bpbm5lci5jbGFzc05hbWUgPSBcInNwaW5uZXItYm9yZGVyIHNwaW5uZXItYm9yZGVyLXNtXCI7XG4gICAgICBjb250YWluZXIuYXBwZW5kQ2hpbGQoc3Bpbm5lcik7XG4gICAgfVxuXG4gICAgeWllbGQgY29udGFpbmVyO1xuICB9XG5cbiAgcHlvZGlkZU9qcy5yZW5kZXJlZE9qc1tcIjEyXCJdID0gdHJ1ZTtcbiAgeWllbGQgYXdhaXQgcmVzdWx0O1xufVxuIn0seyJjZWxsTmFtZSI6InB5b2RpZGUtMTEiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoiX3B5b2RpZGVfdmFsdWVfMTEgPSB7XG4gIGNvbnN0IHsgaGlnaGxpZ2h0UHl0aG9uLCBiNjREZWNvZGV9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtMTEtY29udGVudHNcXFwiXWApLnRleHRDb250ZW50O1xuICBjb25zdCBibG9jayA9IEpTT04ucGFyc2UoYjY0RGVjb2RlKHNjcmlwdENvbnRlbnQpKTtcblxuICAvLyBEZWZhdWx0IGV2YWx1YXRpb24gY29uZmlndXJhdGlvblxuICBjb25zdCBvcHRpb25zID0gT2JqZWN0LmFzc2lnbih7XG4gICAgaWQ6IFwicHlvZGlkZS0xMS1jb250ZW50c1wiLFxuICAgIGVjaG86IHRydWUsXG4gICAgb3V0cHV0OiB0cnVlXG4gIH0sIGJsb2NrLmF0dHIpO1xuXG4gIC8vIEV2YWx1YXRlIHRoZSBwcm92aWRlZCBQeXRob24gY29kZVxuICBjb25zdCByZXN1bHQgPSBweW9kaWRlT2pzLnByb2Nlc3Moe2NvZGU6IGJsb2NrLmNvZGUsIG9wdGlvbnN9LCB7fSk7XG5cbiAgLy8gRWFybHkgeWllbGQgd2hpbGUgd2Ugd2FpdCBmb3IgdGhlIGZpcnN0IGV2YWx1YXRpb24gYW5kIHJlbmRlclxuICBpZiAob3B0aW9ucy5vdXRwdXQgJiYgIShcIjExXCIgaW4gcHlvZGlkZU9qcy5yZW5kZXJlZE9qcykpIHtcbiAgICBjb25zdCBjb250YWluZXIgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpO1xuICAgIGNvbnN0IHNwaW5uZXIgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpO1xuXG4gICAgaWYgKG9wdGlvbnMuZWNobykge1xuICAgICAgLy8gU2hvdyBvdXRwdXQgYXMgaGlnaGxpZ2h0ZWQgc291cmNlXG4gICAgICBjb25zdCBwcmVFbGVtID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcInByZVwiKTtcbiAgICAgIGNvbnRhaW5lci5jbGFzc05hbWUgPSBcInNvdXJjZUNvZGVcIjtcbiAgICAgIHByZUVsZW0uY2xhc3NOYW1lID0gXCJzb3VyY2VDb2RlIHB5dGhvblwiO1xuICAgICAgcHJlRWxlbS5hcHBlbmRDaGlsZChoaWdobGlnaHRQeXRob24oYmxvY2suY29kZSkpO1xuICAgICAgc3Bpbm5lci5jbGFzc05hbWUgPSBcInNwaW5uZXItZ3JvdyBzcGlubmVyLWdyb3ctc20gbS0yIHBvc2l0aW9uLWFic29sdXRlIHRvcC0wIGVuZC0wXCI7XG4gICAgICBwcmVFbGVtLmFwcGVuZENoaWxkKHNwaW5uZXIpO1xuICAgICAgY29udGFpbmVyLmFwcGVuZENoaWxkKHByZUVsZW0pO1xuICAgIH0gZWxzZSB7XG4gICAgICBzcGlubmVyLmNsYXNzTmFtZSA9IFwic3Bpbm5lci1ib3JkZXIgc3Bpbm5lci1ib3JkZXItc21cIjtcbiAgICAgIGNvbnRhaW5lci5hcHBlbmRDaGlsZChzcGlubmVyKTtcbiAgICB9XG5cbiAgICB5aWVsZCBjb250YWluZXI7XG4gIH1cblxuICBweW9kaWRlT2pzLnJlbmRlcmVkT2pzW1wiMTFcIl0gPSB0cnVlO1xuICB5aWVsZCBhd2FpdCByZXN1bHQ7XG59XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS0xMCIsImlubGluZSI6ZmFsc2UsIm1ldGhvZE5hbWUiOiJpbnRlcnByZXQiLCJzb3VyY2UiOiJ2aWV3b2YgX3B5b2RpZGVfZWRpdG9yXzEwID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS0xMC1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHsgaWQ6IGBweW9kaWRlLTEwLWNvbnRlbnRzYCB9LCBibG9jay5hdHRyKTtcbiAgY29uc3QgZWRpdG9yID0gbmV3IFB5b2RpZGVFeGVyY2lzZUVkaXRvcihcbiAgICBweW9kaWRlT2pzLnB5b2RpZGVQcm9taXNlLFxuICAgIGJsb2NrLmNvZGUsXG4gICAgb3B0aW9uc1xuICApO1xuXG4gIHJldHVybiBlZGl0b3IuY29udGFpbmVyO1xufVxuX3B5b2RpZGVfdmFsdWVfMTAgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzEwLCB7fSk7XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS05IiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6Il9weW9kaWRlX3ZhbHVlXzkgPSB7XG4gIGNvbnN0IHsgaGlnaGxpZ2h0UHl0aG9uLCBiNjREZWNvZGV9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtOS1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIC8vIERlZmF1bHQgZXZhbHVhdGlvbiBjb25maWd1cmF0aW9uXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHtcbiAgICBpZDogXCJweW9kaWRlLTktY29udGVudHNcIixcbiAgICBlY2hvOiB0cnVlLFxuICAgIG91dHB1dDogdHJ1ZVxuICB9LCBibG9jay5hdHRyKTtcblxuICAvLyBFdmFsdWF0ZSB0aGUgcHJvdmlkZWQgUHl0aG9uIGNvZGVcbiAgY29uc3QgcmVzdWx0ID0gcHlvZGlkZU9qcy5wcm9jZXNzKHtjb2RlOiBibG9jay5jb2RlLCBvcHRpb25zfSwge30pO1xuXG4gIC8vIEVhcmx5IHlpZWxkIHdoaWxlIHdlIHdhaXQgZm9yIHRoZSBmaXJzdCBldmFsdWF0aW9uIGFuZCByZW5kZXJcbiAgaWYgKG9wdGlvbnMub3V0cHV0ICYmICEoXCI5XCIgaW4gcHlvZGlkZU9qcy5yZW5kZXJlZE9qcykpIHtcbiAgICBjb25zdCBjb250YWluZXIgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpO1xuICAgIGNvbnN0IHNwaW5uZXIgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpO1xuXG4gICAgaWYgKG9wdGlvbnMuZWNobykge1xuICAgICAgLy8gU2hvdyBvdXRwdXQgYXMgaGlnaGxpZ2h0ZWQgc291cmNlXG4gICAgICBjb25zdCBwcmVFbGVtID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcInByZVwiKTtcbiAgICAgIGNvbnRhaW5lci5jbGFzc05hbWUgPSBcInNvdXJjZUNvZGVcIjtcbiAgICAgIHByZUVsZW0uY2xhc3NOYW1lID0gXCJzb3VyY2VDb2RlIHB5dGhvblwiO1xuICAgICAgcHJlRWxlbS5hcHBlbmRDaGlsZChoaWdobGlnaHRQeXRob24oYmxvY2suY29kZSkpO1xuICAgICAgc3Bpbm5lci5jbGFzc05hbWUgPSBcInNwaW5uZXItZ3JvdyBzcGlubmVyLWdyb3ctc20gbS0yIHBvc2l0aW9uLWFic29sdXRlIHRvcC0wIGVuZC0wXCI7XG4gICAgICBwcmVFbGVtLmFwcGVuZENoaWxkKHNwaW5uZXIpO1xuICAgICAgY29udGFpbmVyLmFwcGVuZENoaWxkKHByZUVsZW0pO1xuICAgIH0gZWxzZSB7XG4gICAgICBzcGlubmVyLmNsYXNzTmFtZSA9IFwic3Bpbm5lci1ib3JkZXIgc3Bpbm5lci1ib3JkZXItc21cIjtcbiAgICAgIGNvbnRhaW5lci5hcHBlbmRDaGlsZChzcGlubmVyKTtcbiAgICB9XG5cbiAgICB5aWVsZCBjb250YWluZXI7XG4gIH1cblxuICBweW9kaWRlT2pzLnJlbmRlcmVkT2pzW1wiOVwiXSA9IHRydWU7XG4gIHlpZWxkIGF3YWl0IHJlc3VsdDtcbn1cbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTgiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoiX3B5b2RpZGVfdmFsdWVfOCA9IHtcbiAgY29uc3QgeyBoaWdobGlnaHRQeXRob24sIGI2NERlY29kZX0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS04LWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgLy8gRGVmYXVsdCBldmFsdWF0aW9uIGNvbmZpZ3VyYXRpb25cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oe1xuICAgIGlkOiBcInB5b2RpZGUtOC1jb250ZW50c1wiLFxuICAgIGVjaG86IHRydWUsXG4gICAgb3V0cHV0OiB0cnVlXG4gIH0sIGJsb2NrLmF0dHIpO1xuXG4gIC8vIEV2YWx1YXRlIHRoZSBwcm92aWRlZCBQeXRob24gY29kZVxuICBjb25zdCByZXN1bHQgPSBweW9kaWRlT2pzLnByb2Nlc3Moe2NvZGU6IGJsb2NrLmNvZGUsIG9wdGlvbnN9LCB7fSk7XG5cbiAgLy8gRWFybHkgeWllbGQgd2hpbGUgd2Ugd2FpdCBmb3IgdGhlIGZpcnN0IGV2YWx1YXRpb24gYW5kIHJlbmRlclxuICBpZiAob3B0aW9ucy5vdXRwdXQgJiYgIShcIjhcIiBpbiBweW9kaWRlT2pzLnJlbmRlcmVkT2pzKSkge1xuICAgIGNvbnN0IGNvbnRhaW5lciA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJkaXZcIik7XG4gICAgY29uc3Qgc3Bpbm5lciA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJkaXZcIik7XG5cbiAgICBpZiAob3B0aW9ucy5lY2hvKSB7XG4gICAgICAvLyBTaG93IG91dHB1dCBhcyBoaWdobGlnaHRlZCBzb3VyY2VcbiAgICAgIGNvbnN0IHByZUVsZW0gPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwicHJlXCIpO1xuICAgICAgY29udGFpbmVyLmNsYXNzTmFtZSA9IFwic291cmNlQ29kZVwiO1xuICAgICAgcHJlRWxlbS5jbGFzc05hbWUgPSBcInNvdXJjZUNvZGUgcHl0aG9uXCI7XG4gICAgICBwcmVFbGVtLmFwcGVuZENoaWxkKGhpZ2hsaWdodFB5dGhvbihibG9jay5jb2RlKSk7XG4gICAgICBzcGlubmVyLmNsYXNzTmFtZSA9IFwic3Bpbm5lci1ncm93IHNwaW5uZXItZ3Jvdy1zbSBtLTIgcG9zaXRpb24tYWJzb2x1dGUgdG9wLTAgZW5kLTBcIjtcbiAgICAgIHByZUVsZW0uYXBwZW5kQ2hpbGQoc3Bpbm5lcik7XG4gICAgICBjb250YWluZXIuYXBwZW5kQ2hpbGQocHJlRWxlbSk7XG4gICAgfSBlbHNlIHtcbiAgICAgIHNwaW5uZXIuY2xhc3NOYW1lID0gXCJzcGlubmVyLWJvcmRlciBzcGlubmVyLWJvcmRlci1zbVwiO1xuICAgICAgY29udGFpbmVyLmFwcGVuZENoaWxkKHNwaW5uZXIpO1xuICAgIH1cblxuICAgIHlpZWxkIGNvbnRhaW5lcjtcbiAgfVxuXG4gIHB5b2RpZGVPanMucmVuZGVyZWRPanNbXCI4XCJdID0gdHJ1ZTtcbiAgeWllbGQgYXdhaXQgcmVzdWx0O1xufVxuIn0seyJjZWxsTmFtZSI6InB5b2RpZGUtNyIsImlubGluZSI6ZmFsc2UsIm1ldGhvZE5hbWUiOiJpbnRlcnByZXQiLCJzb3VyY2UiOiJfcHlvZGlkZV92YWx1ZV83ID0ge1xuICBjb25zdCB7IGhpZ2hsaWdodFB5dGhvbiwgYjY0RGVjb2RlfSA9IHdpbmRvdy5fZXhlcmNpc2Vfb2pzX3J1bnRpbWU7XG5cbiAgY29uc3Qgc2NyaXB0Q29udGVudCA9IGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3IoYHNjcmlwdFt0eXBlPVxcXCJweW9kaWRlLTctY29udGVudHNcXFwiXWApLnRleHRDb250ZW50O1xuICBjb25zdCBibG9jayA9IEpTT04ucGFyc2UoYjY0RGVjb2RlKHNjcmlwdENvbnRlbnQpKTtcblxuICAvLyBEZWZhdWx0IGV2YWx1YXRpb24gY29uZmlndXJhdGlvblxuICBjb25zdCBvcHRpb25zID0gT2JqZWN0LmFzc2lnbih7XG4gICAgaWQ6IFwicHlvZGlkZS03LWNvbnRlbnRzXCIsXG4gICAgZWNobzogdHJ1ZSxcbiAgICBvdXRwdXQ6IHRydWVcbiAgfSwgYmxvY2suYXR0cik7XG5cbiAgLy8gRXZhbHVhdGUgdGhlIHByb3ZpZGVkIFB5dGhvbiBjb2RlXG4gIGNvbnN0IHJlc3VsdCA9IHB5b2RpZGVPanMucHJvY2Vzcyh7Y29kZTogYmxvY2suY29kZSwgb3B0aW9uc30sIHt9KTtcblxuICAvLyBFYXJseSB5aWVsZCB3aGlsZSB3ZSB3YWl0IGZvciB0aGUgZmlyc3QgZXZhbHVhdGlvbiBhbmQgcmVuZGVyXG4gIGlmIChvcHRpb25zLm91dHB1dCAmJiAhKFwiN1wiIGluIHB5b2RpZGVPanMucmVuZGVyZWRPanMpKSB7XG4gICAgY29uc3QgY29udGFpbmVyID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcImRpdlwiKTtcbiAgICBjb25zdCBzcGlubmVyID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcImRpdlwiKTtcblxuICAgIGlmIChvcHRpb25zLmVjaG8pIHtcbiAgICAgIC8vIFNob3cgb3V0cHV0IGFzIGhpZ2hsaWdodGVkIHNvdXJjZVxuICAgICAgY29uc3QgcHJlRWxlbSA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJwcmVcIik7XG4gICAgICBjb250YWluZXIuY2xhc3NOYW1lID0gXCJzb3VyY2VDb2RlXCI7XG4gICAgICBwcmVFbGVtLmNsYXNzTmFtZSA9IFwic291cmNlQ29kZSBweXRob25cIjtcbiAgICAgIHByZUVsZW0uYXBwZW5kQ2hpbGQoaGlnaGxpZ2h0UHl0aG9uKGJsb2NrLmNvZGUpKTtcbiAgICAgIHNwaW5uZXIuY2xhc3NOYW1lID0gXCJzcGlubmVyLWdyb3cgc3Bpbm5lci1ncm93LXNtIG0tMiBwb3NpdGlvbi1hYnNvbHV0ZSB0b3AtMCBlbmQtMFwiO1xuICAgICAgcHJlRWxlbS5hcHBlbmRDaGlsZChzcGlubmVyKTtcbiAgICAgIGNvbnRhaW5lci5hcHBlbmRDaGlsZChwcmVFbGVtKTtcbiAgICB9IGVsc2Uge1xuICAgICAgc3Bpbm5lci5jbGFzc05hbWUgPSBcInNwaW5uZXItYm9yZGVyIHNwaW5uZXItYm9yZGVyLXNtXCI7XG4gICAgICBjb250YWluZXIuYXBwZW5kQ2hpbGQoc3Bpbm5lcik7XG4gICAgfVxuXG4gICAgeWllbGQgY29udGFpbmVyO1xuICB9XG5cbiAgcHlvZGlkZU9qcy5yZW5kZXJlZE9qc1tcIjdcIl0gPSB0cnVlO1xuICB5aWVsZCBhd2FpdCByZXN1bHQ7XG59XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS02IiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6InZpZXdvZiBfcHlvZGlkZV9lZGl0b3JfNiA9IHtcbiAgY29uc3QgeyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IsIGI2NERlY29kZSB9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtNi1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHsgaWQ6IGBweW9kaWRlLTYtY29udGVudHNgIH0sIGJsb2NrLmF0dHIpO1xuICBjb25zdCBlZGl0b3IgPSBuZXcgUHlvZGlkZUV4ZXJjaXNlRWRpdG9yKFxuICAgIHB5b2RpZGVPanMucHlvZGlkZVByb21pc2UsXG4gICAgYmxvY2suY29kZSxcbiAgICBvcHRpb25zXG4gICk7XG5cbiAgcmV0dXJuIGVkaXRvci5jb250YWluZXI7XG59XG5fcHlvZGlkZV92YWx1ZV82ID0gcHlvZGlkZU9qcy5wcm9jZXNzKF9weW9kaWRlX2VkaXRvcl82LCB7fSk7XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS01IiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6InZpZXdvZiBfcHlvZGlkZV9lZGl0b3JfNSA9IHtcbiAgY29uc3QgeyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IsIGI2NERlY29kZSB9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtNS1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHsgaWQ6IGBweW9kaWRlLTUtY29udGVudHNgIH0sIGJsb2NrLmF0dHIpO1xuICBjb25zdCBlZGl0b3IgPSBuZXcgUHlvZGlkZUV4ZXJjaXNlRWRpdG9yKFxuICAgIHB5b2RpZGVPanMucHlvZGlkZVByb21pc2UsXG4gICAgYmxvY2suY29kZSxcbiAgICBvcHRpb25zXG4gICk7XG5cbiAgcmV0dXJuIGVkaXRvci5jb250YWluZXI7XG59XG5fcHlvZGlkZV92YWx1ZV81ID0gcHlvZGlkZU9qcy5wcm9jZXNzKF9weW9kaWRlX2VkaXRvcl81LCB7fSk7XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS00IiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6InZpZXdvZiBfcHlvZGlkZV9lZGl0b3JfNCA9IHtcbiAgY29uc3QgeyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IsIGI2NERlY29kZSB9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtNC1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHsgaWQ6IGBweW9kaWRlLTQtY29udGVudHNgIH0sIGJsb2NrLmF0dHIpO1xuICBjb25zdCBlZGl0b3IgPSBuZXcgUHlvZGlkZUV4ZXJjaXNlRWRpdG9yKFxuICAgIHB5b2RpZGVPanMucHlvZGlkZVByb21pc2UsXG4gICAgYmxvY2suY29kZSxcbiAgICBvcHRpb25zXG4gICk7XG5cbiAgcmV0dXJuIGVkaXRvci5jb250YWluZXI7XG59XG5fcHlvZGlkZV92YWx1ZV80ID0gcHlvZGlkZU9qcy5wcm9jZXNzKF9weW9kaWRlX2VkaXRvcl80LCB7fSk7XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS0zIiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6InZpZXdvZiBfcHlvZGlkZV9lZGl0b3JfMyA9IHtcbiAgY29uc3QgeyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IsIGI2NERlY29kZSB9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtMy1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHsgaWQ6IGBweW9kaWRlLTMtY29udGVudHNgIH0sIGJsb2NrLmF0dHIpO1xuICBjb25zdCBlZGl0b3IgPSBuZXcgUHlvZGlkZUV4ZXJjaXNlRWRpdG9yKFxuICAgIHB5b2RpZGVPanMucHlvZGlkZVByb21pc2UsXG4gICAgYmxvY2suY29kZSxcbiAgICBvcHRpb25zXG4gICk7XG5cbiAgcmV0dXJuIGVkaXRvci5jb250YWluZXI7XG59XG5fcHlvZGlkZV92YWx1ZV8zID0gcHlvZGlkZU9qcy5wcm9jZXNzKF9weW9kaWRlX2VkaXRvcl8zLCB7fSk7XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS0yIiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6InZpZXdvZiBfcHlvZGlkZV9lZGl0b3JfMiA9IHtcbiAgY29uc3QgeyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IsIGI2NERlY29kZSB9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtMi1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHsgaWQ6IGBweW9kaWRlLTItY29udGVudHNgIH0sIGJsb2NrLmF0dHIpO1xuICBjb25zdCBlZGl0b3IgPSBuZXcgUHlvZGlkZUV4ZXJjaXNlRWRpdG9yKFxuICAgIHB5b2RpZGVPanMucHlvZGlkZVByb21pc2UsXG4gICAgYmxvY2suY29kZSxcbiAgICBvcHRpb25zXG4gICk7XG5cbiAgcmV0dXJuIGVkaXRvci5jb250YWluZXI7XG59XG5fcHlvZGlkZV92YWx1ZV8yID0gcHlvZGlkZU9qcy5wcm9jZXNzKF9weW9kaWRlX2VkaXRvcl8yLCB7fSk7XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS0xIiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6InZpZXdvZiBfcHlvZGlkZV9lZGl0b3JfMSA9IHtcbiAgY29uc3QgeyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IsIGI2NERlY29kZSB9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtMS1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHsgaWQ6IGBweW9kaWRlLTEtY29udGVudHNgIH0sIGJsb2NrLmF0dHIpO1xuICBjb25zdCBlZGl0b3IgPSBuZXcgUHlvZGlkZUV4ZXJjaXNlRWRpdG9yKFxuICAgIHB5b2RpZGVPanMucHlvZGlkZVByb21pc2UsXG4gICAgYmxvY2suY29kZSxcbiAgICBvcHRpb25zXG4gICk7XG5cbiAgcmV0dXJuIGVkaXRvci5jb250YWluZXI7XG59XG5fcHlvZGlkZV92YWx1ZV8xID0gcHlvZGlkZU9qcy5wcm9jZXNzKF9weW9kaWRlX2VkaXRvcl8xLCB7fSk7XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS1wcmVsdWRlIiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldFF1aWV0Iiwic291cmNlIjoicHlvZGlkZU9qcyA9IHtcbiAgY29uc3Qge1xuICAgIFB5b2RpZGVFdmFsdWF0b3IsXG4gICAgUHlvZGlkZUVudmlyb25tZW50TWFuYWdlcixcbiAgICBzZXR1cFB5dGhvbixcbiAgICBzdGFydFB5b2RpZGVXb3JrZXIsXG4gICAgYjY0RGVjb2RlLFxuICAgIGNvbGxhcHNlUGF0aCxcbiAgfSA9IHdpbmRvdy5fZXhlcmNpc2Vfb2pzX3J1bnRpbWU7XG5cbiAgY29uc3Qgc3RhdHVzQ29udGFpbmVyID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoXCJleGVyY2lzZS1sb2FkaW5nLXN0YXR1c1wiKTtcbiAgY29uc3QgaW5kaWNhdG9yQ29udGFpbmVyID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoXCJleGVyY2lzZS1sb2FkaW5nLWluZGljYXRvclwiKTtcbiAgaW5kaWNhdG9yQ29udGFpbmVyLmNsYXNzTGlzdC5yZW1vdmUoXCJkLW5vbmVcIik7XG5cbiAgbGV0IHN0YXR1c1RleHQgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpXG4gIHN0YXR1c1RleHQuY2xhc3NMaXN0ID0gXCJleGVyY2lzZS1sb2FkaW5nLWRldGFpbHNcIjtcbiAgc3RhdHVzVGV4dCA9IHN0YXR1c0NvbnRhaW5lci5hcHBlbmRDaGlsZChzdGF0dXNUZXh0KTtcbiAgc3RhdHVzVGV4dC50ZXh0Q29udGVudCA9IGBJbml0aWFsaXNlYDtcblxuICAvLyBIb2lzdCBpbmRpY2F0b3Igb3V0IGZyb20gZmluYWwgc2xpZGUgd2hlbiBydW5uaW5nIHVuZGVyIHJldmVhbFxuICBjb25zdCByZXZlYWxTdGF0dXMgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKFwiLnJldmVhbCAuZXhlcmNpc2UtbG9hZGluZy1pbmRpY2F0b3JcIik7XG4gIGlmIChyZXZlYWxTdGF0dXMpIHtcbiAgICByZXZlYWxTdGF0dXMucmVtb3ZlKCk7XG4gICAgZG9jdW1lbnQucXVlcnlTZWxlY3RvcihcIi5yZXZlYWwgPiAuc2xpZGVzXCIpLmFwcGVuZENoaWxkKHJldmVhbFN0YXR1cyk7XG4gIH1cblxuICAvLyBNYWtlIGFueSByZXZlYWwgc2xpZGVzIHdpdGggbGl2ZSBjZWxscyBzY3JvbGxhYmxlXG4gIGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3JBbGwoXCIucmV2ZWFsIC5leGVyY2lzZS1jZWxsXCIpLmZvckVhY2goKGVsKSA9PiB7XG4gICAgZWwuY2xvc2VzdCgnc2VjdGlvbi5zbGlkZScpLmNsYXNzTGlzdC5hZGQoXCJzY3JvbGxhYmxlXCIpO1xuICB9KVxuXG4gIC8vIFB5b2RpZGUgc3VwcGxlbWVudGFsIGRhdGEgYW5kIG9wdGlvbnNcbiAgY29uc3QgZGF0YUNvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS1kYXRhXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgZGF0YSA9IEpTT04ucGFyc2UoYjY0RGVjb2RlKGRhdGFDb250ZW50KSk7XG5cbiAgLy8gR3JhYiBsaXN0IG9mIHJlc291cmNlcyB0byBiZSBkb3dubG9hZGVkXG4gIGNvbnN0IGZpbGVzQ29udGVudCA9IGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3IoYHNjcmlwdFt0eXBlPVxcXCJ2ZnMtZmlsZVxcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGZpbGVzID0gSlNPTi5wYXJzZShiNjREZWNvZGUoZmlsZXNDb250ZW50KSk7XG5cbiAgbGV0IHB5b2RpZGVQcm9taXNlID0gKGFzeW5jICgpID0+IHtcbiAgICBzdGF0dXNUZXh0LnRleHRDb250ZW50ID0gYERvd25sb2FkaW5nIFB5b2RpZGVgO1xuICAgIGNvbnN0IHB5b2RpZGUgPSBhd2FpdCBzdGFydFB5b2RpZGVXb3JrZXIoZGF0YS5vcHRpb25zKTtcblxuICAgIHN0YXR1c1RleHQudGV4dENvbnRlbnQgPSBgRG93bmxvYWRpbmcgcGFja2FnZTogbWljcm9waXBgO1xuICAgIGF3YWl0IHB5b2RpZGUubG9hZFBhY2thZ2UoXCJtaWNyb3BpcFwiKTtcbiAgICBjb25zdCBtaWNyb3BpcCA9IGF3YWl0IHB5b2RpZGUucHlpbXBvcnQoXCJtaWNyb3BpcFwiKTtcbiAgICBhd2FpdCBkYXRhLnBhY2thZ2VzLnBrZ3MubWFwKChwa2cpID0+ICgpID0+IHtcbiAgICAgIHN0YXR1c1RleHQudGV4dENvbnRlbnQgPSBgRG93bmxvYWRpbmcgcGFja2FnZTogJHtwa2d9YDtcbiAgICAgIHJldHVybiBtaWNyb3BpcC5pbnN0YWxsKHBrZyk7XG4gICAgfSkucmVkdWNlKChjdXIsIG5leHQpID0+IGN1ci50aGVuKG5leHQpLCBQcm9taXNlLnJlc29sdmUoKSk7XG4gICAgYXdhaXQgbWljcm9waXAuZGVzdHJveSgpO1xuXG4gICAgLy8gRG93bmxvYWQgYW5kIGluc3RhbGwgcmVzb3VyY2VzXG4gICAgYXdhaXQgZmlsZXMubWFwKChmaWxlKSA9PiBhc3luYyAoKSA9PiB7XG4gICAgICBjb25zdCBuYW1lID0gZmlsZS5zdWJzdHJpbmcoZmlsZS5sYXN0SW5kZXhPZignLycpICsgMSk7XG4gICAgICBzdGF0dXNUZXh0LnRleHRDb250ZW50ID0gYERvd25sb2FkaW5nIHJlc291cmNlOiAke25hbWV9YDtcbiAgICAgIGNvbnN0IHJlc3BvbnNlID0gYXdhaXQgZmV0Y2goZmlsZSk7XG4gICAgICBpZiAoIXJlc3BvbnNlLm9rKSB7XG4gICAgICAgIHRocm93IG5ldyBFcnJvcihgQ2FuJ3QgZG93bmxvYWQgXFxgJHtmaWxlfVxcYC4gRXJyb3IgJHtyZXNwb25zZS5zdGF0dXN9OiBcIiR7cmVzcG9uc2Uuc3RhdHVzVGV4dH1cIi5gKTtcbiAgICAgIH1cbiAgICAgIGNvbnN0IGRhdGEgPSBhd2FpdCByZXNwb25zZS5hcnJheUJ1ZmZlcigpO1xuXG4gICAgICAvLyBTdG9yZSBVUkxzIGluIHRoZSBjd2Qgd2l0aG91dCBhbnkgc3ViZGlyZWN0b3J5IHN0cnVjdHVyZVxuICAgICAgaWYgKGZpbGUuaW5jbHVkZXMoXCI6Ly9cIikpIHtcbiAgICAgICAgZmlsZSA9IG5hbWU7XG4gICAgICB9XG5cbiAgICAgIC8vIENvbGxhcHNlIGhpZ2hlciBkaXJlY3Rvcnkgc3RydWN0dXJlXG4gICAgICBmaWxlID0gY29sbGFwc2VQYXRoKGZpbGUpO1xuXG4gICAgICAvLyBDcmVhdGUgZGlyZWN0b3J5IHRyZWUsIGlnbm9yaW5nIFwiZGlyZWN0b3J5IGV4aXN0c1wiIFZGUyBlcnJvcnNcbiAgICAgIGNvbnN0IHBhcnRzID0gZmlsZS5zcGxpdCgnLycpLnNsaWNlKDAsIC0xKTtcbiAgICAgIGxldCBwYXRoID0gJyc7XG4gICAgICB3aGlsZSAocGFydHMubGVuZ3RoID4gMCkge1xuICAgICAgICBwYXRoICs9IHBhcnRzLnNoaWZ0KCkgKyAnLyc7XG4gICAgICAgIHRyeSB7XG4gICAgICAgICAgYXdhaXQgcHlvZGlkZS5GUy5ta2RpcihwYXRoKTtcbiAgICAgICAgfSBjYXRjaCAoZSkge1xuICAgICAgICAgIGlmIChlLm5hbWUgIT09IFwiRXJybm9FcnJvclwiKSB0aHJvdyBlO1xuICAgICAgICAgIGlmIChlLmVycm5vICE9PSAyMCkge1xuICAgICAgICAgICAgY29uc3QgZXJyb3JUZXh0UHRyID0gYXdhaXQgcHlvZGlkZS5fbW9kdWxlLl9zdHJlcnJvcihlLmVycm5vKTtcbiAgICAgICAgICAgIGNvbnN0IGVycm9yVGV4dCA9IGF3YWl0IHB5b2RpZGUuX21vZHVsZS5VVEY4VG9TdHJpbmcoZXJyb3JUZXh0UHRyKTtcbiAgICAgICAgICAgIHRocm93IG5ldyBFcnJvcihgRmlsZXN5c3RlbSBFcnJvciAke2UuZXJybm99IFwiJHtlcnJvclRleHR9XCIuYCk7XG4gICAgICAgICAgfVxuICAgICAgICB9XG4gICAgICB9XG5cbiAgICAgIC8vIFdyaXRlIHRoaXMgZmlsZSB0byB0aGUgVkZTXG4gICAgICB0cnkge1xuICAgICAgICByZXR1cm4gYXdhaXQgcHlvZGlkZS5GUy53cml0ZUZpbGUoZmlsZSwgbmV3IFVpbnQ4QXJyYXkoZGF0YSkpO1xuICAgICAgfSBjYXRjaCAoZSkge1xuICAgICAgICBpZiAoZS5uYW1lICE9PSBcIkVycm5vRXJyb3JcIikgdGhyb3cgZTtcbiAgICAgICAgY29uc3QgZXJyb3JUZXh0UHRyID0gYXdhaXQgcHlvZGlkZS5fbW9kdWxlLl9zdHJlcnJvcihlLmVycm5vKTtcbiAgICAgICAgY29uc3QgZXJyb3JUZXh0ID0gYXdhaXQgcHlvZGlkZS5fbW9kdWxlLlVURjhUb1N0cmluZyhlcnJvclRleHRQdHIpO1xuICAgICAgICB0aHJvdyBuZXcgRXJyb3IoYEZpbGVzeXN0ZW0gRXJyb3IgJHtlLmVycm5vfSBcIiR7ZXJyb3JUZXh0fVwiLmApO1xuICAgICAgfVxuICAgIH0pLnJlZHVjZSgoY3VyLCBuZXh0KSA9PiBjdXIudGhlbihuZXh0KSwgUHJvbWlzZS5yZXNvbHZlKCkpO1xuXG4gICAgc3RhdHVzVGV4dC50ZXh0Q29udGVudCA9IGBQeW9kaWRlIGVudmlyb25tZW50IHNldHVwYDtcbiAgICBhd2FpdCBzZXR1cFB5dGhvbihweW9kaWRlKTtcblxuICAgIHN0YXR1c1RleHQucmVtb3ZlKCk7XG4gICAgaWYgKHN0YXR1c0NvbnRhaW5lci5jaGlsZHJlbi5sZW5ndGggPT0gMCkge1xuICAgICAgc3RhdHVzQ29udGFpbmVyLnBhcmVudE5vZGUucmVtb3ZlKCk7XG4gICAgfVxuICAgIHJldHVybiBweW9kaWRlO1xuICB9KSgpLmNhdGNoKChlcnIpID0+IHtcbiAgICBzdGF0dXNUZXh0LnN0eWxlLmNvbG9yID0gXCJ2YXIoLS1leGVyY2lzZS1lZGl0b3ItaGwtZXIsICNBRDAwMDApXCI7XG4gICAgc3RhdHVzVGV4dC50ZXh0Q29udGVudCA9IGVyci5tZXNzYWdlO1xuICAgIC8vaW5kaWNhdG9yQ29udGFpbmVyLnF1ZXJ5U2VsZWN0b3IoXCIuc3Bpbm5lci1ncm93XCIpLmNsYXNzTGlzdC5hZGQoXCJkLW5vbmVcIik7XG4gICAgdGhyb3cgZXJyO1xuICB9KTtcblxuICAvLyBLZWVwIHRyYWNrIG9mIGluaXRpYWwgT0pTIGJsb2NrIHJlbmRlclxuICBjb25zdCByZW5kZXJlZE9qcyA9IHt9O1xuXG4gIGNvbnN0IHByb2Nlc3MgPSBhc3luYyAoY29udGV4dCwgaW5wdXRzKSA9PiB7XG4gICAgY29uc3QgcHlvZGlkZSA9IGF3YWl0IHB5b2RpZGVQcm9taXNlO1xuICAgIGNvbnN0IGV2YWx1YXRvciA9IG5ldyBQeW9kaWRlRXZhbHVhdG9yKHB5b2RpZGUsIGNvbnRleHQpO1xuICAgIGF3YWl0IGV2YWx1YXRvci5wcm9jZXNzKGlucHV0cyk7XG4gICAgcmV0dXJuIGV2YWx1YXRvci5jb250YWluZXI7XG4gIH1cblxuICByZXR1cm4ge1xuICAgIHB5b2RpZGVQcm9taXNlLFxuICAgIHJlbmRlcmVkT2pzLFxuICAgIHByb2Nlc3MsXG4gIH07XG59XG4ifV19
+</script>
+<div id="exercise-loading-indicator" class="exercise-loading-indicator d-none d-flex align-items-center gap-2">
+<div id="exercise-loading-status" class="d-flex gap-2">
+
+</div>
+<div class="spinner-grow spinner-grow-sm">
+
+</div>
+</div>
+<script type="vfs-file">
+W10=
+</script>
+</section>
+
+</main> <!-- /main -->
+<script type="ojs-module-contents">
+eyJjb250ZW50cyI6W119
+</script>
+<script type="module">
+if (window.location.protocol === "file:") { alert("The OJS runtime does not work with file:// URLs. Please use a web server to view this document."); }
+window._ojs.paths.runtimeToDoc = "../../part-06-nonlinear-regression";
+window._ojs.paths.runtimeToRoot = "../..";
+window._ojs.paths.docToRoot = "..";
+window._ojs.selfContained = false;
+window._ojs.runtime.interpretFromScriptTags();
+</script>
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/enduringchung\.github\.io\/ml-interactive-course\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="../part-06-nonlinear-regression/06-4-regression-splines.html" class="pagination-link" aria-label="6.4 Regression Splines">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">6.4 Regression Splines</span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="../part-06-nonlinear-regression/06-6-local-regression.html" class="pagination-link" aria-label="6.6 Local Regression (LOESS)">
+        <span class="nav-page-text">6.6 Local Regression (LOESS)</span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/EnduringChung/ml-interactive-course/edit/main/part-06-nonlinear-regression/06-5-smoothing-splines.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/EnduringChung/ml-interactive-course/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
