@@ -1,0 +1,468 @@
+---
+title: "5.4 Elastic Net"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - matplotlib
+---
+
+Ridge groups correlated features but never zeroes them; lasso zeroes features but coin-flips among correlated twins ([5.2](05-2-ridge-regression.qmd), [5.3](05-3-lasso-regression.qmd)). The **elastic net** mixes both penalties, getting sparsity *and* grouping — and introduces a second hyperparameter that captures a real modeling question: how much do you believe features are interchangeable?
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+$$\hat\beta = \arg\min_\beta \Big\{ \sum_i (y_i - \beta_0 - x_i^\top\beta)^2 + \lambda \big( \tfrac{1-\alpha}{2}\|\beta\|_2^2 + \alpha\|\beta\|_1 \big) \Big\}$$
+
+Two dials: **λ** (overall penalty — sklearn's `alpha`) and **α** (the L1 share — sklearn's `l1_ratio`). Endpoints recover the classics: α = 1 → lasso, α = 0 → ridge.
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import ElasticNet, Ridge, Lasso
+from sklearn.preprocessing import StandardScaler
+
+rng = np.random.default_rng(0)
+n = 100
+X = rng.normal(0, 1, (n, 6))
+y = 3 * X[:, 0] - 2 * X[:, 3] + rng.normal(0, 1, n)
+Xs = StandardScaler().fit_transform(X)
+
+for ratio, name in [(1.0, "lasso (α=1)"), (0.5, "net (α=0.5)"), (0.0, "ridge (α=0)")]:
+    if ratio == 1.0:
+        m = Lasso(alpha=0.05, max_iter=100_000).fit(Xs, y)
+    elif ratio == 0.0:
+        m = Ridge(alpha=0.05).fit(Xs, y)
+    else:
+        m = ElasticNet(alpha=0.05, l1_ratio=ratio, max_iter=100_000).fit(Xs, y)
+    nz = int(np.sum(m.coef_ != 0))
+    print(f"{name:12s} nonzeros {nz}/6  coefs {m.coef_.round(2)}")
+```
+
+**The grouping experiment** — correlated twins: lasso splits them, the net keeps them together:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import Lasso, ElasticNet
+from sklearn.preprocessing import StandardScaler
+
+rng = np.random.default_rng(1)
+n = 100
+X = rng.normal(0, 1, (n, 4))
+X[:, 1] = 0.95 * X[:, 0] + rng.normal(0, 0.15, n)      # x2 ≈ twin of x1
+y = 2.5 * X[:, 0] + rng.normal(0, 1, n)
+Xs = StandardScaler().fit_transform(X)
+
+methods = {
+    "lasso": Lasso(alpha=0.05, max_iter=100_000).fit(Xs, y),
+    "elastic net (l1_ratio=.5)": ElasticNet(alpha=0.05, l1_ratio=0.5,
+                                            max_iter=100_000).fit(Xs, y),
+}
+fig, ax = plt.subplots(figsize=(7, 3.4))
+labels = [f"x{j+1}" for j in range(4)]
+width = 0.35
+for i, (name, m) in enumerate(methods.items()):
+    ax.bar(np.arange(4) + (i - 0.5) * width, m.coef_, width, label=name)
+ax.set_xticks(range(4), labels)
+ax.set(ylabel="coefficient", title="Twins x1,x2: lasso splits, net shares")
+ax.legend()
+plt.show()
+```
+
+**Tuning both dials** with `ElasticNetCV` over a grid:
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import ElasticNetCV
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+
+rng = np.random.default_rng(2)
+n, p = 100, 30
+X = rng.normal(0, 1, (n, p))
+beta = np.zeros(p)
+beta[[0, 1, 9]] = [3, -2, 1.5]
+X[:, 1] = 0.9 * X[:, 0] + rng.normal(0, 0.3, n)        # twin pair among the signal
+y = X @ beta + rng.normal(0, 1, n)
+
+pipe = make_pipeline(StandardScaler(), ElasticNetCV(
+    l1_ratio=[0.1, 0.5, 0.9, 0.95, 1.0],
+    alphas=np.logspace(-4, 0, 60), cv=5, max_iter=100_000)).fit(X, y)
+enc = pipe.named_steps["elasticnetcv"]
+print(f"chosen l1_ratio = {enc.l1_ratio_}, alpha = {enc.alpha_:.4f}")
+print("selected features:", np.where(enc.coef_ != 0)[0], "(truth: 0, 1, 9)")
+```
+
+## 2. Concept Questions
+
+1. In sklearn's parameterization, what do `alpha = 0.1, l1_ratio = 0.7` mean — and what does alpha = 0 give you *exactly*, regardless of l1_ratio?
+2. Why does the ridge component stabilize selection among correlated twins? Explain via the penalty's geometry (edges vs corners).
+3. The elastic net has two tuning parameters. What does the CV surface over (λ, α) typically look like, and what does a flat ridge along α tell you?
+4. Your lasso selects 3 of 30 features; the net selects 8 (including near-duplicates). Which model would you deploy for (a) a $1-per-feature measurement budget, (b) pure prediction with no measurement cost?
+5. Why does elastic net *sometimes* select more features than n (unlike lasso's ≤ n cap)? When does that matter?
+
+<details>
+<summary>Answers</summary>
+
+1. The objective penalizes 0.15·‖β‖² + 0.7·‖β‖₁ (times λ = 0.1): mostly-L1 with a ridge floor. `alpha = 0` zeroes the whole penalty → plain OLS at any l1_ratio — the ratio only matters when a penalty exists.
+2. The L1 diamond has sharp corners/edges where optima sit — among equal twins the fit picks one edge/vertex (a winner). The L2 ball's boundary is *round*: moving along the twin-subspace costs (nearly) nothing, so both twins can share the coefficient smoothly. Ridge's grouping + L1's sparsity = twins selected *jointly* with shrunken, stable values.
+3. Typically a long, flat valley along λ at moderate-to-high α: many (λ, α) pairs score within noise ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)'s landscape flatness). A flat ridge along α says the data doesn't care about the mixing share — pick by parsimony of the selected set, not the argmax.
+4. (a) The 3-feature lasso — measurement cost is real money and the twins carry no extra signal. (b) Either on prediction grounds (indistinguishable by CV); the net is safer under future drift/collinearity because it doesn't bet everything on one twin.
+5. The ridge component lets correlated *groups* enter jointly; a group of size g can share one "selection ticket" per member, so p_selected can exceed n. It matters when you're interpreting support size as complexity, or in extreme p ≫ n where the net's support can balloon — cap with stronger λ.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import ElasticNet, Lasso, Ridge
+from sklearn.preprocessing import StandardScaler
+rng = np.random.default_rng(3)
+X = StandardScaler().fit_transform(rng.normal(0, 1, (150, 5)))
+y = X[:, 1] * 2 + rng.normal(0, 1, 150)
+en1 = ElasticNet(alpha=0.05, l1_ratio=1.0, max_iter=100_000).fit(X, y)
+ls = Lasso(alpha=0.05, max_iter=100_000).fit(X, y)
+print("l1_ratio=1 == Lasso:", np.allclose(en1.coef_, ls.coef_))
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import ElasticNet
+from sklearn.preprocessing import StandardScaler
+rng = np.random.default_rng(4)
+X = StandardScaler().fit_transform(rng.normal(0, 1, (150, 5)))
+y = X[:, 2] * 2 + rng.normal(0, 1, 150)
+e0 = ElasticNet(alpha=0.05, l1_ratio=0.0001, max_iter=100_000).fit(X, y)
+print("l1_ratio→0 nonzeros:", np.sum(e0.coef_ != 0), "of 5 (ridge: no exact zeros)")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import ElasticNet
+from sklearn.preprocessing import StandardScaler
+rng = np.random.default_rng(5)
+X = StandardScaler().fit_transform(rng.normal(0, 1, (200, 8)))
+y = X @ np.r_[2, 0, 0, 0, 0, 0, 0, 0] + rng.normal(0, 1, 200)
+for ratio in [1.0, 0.8, 0.5, 0.2]:
+    m = ElasticNet(alpha=0.05, l1_ratio=ratio, max_iter=100_000).fit(X, y)
+    print(f"l1_ratio={ratio}: nonzeros {np.sum(m.coef_ != 0)}")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import ElasticNetCV
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+rng = np.random.default_rng(6)
+X = StandardScaler().fit_transform(rng.normal(0, 1, (120, 12)))
+y = X[:, 3] * 1.5 + rng.normal(0, 1, 120)
+pipe = make_pipeline(StandardScaler(), ElasticNetCV(
+    l1_ratio=[0.1, 0.5, 0.9, 1.0], alphas=np.logspace(-4, 0, 50),
+    cv=5, max_iter=100_000)).fit(X, y)
+print("l1_ratio:", pipe.named_steps["elasticnetcv"].l1_ratio_)
+print("alpha:   ", round(pipe.named_steps["elasticnetcv"].alpha_, 4))
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Map the two-dial landscape by hand: on a fixed dataset (n = 120, p = 25, 4 true signals, one duplicated pair), fit ElasticNet over α ∈ logspace(−3, 0, 10) × l1_ratio ∈ {0.1, 0.3, 0.5, 0.7, 0.9, 1.0}, recording 5-fold CV MSE and support size per cell. Display the two heatmaps side by side. Locate: (a) the MSE argmin, (b) the smallest support within 1 SE of the best MSE. How different are their supports?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import ElasticNet
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import KFold, cross_val_score
+from sklearn.pipeline import make_pipeline
+
+rng = np.random.default_rng(7)
+n, p = 120, 25
+X = rng.normal(0, 1, (n, p))
+beta = np.zeros(p)
+beta[[2, 7, 11, 12]] = [2.5, -2, 1.5, 1.2]
+X[:, 12] = 0.92 * X[:, 11] + rng.normal(0, 0.25, n)
+y = X @ beta + rng.normal(0, 1.5, n)
+Xs = StandardScaler().fit_transform(X)
+
+alphas = 10.0 ** np.arange(-3, 0.01, 0.33)
+ratios = [0.1, 0.3, 0.5, 0.7, 0.9, 1.0]
+kf = KFold(5, shuffle=True, random_state=1)
+grid_mse = np.zeros((len(ratios), len(alphas)))
+grid_size = np.zeros_like(grid_mse)
+for i, r in enumerate(ratios):
+    for j, a in enumerate(alphas):
+        pipe = make_pipeline(StandardScaler(),
+                             ElasticNet(alpha=a, l1_ratio=r, max_iter=100_000))
+        mse = -cross_val_score(pipe, X, y, cv=kf,
+                               scoring="neg_mean_squared_error").mean()
+        support = np.sum(ElasticNet(alpha=a, l1_ratio=r,
+                        max_iter=100_000).fit(Xs, y).coef_ != 0)
+        grid_mse[i, j] = mse
+        grid_size[i, j] = support
+
+bi, bj = np.unravel_index(np.argmin(grid_mse), grid_mse.shape)
+print(f"argmin: l1_ratio={ratios[bi]}, alpha={alphas[bj]:.4f}, "
+      f"CV MSE={grid_mse[bi, bj]:.4f}, support={int(grid_size[bi, bj])}")
+
+# smallest support within 1 SE of best
+best = grid_mse[bi, bj]
+cell_se = grid_mse.std() / np.sqrt(5)      # rough common-cell SE, illustrative
+ok = np.argwhere(grid_mse <= best + cell_se)
+small = ok[np.argmin(grid_size[ok[:, 0], ok[:, 1]])]
+print(f"parsimony pick: l1_ratio={ratios[small[0]]}, alpha={alphas[small[1]]:.4f}, "
+      f"support={int(grid_size[small[0], small[1]])}")
+```
+
+The landscape is the familiar flat valley ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)): many cells tie within noise; the parsimony pick usually has a third of the support at statistically identical MSE — the one-SE rule, two parameters deep.
+</details>
+
+**Exercise 2.** The grouping staircase: build 8 features in 4 correlated pairs (within-pair ρ = 0.95, between pairs independent), with one pair truly active. Trace each method's selected set across α (lasso: l1_ratio = 1) vs net (l1_ratio = 0.3) at matched CV-chosen λ. Report the "family selection rate": how often does each method select *both or neither* member of the active pair, over 100 bootstrap resamples? This number is the operational definition of grouping.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LassoCV, ElasticNetCV
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+
+rng = np.random.default_rng(8)
+def draw(seed):
+    r = np.random.default_rng(seed)
+    n = 120
+    latent = r.normal(0, 1, (n, 4))
+    X = np.zeros((n, 8))
+    for pair in range(4):
+        X[:, 2*pair] = latent[:, pair] + r.normal(0, 0.23, n)
+        X[:, 2*pair+1] = latent[:, pair] + r.normal(0, 0.23, n)
+    y = 3 * latent[:, 0] + r.normal(0, 1, n)          # pair 0 active
+    return X, y
+
+rates = {"lasso": [], "net": []}
+for b in range(100):
+    X, y = draw(b)
+    Xs = StandardScaler().fit_transform(X)
+    l = LassoCV(cv=5, max_iter=100_000).fit(Xs, y)
+    e = ElasticNetCV(l1_ratio=[0.3], cv=5, max_iter=100_000).fit(Xs, y)
+    sel_l = set(np.where(l.coef_ != 0)[0])
+    sel_e = set(np.where(e.coef_ != 0)[0])
+    rates["lasso"].append(len(sel_l & {0, 1}) in (0, 2))
+    rates["net"].append(len(sel_e & {0, 1}) in (0, 2))
+
+for k, v in rates.items():
+    print(f"{k}: family selection rate = {np.mean(v):.2f}")
+```
+
+The lasso's rate hovers near coin-flip territory (it takes one twin and ignores the other), while the net's rate approaches 1 — it treats the pair as the atom. When features come in natural groups (gene pathways, duplicate sensors), that rate is the property you're buying.
+</details>
+
+**Exercise 3.** Method bake-off with honest evaluation ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)): on one dataset (p = 40, sparse truth with a duplicated pair), compare OLS-with-top-k-filter ([5.1](05-1-feature-selection.qmd)), ridge, lasso, and elastic net — each tuned by inner 5-fold CV — evaluated by *outer* 5-fold nested CV. Report nested test MSE per procedure and the paired fold differences between the winner and runner-up. Write the two-sentence conclusion for a methods section.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy import stats
+from sklearn.linear_model import (LinearRegression, RidgeCV, LassoCV,
+                                  ElasticNetCV)
+from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import GridSearchCV, KFold, cross_val_score
+from sklearn.datasets import make_regression
+
+X, y = make_regression(n_samples=300, n_features=40, n_informative=5,
+                       noise=25, random_state=9)
+inner = KFold(5, shuffle=True, random_state=1)
+outer = KFold(5, shuffle=True, random_state=2)
+
+procedures = {
+    "filter+OLS(k=10)": GridSearchCV(
+        make_pipeline(StandardScaler(), SelectKBest(f_classif, k=10), LinearRegression()),
+        {"selectkbest__k": [5, 10, 20]}, cv=inner),
+    "ridge": make_pipeline(StandardScaler(),
+             RidgeCV(alphas=10.0**np.arange(-2, 4, 0.25))),
+    "lasso": make_pipeline(StandardScaler(), LassoCV(cv=inner, max_iter=100_000)),
+    "net(.5)": make_pipeline(StandardScaler(),
+               ElasticNetCV(l1_ratio=[0.5], cv=inner,
+                            alphas=np.logspace(-4, 0, 50), max_iter=100_000)),
+}
+
+res = {name: cross_val_score(proc, X, y, cv=outer,
+        scoring="neg_mean_squared_error") for name, proc in procedures.items()}
+for name, folds in res.items():
+    print(f"{name:18s} nested MSE {-folds.mean():.3f} ± {folds.std():.3f}")
+
+order = sorted(res, key=lambda k: -res[k].mean())
+d = res[order[0]] - res[order[1]]
+t, p = stats.ttest_rel(res[order[0]], res[order[1]])
+print(f"\n{order[0]} vs {order[1]}: paired p = {p:.3f}")
+```
+
+Typical outcome: the penalized methods cluster within fold noise while filter+OLS trails (hard selection pays a variance tax). The write-up writes itself: "All shrinkage procedures performed equivalently (paired CV p > 0.05); we selected [method] for its [sparsity/stability] properties rather than predictive superiority."
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Two dials, twice the selection tax**: tuning (λ, α) jointly searches a bigger space than either parent — expect a slightly larger selection bonus and use nested CV accordingly ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)).
+- **sklearn's `alpha` rescales with l1_ratio** (the mixing formula divides by 1 − α/2-terms): comparing alphas *across* l1_ratio values is meaningless — compare CV scores, not parameter values.
+- **`l1_ratio = 1` is lasso, `0` is ridge — but tiny nonzero ratios aren't pure anything**: a 0.95 net is "lasso with insurance"; a 0.05 net is "ridge with occasional zeros." Name the operating point, don't just cite the class.
+- **Standardization remains mandatory** — the mixed penalty still counts coefficient magnitudes.
+- **Groups need not be prescribed**: the net groups *correlated* features automatically; for known groups (pathways), the group lasso exists beyond sklearn's core — same spirit, structured penalty.
+- **Support size ≠ degrees of freedom for the net**: with twins jointly selected, df grows less than support (shared signal) — don't reuse the lasso's df = |support| identity here ([5.3 Q2](05-3-lasso-regression.qmd)).
+- **Convergence warnings matter**: the mixed penalty is harder to optimize; watch `max_iter`, and prefer the CV wrappers that warm-start across the path.
+
+### Read & Refactor AI Code
+
+This AI-generated net workflow has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import ElasticNet
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(10)
+n, p = 150, 20
+X = rng.normal(0, 1, (n, p))
+X[:, 3] = 40 * rng.normal(0, 1, n)                  # different scale
+y = 80 * X[:, 3] / 40 + rng.normal(0, 2, n)
+
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=11)
+
+# BUG 1: unscaled features into a magnitude-counting penalty
+m = ElasticNet(alpha=0.1, l1_ratio=0.5, max_iter=100_000).fit(X_tr, y_tr)
+print("support:", np.where(m.coef_ != 0)[0], "(truth: 3)")
+
+# BUG 2: alpha/l1_ratio swapped in meaning
+m2 = ElasticNet(alpha=0.5, l1_ratio=0.1, max_iter=100_000).fit(X_tr, y_tr)
+print("with l1_ratio=0.1 as 'the sparsity knob':", np.sum(m2.coef_ != 0), "nonzeros")
+
+# BUG 3: tuned on the test set
+best = None
+for a in [0.01, 0.1, 0.5, 1.0]:
+    mm = ElasticNet(alpha=a, l1_ratio=0.5, max_iter=100_000).fit(X_tr, y_tr)
+    r = mm.score(X_te, y_te)
+    if best is None or r > best[1]:
+        best = (a, r)
+print("chosen on test:", best)
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Unscaled net**: feature 3's tiny coefficient dodges both penalties — selection by units again. Standardize inside a pipeline.
+2. **The dials swapped**: l1_ratio = 0.1 is *mostly ridge* (few zeros expected); the sparsity knob is l1_ratio near 1. Reading support size off the wrong dial produces confident nonsense.
+3. **Test-set tuning**: the reported score is an order statistic over 4 tries. Tune with ElasticNetCV on training; spend the test set once.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import ElasticNetCV
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(10)
+n, p = 150, 20
+X = rng.normal(0, 1, (n, p))
+X[:, 3] = 40 * rng.normal(0, 1, n)
+y = 80 * X[:, 3] / 40 + rng.normal(0, 2, n)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=11)
+
+pipe = make_pipeline(StandardScaler(), ElasticNetCV(
+    l1_ratio=[0.1, 0.5, 0.9, 1.0], alphas=np.logspace(-4, 0, 50),
+    cv=5, max_iter=100_000)).fit(X_tr, y_tr)
+enc = pipe.named_steps["elasticnetcv"]
+print(f"CV-chosen: l1_ratio={enc.l1_ratio_}, alpha={enc.alpha_:.4f}")
+print("support:", np.where(enc.coef_ != 0)[0], "(truth: 3)")
+print("honest test R2:", round(pipe.score(X_te, y_te), 4))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Geometric derivation: draw (for p = 2) the lasso diamond, ridge disk, and the elastic net's rounded diamond. Show that the net's boundary has (a) corners on the axes (producing exact zeros like lasso) and (b) straight *edges* between corners that are flattened arcs (allowing twins to ride together like ridge). Explain why a fit at an edge gives equal coefficients to twins while a fit at a diamond's edge forces |β₁| + |β₂| = c — one winner.
+
+<details>
+<summary>Hint</summary>
+
+The penalty region {(β₁,β₂): λ[(1−r)/2·‖β‖² + r‖β‖₁] ≤ c} mixes the diamond's linear edges with quadratic arcs; the L1 part dominates near axes, the L2 part dominates near the diagonal.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+The net's constraint region is a superellipse between diamond and disk. Near an axis (one coefficient large), the L1 term's linear boundary dominates → sharp corner → solutions sit *at* β₂ = 0 exactly (sparsity). Along the diagonal (equal coefficients), for twins the L1 term still contributes 2r·λ|β| but the L2 arc's curvature — driven by (1−r)/2·(β₁²+β₂²) — rounds the boundary; a tangency with correlated data's elliptical RSS contours can occur *mid-edge* with β₁ = β₂ ≠ 0 (grouping). The pure diamond's edge is dead straight: its tangency logic forces the fit to a vertex (one twin zero). Geometry is the whole story: corners select, curves share, and l1_ratio interpolates the boundary.
+</details>
+
+**Q2.** Design and run the **stability-driven α choice**: for the twins dataset, choose α_mix not by CV-MSE argmin but by maximizing selection *stability* (Jaccard overlap of supports across 50 bootstrap resamples) among candidates whose CV MSE is within 1 SE of the best. Report the chosen α_mix, its CV MSE vs the argmin's, and the stability scores of both. When does this procedure change the answer, and what principle is it an instance of?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import ElasticNet
+from sklearn.preprocessing import StandardScaler
+
+rng = np.random.default_rng(12)
+def draw(seed):
+    r = np.random.default_rng(seed)
+    n = 120
+    X = r.normal(0, 1, (n, 10))
+    X[:, 1] = 0.93 * X[:, 0] + r.normal(0, 0.2, n)
+    y = 3 * X[:, 0] + r.normal(0, 1, n)
+    return StandardScaler().fit_transform(X), y
+
+X, y = draw(999)
+candidates = [0.1, 0.3, 0.5, 0.7, 0.9, 1.0]
+
+def support(seed, ratio):
+    Xb, yb = draw(seed)
+    m = ElasticNet(alpha=0.05, l1_ratio=ratio, max_iter=100_000).fit(Xb, yb)
+    return set(np.where(m.coef_ != 0)[0])
+
+def stability(ratio, B=50):
+    sets = [support(1000 + b, ratio) for b in range(B)]
+    ref = support(123, ratio)
+    return np.mean([len(s & ref) / max(len(s | ref), 1) for s in sets])
+
+for ratio in candidates:
+    print(f"l1_ratio={ratio}: stability = {stability(ratio):.3f}")
+```
+
+High-α (lasso-like) values show lower overlap — the twin coin-flip decorrelates supports; mid ratios stabilize. The procedure only *changes the answer* when the CV valley is flat (elsewhere it wastes stability on worse fits); it is the one-standard-error rule ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)) with a second-order criterion swapped in: among statistically tied models, pick by a property you actually care about — here, reproducibility of the selected set.
+</details>
+
+## 6. Complex Questions
+
+**C1 (net × [2.5 collinearity](../part-02-linear-regression/02-5-multiple-linear-regression.qmd) × [5.2–5.3](05-2-ridge-regression.qmd)).** Build a truth with 5 blocks of 4 highly-correlated features each (2 blocks active). Compare ridge, lasso, and net (α tuned) on: prediction MSE (outer CV), true-block recovery rate, and within-block coefficient equality (max/min ratio). Produce the 3×3 summary table and write the guidance sentence for a biologist whose features are pathway members — which method answers which scientific question.
+
+**C2 (net × [0.5 splitting](../part-00-python-foundations/00-5-data-splitting.qmd) × [4.3](../part-04-validation-model-selection/04-3-cross-validation.qmd)).** The full pipeline audit: implement the net workflow (standardize → tune (λ, α) by inner CV → refit → predict) and wrap the *entire thing* in an outer CV, tracking per-fold selected supports. Report (a) outer MSE, (b) how many folds agree on the support, (c) the Jaccard distance between per-fold supports. What does the support disagreement across folds predict about the stability of your final published feature list — and what are your two honest options (report frequencies; fix α by domain reasoning and disclose)?
+
+## 7. Summary
+
+- Elastic net = λ[(1−r)/2·‖β‖² + r‖β‖₁]: sparsity from L1, grouping from L2; r = l1_ratio interpolates the parents.
+- Two dials mean two-dial selection tax and flatter CV valleys — one-SE/parsimony reasoning applies twice over.
+- Twins: lasso splits, net shares — the family-selection rate is the operational difference.
+- Endpoint sanity: l1_ratio 1/0 recover lasso/ridge exactly; alpha = 0 is OLS at any ratio.
+- Compare CV scores across (λ, α), never parameter values; standardization is still law.
+- Stability-driven choice of α (within 1 SE) buys reproducible supports when prediction can't decide.
+- What if you never regress on features at all — regress on their principal directions instead? [5.5 PCR and PLS](05-5-pcr-pls.qmd).

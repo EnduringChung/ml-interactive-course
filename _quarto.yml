@@ -75,6 +75,14 @@ website:
             - part-04-validation-model-selection/04-4-bias-variance.qmd
             - part-04-validation-model-selection/04-5-bootstrap.qmd
             - part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd
+        - section: "Part 5 — Regularization & High Dimensions"
+          contents:
+            - part-05-regularization-high-dimensions/05-1-feature-selection.qmd
+            - part-05-regularization-high-dimensions/05-2-ridge-regression.qmd
+            - part-05-regularization-high-dimensions/05-3-lasso-regression.qmd
+            - part-05-regularization-high-dimensions/05-4-elastic-net.qmd
+            - part-05-regularization-high-dimensions/05-5-pcr-pls.qmd
+            - part-05-regularization-high-dimensions/05-6-high-dimensional.qmd
 
 format:
   live-html:

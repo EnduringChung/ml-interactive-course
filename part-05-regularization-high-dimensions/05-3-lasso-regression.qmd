@@ -1,0 +1,423 @@
+---
+title: "5.3 Lasso Regression"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - statsmodels
+    - matplotlib
+---
+
+The lasso (least absolute shrinkage and selection operator) penalizes the *sum of absolute* coefficients. The kink at zero that ‖β‖₁ introduces does something ridge never does: it sets coefficients **exactly to zero** — shrinkage and variable selection in one convex problem, and the workhorse of p ≫ n data.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+$$\hat{\beta}^{\text{lasso}} = \arg\min_\beta \Big\{ \sum_i (y_i - \beta_0 - x_i^\top\beta)^2 + \lambda \sum_j |\beta_j| \Big\}$$
+
+No closed form in general (the absolute values aren't differentiable at zero) — solved by coordinate descent: iterate coefficients one at a time, each update a **soft-threshold** of the OLS-style partial fit. For orthonormal X the solution is explicit and illuminating:
+
+$$\hat\beta_j = S_\lambda(b_j) = \text{sign}(b_j)\,\max(|b_j| - \lambda,\ 0)$$
+
+— shrink small things to zero, shrink large things by λ:
+
+```{pyodide}
+import numpy as np
+
+def soft_threshold(b, lam):
+    return np.sign(b) * np.maximum(np.abs(b) - lam, 0.0)
+
+b = np.array([3.0, 1.2, 0.4, -2.0, -0.3])
+for lam in [0.5, 1.0, 2.0]:
+    print(f"λ={lam}: {soft_threshold(b, lam).round(2)}")
+print("large effects shrink by λ; small effects vanish — sparsity by construction")
+```
+
+Against sklearn's lasso (standardized data, orthonormal-ish case), the same logic appears as *zeros you can count*:
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import Lasso
+from sklearn.preprocessing import StandardScaler
+
+rng = np.random.default_rng(0)
+n = 100
+X = rng.normal(0, 1, (n, 8))
+y = 3 * X[:, 0] - 2 * X[:, 3] + rng.normal(0, 1, n)     # truth: 2 of 8
+Xs = StandardScaler().fit_transform(X)
+
+for alpha in [0.01, 0.1, 0.5]:
+    l = Lasso(alpha=alpha, max_iter=100_000).fit(Xs, y)
+    nz = np.sum(l.coef_ != 0)
+    print(f"alpha={alpha:>4}: nonzeros {nz}/8, coefs {l.coef_.round(2)}")
+```
+
+**The lasso path** — coefficients entering and leaving the model as λ decreases:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import lasso_path
+from sklearn.preprocessing import StandardScaler
+
+rng = np.random.default_rng(1)
+n = 120
+X = rng.normal(0, 1, (n, 10))
+X[:, 1] = 0.85 * X[:, 0] + rng.normal(0, 0.5, n)        # a near-duplicate
+y = 3 * X[:, 0] - 2 * X[:, 5] + rng.normal(0, 1.5, n)
+Xs = StandardScaler().fit_transform(X)
+
+alphas, coefs, _ = lasso_path(Xs, y, n_alphas=100)
+
+fig, ax = plt.subplots(figsize=(7, 3.4))
+for j in range(coefs.shape[0]):
+    ax.plot(-np.log10(alphas), coefs[j], lw=1.5, label=f"x{j}" if j in (0, 1, 5) else None)
+ax.set(xlabel="−log10(α)  (flexibility →)", ylabel="coefficient",
+       title="Lasso path: coefficients arrive at zero exactly")
+ax.axhline(0, color="gray", lw=0.8)
+ax.legend()
+plt.show()
+```
+
+Watch x₀ and x₁ (the near-duplicates): the lasso typically admits *one* of them and ignores the other — feature selection among twins by coin flip.
+
+## 2. Concept Questions
+
+1. Why does the L1 penalty produce exact zeros while L2 never does? (Use the soft-threshold formula's kink.)
+2. sklearn's `LassoCV` selects alpha by CV. What does that alpha optimize, and what does it *not* optimize?
+3. Two features are near-perfect duplicates and both truly matter. What does lasso do, and is the resulting model wrong?
+4. Your lasso selects 4 features; you then report those 4 features' p-values from a fresh OLS on just them. What's still wrong?
+5. As n grows with fixed true sparsity, what happens to lasso's selection consistency — and which condition on the design can break it (the "irrepresentable" idea, in one sentence)?
+
+<details>
+<summary>Answers</summary>
+
+1. For βⱼ near 0, the L2 penalty's gradient 2βⱼ → 0 — nothing forces an exact zero (flat, smooth approach). The L1 gradient near zero is sign(βⱼ)·λ — a constant push *through* zero; the optimum sits at 0 unless the data strongly objects. Zero is a *corner*, and optima sit at corners.
+2. It optimizes prediction error (default MSE) estimated by CV over the alpha grid. It does not optimize the selected *set's* correctness, coefficient unbiasedness, or any inferential property — a good predictive alpha can over- or under-select features relative to the truth.
+3. It picks (essentially) one of the duplicates and zeros the other. The model is not wrong *predictively* — the kept twin carries the shared signal. It's wrong *interpretively* if you conclude "feature A matters, feature B doesn't": B is shadowed, not exonerated ([2.5](../part-02-linear-regression/02-5-multiple-linear-regression.qmd)'s collinearity in L1 clothing).
+4. The selection step used y (through the lasso), so the refit p-values still condition on a data-chosen set — naive OLS inference after selection is invalid ([5.1](05-1-feature-selection.qmd)'s post-selection problem; lasso doesn't escape it, it's just smoother). Options: split-sample selection/inference, or selective-inference machinery.
+5. With n → ∞, lasso can consistently recover the true support *if* the design satisfies the irrepresentable condition — loosely, no feature outside the support may be too correlated with the selected set (the signal must be unambiguous). With strongly correlated "shadowed" features, lasso selection stays inconsistent even as n grows.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import Lasso
+rng = np.random.default_rng(2)
+X = rng.normal(0, 1, (150, 5))
+y = 4 * X[:, 2] + rng.normal(0, 1, 150)
+l = Lasso(alpha=0.05, max_iter=100_000).fit(X, y)
+print("coefs:", l.coef_.round(3))
+print("zeros:", np.sum(l.coef_ == 0), "of 5")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import Lasso
+rng = np.random.default_rng(3)
+X = rng.normal(0, 1, (200, 4))
+y = 2 * X[:, 0] + rng.normal(0, 1, 200)
+for a in [1e-4, 1e-3, 1e-2]:
+    l = Lasso(alpha=a, max_iter=100_000).fit(X, y)
+    print(f"alpha={a:>7}: beta0-hat {l.coef_[0]:.3f}  (truth 2.0, shrinkage grows)")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import LassoCV
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+rng = np.random.default_rng(4)
+n = 120
+X = rng.normal(0, 1, (n, 10))
+y = X @ np.r_[2.0, np.zeros(4), -1.5, np.zeros(4)] + rng.normal(0, 1, n)
+pipe = make_pipeline(StandardScaler(), LassoCV(cv=5, max_iter=100_000)).fit(X, y)
+lc = pipe.named_steps["lassocv"]
+print("chosen alpha:", round(lc.alpha_, 4))
+print("selected features:", np.where(lc.coef_ != 0)[0], "(truth: 0 and 5)")
+```
+
+```{pyodide}
+import numpy as np
+# lasso in p >> n: at most n features can survive
+rng = np.random.default_rng(5)
+X = rng.normal(0, 1, (50, 300))
+y = rng.normal(0, 1, 50)
+l = Lasso(alpha=0.1, max_iter=100_000).fit(X, y)
+print(f"p=300, n=50: lasso kept {np.sum(l.coef_ != 0)} features (≤ n = 50)")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Derive the soft-threshold update: for a single coefficient βⱼ with residual partial correlation fixed (others held), write the objective as a quadratic in βⱼ plus λ|βⱼ|, minimize over βⱼ > 0 and βⱼ < 0 separately, and show the solution is $S_\lambda(z_j)$ where $z_j = x_j^\top r_{-j} / (x_j^\top x_j)$ (r₋ⱼ = partial residuals). Then implement one full coordinate-descent pass on a small dataset and verify the objective *decreases* at every step.
+
+<details>
+<summary>Solution</summary>
+
+Holding other coefficients fixed, the objective in βⱼ is $\frac{1}{2}x_j^\top x_j\,\beta_j^2 - z_j'\beta_j + \lambda|\beta_j| + \text{const}$ (where z′ absorbs the current partial residual). For βⱼ > 0 the minimizer is (z′ − λ)/(xⱼᵀxⱼ); for βⱼ < 0 it's (z′ + λ)/(xⱼᵀxⱼ); if the unconstrained optimum lies within ±λ, the corner βⱼ = 0 wins — assembling to the soft-threshold.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(6)
+n, p = 60, 5
+X = rng.normal(0, 1, (n, 5))
+y = X @ np.array([2.0, 0, -1.5, 0, 0]) + rng.normal(0, 1, n)
+lam = 0.5
+
+def objective(beta):
+    return 0.5 * np.sum((y - X @ beta)**2) + lam * np.sum(np.abs(beta))
+
+def soft(rho, gram, lam):
+    return np.sign(rho) * max(abs(rho) - lam, 0.0) / gram
+
+beta = np.zeros(p)
+objs = [objective(beta)]
+for it in range(40):
+    for j in range(p):
+        r_partial = y - X @ beta + X[:, j] * beta[j]     # residual excluding x_j's term
+        rho = X[:, j] @ r_partial                        # x_j'x_j * OLS-ish coefficient
+        beta[j] = soft(rho, X[:, j] @ X[:, j], lam)      # soft-threshold update
+    objs.append(objective(beta))
+
+print("objective trajectory (first 6):", np.round(objs[:6], 4))
+print("monotone decreasing:", bool(np.all(np.diff(objs) <= 1e-8)))
+print("final beta:", beta.round(3), "(truth: 2, 0, -1.5, 0, 0)")
+```
+
+Each coordinate's update is the exact minimizer along that coordinate, so convexity guarantees the objective never rises — the guarantee coordinate descent rides on. (The threshold is λ/(xⱼᵀxⱼ) in coefficient units: bigger columns pay proportionally less — one reason practitioners standardize.)
+</details>
+
+**Exercise 2.** Lasso vs ridge on *sparse truth with junk*: n = 80, p = 40, truth uses 3 features. Fit ridge (α tuned by CV) and lasso (LassoCV); compare test MSE on fresh data AND the number of nonzero coefficients. Then flip the truth to *dense* (all 40 features with small effects) and re-run. Which method wins under which truth, and what does the loser's nonzero count say about it?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LassoCV, RidgeCV
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+
+rng = np.random.default_rng(7)
+def experiment(sparsity, seed=0):
+    r = np.random.default_rng(seed)
+    n, p = 80, 40
+    X = r.normal(0, 1, (n, p))
+    beta = np.zeros(p)
+    if sparsity == "sparse":
+        beta[:3] = [3, -2, 1.5]
+    else:
+        beta[:] = r.uniform(-0.6, 0.6, p)
+    y = X @ beta + r.normal(0, 2, n)
+    Xte = r.normal(0, 1, (20000, p))
+    yte = Xte @ beta + r.normal(0, 2, 20000)
+
+    lasso = make_pipeline(StandardScaler(), LassoCV(cv=5, max_iter=100_000)).fit(X, y)
+    ridge = make_pipeline(StandardScaler(), RidgeCV(alphas=10.0**np.arange(-2, 4, 0.25))).fit(X, y)
+    return {
+        "lasso MSE": np.mean((yte - lasso.predict(Xte))**2),
+        "lasso nonzeros": int(np.sum(lasso.named_steps["lassocv"].coef_ != 0)),
+        "ridge MSE": np.mean((yte - ridge.predict(Xte))**2),
+    }
+
+for truth in ["sparse", "dense"]:
+    res = experiment(truth, seed=8)
+    print(truth, {k: (round(v, 3) if isinstance(v, float) else v) for k, v in res.items()})
+```
+
+Sparse truth: lasso's MSE is competitive-or-better *and* its nonzero count ≈ the truth — the interpretability win is free. Dense truth: ridge typically edges out lasso on MSE, and lasso's nonzero count shows it *dropped* many small-but-real effects (bias on dense signals). The methods embody priors about the world; pick by which prior matches, verified by CV — never by leaderboard reflex.
+</details>
+
+**Exercise 3.** The relaxed lasso (post-lasso refit): run LassoCV to select a support; then refit plain OLS **on the selected features only**. Compare on fresh test data: lasso's predictions, the relaxed fit's predictions, and (a) MSE, (b) the relaxed coefficients vs the truth (when you know it). Why does the refit usually reduce shrinkage bias without reintroducing much variance — and when could it blow up?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LassoCV, LinearRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(9)
+n, p = 100, 50
+X = rng.normal(0, 1, (n, p))
+beta = np.zeros(p)
+beta[[0, 7, 23]] = [3.0, -2.0, 1.5]
+y = X @ beta + rng.normal(0, 1, n)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=10)
+
+lasso = make_pipeline(StandardScaler(), LassoCV(cv=5, max_iter=100_000)).fit(X_tr, y_tr)
+support = np.where(lasso.named_steps["lassocv"].coef_ != 0)[0]
+print("selected support:", support, "(truth: [0, 7, 23])")
+
+refit = LinearRegression().fit(X_tr[:, support], y_tr)
+
+mse_lasso = np.mean((y_te - lasso.predict(X_te))**2)
+mse_relaxed = np.mean((y_te - refit.predict(X_te[:, support]))**2)
+print(f"lasso   test MSE: {mse_lasso:.4f}")
+print(f"relaxed test MSE: {mse_relaxed:.4f}")
+print("relaxed coefs (unshrunk):", refit.coef_.round(3), "vs truth [3, -2, 1.5] (order)")
+```
+
+Once the support is (mostly) right, refitting OLS on p_support ≪ n parameters removes the lasso's deliberate shrinkage bias at little variance cost — that's the relaxed lasso idea. It blows up when the support is *wrong or barely stable*: the selected set's near-duplicates recreate collinearity, and selection noise propagates into the refit (which is why the relaxed variant should itself be CV'd against plain lasso, and why [5.1](05-1-feature-selection.qmd)'s selection-uncertainty warnings still apply).
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Standardize before lasso, always** — the penalty counts coefficient magnitudes; unstandardized lasso selects by units, not information.
+- **sklearn's `Lasso` may not converge silently** on correlated data at small alphas — watch `ConvergenceWarning`, raise `max_iter`, and prefer `LassoCV` (which handles warm starts and selection).
+- **Alpha's scale is objective-dependent** (sklearn uses 1/(2n)·RSS + α‖β‖₁): alphas are not portable across n, feature scaling, or libraries — retune everywhere.
+- **Selection ≠ inference**: lasso p-values require selective-inference methods or sample splitting ([5.1](05-1-feature-selection.qmd)); a selected feature's "significance" from a naive refit is doubly data-used.
+- **Under correlation, lasso's choice among twins is unstable** — selection frequencies across bootstraps ([5.1](05-1-feature-selection.qmd) drill) are the honest report; elastic net ([5.4](05-4-elastic-net.qmd)) is the structural fix.
+- **The oracle doesn't always appear**: lasso consistency needs the irrepresentable condition; under violation it selects extras or misses features *even at huge n*. Don't promise "lasso finds the true variables" in any write-up.
+- **Orthonormal-case intuition is honest intuition**: soft-thresholding explains every qualitative behavior (zeros, uniform shrinkage, twin coin-flips via correlated columns breaking orthonormality).
+
+### Read & Refactor AI Code
+
+This AI-generated lasso workflow has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import Lasso
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(11)
+n, p = 100, 30
+X = rng.normal(0, 1, (n, p))
+X[:, 5] = 500 * rng.normal(0, 1, n)                # wildly different scale
+y = 200 * X[:, 5] / 500 + rng.normal(0, 1, n)
+
+# BUG 1: lasso on unscaled features
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=12)
+l = Lasso(alpha=0.5, max_iter=100_000).fit(X_tr, y_tr)
+print("selected:", np.where(l.coef_ != 0)[0])
+
+# BUG 2: alpha copied from another study
+print("using alpha=0.5 'because the paper used it'")
+
+# BUG 3: selection p-values from a naive refit
+import statsmodels.api as sm
+support = np.where(l.coef_ != 0)[0]
+if len(support):
+    fit = sm.OLS(y_tr, X_tr[:, support]).fit()
+    print("p-values on selected:", np.round(fit.pvalues, 4), "-> 'all significant'")
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Unscaled lasso**: feature 5's tiny coefficient (units!) escapes the penalty while genuinely informative standardized features get taxed — selection by measurement unit. Standardize.
+2. **Inherited alpha**: α is n-, scale-, and objective-dependent ([Advanced pitfalls](#)); it must be re-tuned (LassoCV) per dataset.
+3. **Naive refit p-values**: the support was chosen with y's help; these p-values double-dip the data. Use split-sample selection→inference or selective inference; at minimum, disclose that inference is post-selection.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LassoCV
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(11)
+n, p = 100, 30
+X = rng.normal(0, 1, (n, p))
+X[:, 5] = 500 * rng.normal(0, 1, n)
+y = 200 * X[:, 5] / 500 + rng.normal(0, 1, n)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=12)
+
+pipe = make_pipeline(StandardScaler(), LassoCV(cv=5, max_iter=100_000)).fit(X_tr, y_tr)
+lc = pipe.named_steps["lassocv"]
+print("CV-chosen alpha:", round(lc.alpha_, 5))
+print("selected:", np.where(lc.coef_ != 0)[0], "(truth: 5)")
+print("test R2:", round(pipe.score(X_te, y_te), 4),
+      "- selection reported with frequencies/instability, not naive p-values")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Prove the orthonormal-case soft thresholding: for X with orthonormal columns, the lasso objective separates across coordinates into $\frac{1}{2}(b_j - \beta_j)^2 + \lambda|\beta_j| + \text{const}$ where $b_j = x_j^\top y$. Solve each 1-D problem by cases and assemble $S_\lambda(b)$. Then state precisely what breaks when columns are merely *correlated*: which step of the separability argument dies, and what replaces it (coordinate descent on coupled problems).
+
+<details>
+<summary>Hint</summary>
+
+Orthonormality makes Xᵀy the OLS estimate coordinatewise and decouples βⱼ's; correlated columns couple the coordinates through off-diagonal XᵀX entries.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+With $X^\top X = I$: completing the square gives $\frac{1}{2}\|\beta - b\|^2 + \lambda\|\beta\|_1 + \text{const}$, which is a sum of independent 1-D problems $\frac{1}{2}(\beta_j - b_j)^2 + \lambda|\beta_j|$. Case |b_j| ≤ λ: minimum at βⱼ = 0 (the V's corner). Case b_j > λ: optimal βⱼ = b_j − λ; symmetric below. Assemble: $\hat\beta = S_\lambda(b)$ — shrink everything by λ, drop anything smaller. With correlated columns, XᵀX has off-diagonal mass: βⱼ's objective depends on the *other* β's through them, separability dies, and the solution is characterized by KKT conditions (subgradient of ‖·‖₁ balanced with gradient of RSS) — solved iteratively by coordinate descent, each step a soft threshold of a *partial* residual estimate. The twins coin-flip lives exactly here: two near-identical columns share one z, and ties break to whichever coordinate descends first.
+</details>
+
+**Q2.** Lasso's degrees of freedom equal the number of selected features (for the Lasso at a given λ). Verify by simulation: compute the covariance-based degrees-of-freedom estimate, $\text{df} = \frac{1}{\sigma^2}\text{Cov}(\hat\mu_i, y_i)$ over many training draws (use σ known), for a small problem at several λ, and compare to the nonzero count. What does df = |support| buy you conceptually (Cp-style penalties on the lasso path), and why is it surprising (a *discontinuous* model can have a smooth, integer-valued complexity)?
+
+<details>
+<summary>Hint</summary>
+
+Zou/Tibshirani/Efron: for the lasso, E[df] = E[#nonzeros] under regularity — testable with the covariance formula.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import Lasso
+
+rng = np.random.default_rng(14)
+n, p, sigma = 40, 8, 1.0
+lam = 0.4
+cov_sum, nonzero_counts = 0.0, []
+mu_hat_all = []
+ys = []
+for rep in range(4000):
+    X = rng.normal(0, 1, (n, p))
+    y = X @ np.array([1.5, -1.0, 0, 0, 0, 0, 0, 0]) + rng.normal(0, sigma, n)
+    ys.append(y)
+    l = Lasso(alpha=lam, max_iter=100_000).fit(X, y)
+    mu_hat_all.append(l.predict(X))
+    nonzero_counts.append(np.sum(l.coef_ != 0))
+
+mu_hat_all = np.array(mu_hat_all)
+ys = np.array(ys)
+df_cov = sum(np.cov(mu_hat_all[:, i], ys[:, i])[0, 1] for i in range(n)) / sigma**2
+print(f"covariance-based df = {df_cov:.3f}")
+print(f"mean nonzero count  = {np.mean(nonzero_counts):.3f}")
+```
+
+The two agree to Monte Carlo noise — the lasso's degrees of freedom *is* its support size. Conceptual payoff: you can price lasso models on the Cp scale (RSS + 2σ̂²·|support|) — a bridge between [5.1](05-1-feature-selection.qmd)'s subset penalties and penalized fitting. The surprise: the fit jumps discontinuously as features enter/leave, yet its *expected* complexity moves smoothly with λ and equals an integer statistic — one of statistics' cleaner magic tricks.
+</details>
+
+## 6. Complex Questions
+
+**C1 (lasso × [5.1 selection instability](05-1-feature-selection.qmd)).** Quantify the twin coin-flip at scale: p = 30 features where x₂ = x₁ + small noise and both are truly active with equal coefficients. Run LassoCV selection on 200 bootstrap resamples; report the joint selection frequency of {x₁, x₂} and each individually. Then rerun with elastic net (α_mix = 0.5, [5.4](05-4-elastic-net.qmd)) and compare — the resulting table is the empirical case for the elastic net's existence.
+
+**C2 (lasso × [4.4 bias–variance](../part-04-validation-model-selection/04-4-bias-variance.qmd) × [4.1 optimism](../part-04-validation-model-selection/04-1-generalization-problem.qmd)).** Measure lasso's bias–variance profile across λ with the multi-training-set protocol from [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd) (300 training sets, n = 60, sparse truth, fixed evaluation grid). Overlay: bias², variance, and the *number of selected features* per λ. Interpret the three panels jointly — where in λ does variance collapse (sparsity kicks in) relative to where bias starts climbing, and how does that gap explain LassoCV's typical conservative choice?
+
+## 7. Summary
+
+- L1 penalty → exact zeros: shrinkage and selection in one convex fit, solved by coordinate soft-thresholding.
+- Standardize; tune α by CV (LassoCV); α is not portable across n/scales/libraries.
+- Lasso selects twins by coin flip — great for prediction, hazardous for narratives; report selection frequencies.
+- Post-lasso refit (relaxed lasso) trades a little variance for the shrinkage bias back — when the support is stable.
+- At most n features survive in p ≫ n; df of the lasso = its support size.
+- Selection still invalidates naive p-values — the post-selection problem wears a smoother costume.
+- Ridge groups, lasso splits — the compromise that groups *and* sparsifies: [5.4 Elastic net](05-4-elastic-net.qmd).

@@ -1,9 +1,432 @@
 ---
-title: "Coming soon"
+title: "5.1 Feature Selection"
 tier: 1
 engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - scikit-learn
+    - statsmodels
+    - matplotlib
 ---
 
-This page has not been published yet. It is scheduled in the [build order](../../index.qmd) and will follow the same seven-section template as every other page.
+When predictors outnumber good ideas, you must choose a subset — for prediction parsimony, for interpretability, or for cheaper deployment. Feature selection is where statistics meets [4.6 Tuning](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd): a feature set is a hyperparameter, and selecting it on the data you report on is the oldest self-deception in the field.
 
-Check back soon — progress is tracked in the [course home](../../index.qmd).
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+Three families of selection:
+
+1. **Subset selection** — search discrete subsets (best-subset by enumeration, forward/backward stepwise), score each by Cp/AIC/BIC or CV.
+2. **Filter methods** — rank features by a univariate statistic (correlation, F-score), keep the top k.
+3. **Embedded methods** — selection as a by-product of fitting (lasso's zeros, [5.3](05-3-lasso-regression.qmd); trees' split choices, Part 7).
+
+Mallows' $C_p$ scores a model with $d$ fitted parameters by trading fit against size:
+
+$$C_p = \frac{1}{n}\big(\text{RSS} + 2\,d\,\hat\sigma^2\big)$$
+
+— training error plus a $2\sigma^2/n$-per-parameter optimism charge (the quantity derived in [4.1 Q1](../part-04-validation-model-selection/04-1-generalization-problem.qmd)).
+
+**Best subset by brute force**, scored by $C_p$, on a small truth:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+from itertools import combinations
+import statsmodels.api as sm
+
+rng = np.random.default_rng(0)
+n = 60
+X = rng.normal(0, 1, (n, 5))
+y = 2 * X[:, 0] - 1.5 * X[:, 2] + rng.normal(0, 1.5, n)     # truth: x1, x3 only
+
+fit_full = sm.OLS(y, sm.add_constant(X)).fit()
+sigma2_hat = fit_full.mse_resid
+
+def cp(subset):
+    Xs = sm.add_constant(X[:, list(subset)])
+    rss = sm.OLS(y, Xs).fit().ssr
+    d = len(subset) + 1
+    return (rss + 2 * d * sigma2_hat) / n
+
+all_models = []
+for size in range(1, 6):
+    for subset in combinations(range(5), size):
+        all_models.append((cp(subset), subset))
+
+all_models.sort()
+best_cp, best_subset = all_models[0]
+print(f"best by Cp: {best_subset}  (Cp = {best_cp:.4f})")
+print(f"true support: (0, 2)")
+
+cps = [m[0] for m in all_models]
+subsets = ["+".join(str(v) for v in m[1]) for m in all_models]
+fig, ax = plt.subplots(figsize=(7, 3.4))
+ax.plot(range(len(cps)), cps, marker="o", ms=3)
+ax.axhline(cps[0], color="red", ls=":")
+best_i = 0
+ax.annotate(subsets[0], (0, cps[0]), textcoords="offset points", xytext=(4, 8), color="red")
+ax.set(xlabel="model rank", ylabel="Cp", title="All 31 models ranked by Cp")
+plt.show()
+```
+
+**Filters and CV-tuned selection** — the honest one-line production version (selection *inside* the folds, per [4.3](../part-04-validation-model-selection/04-3-cross-validation.qmd)):
+
+```{pyodide}
+import numpy as np
+from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import GridSearchCV, StratifiedKFold
+from sklearn.datasets import make_classification
+
+X, y = make_classification(n_samples=400, n_features=20, n_informative=5,
+                           random_state=1)
+pipe = make_pipeline(SelectKBest(f_classif), LogisticRegression(max_iter=4000))
+grid = GridSearchCV(pipe, {"selectkbest__k": [2, 3, 5, 8, 12, 20]},
+                    cv=StratifiedKFold(5, shuffle=True, random_state=2)).fit(X, y)
+print("CV-chosen k:", grid.best_params_["selectkbest__k"])
+print("CV accuracy:", round(grid.best_score_, 4))
+```
+
+## 2. Concept Questions
+
+1. Why does adding $2d\hat\sigma^2$ to RSS (per [2.4](../part-02-linear-regression/02-4-accuracy-of-model.qmd)) make $C_p$ a fairer comparator than raw RSS?
+2. Forward vs backward stepwise: name one setting where each fails to find the best subset.
+3. Why can't you compute p-values from the final selected model in the usual way, after the selection used those same p-values?
+4. What is *selection instability*, and what does it predict about two labs running identical stepwise on their own data?
+5. Your filter keeps the 5 features with the strongest *marginal* correlation with y. Name two kinds of variables this rule can miss.
+
+<details>
+<summary>Answers</summary>
+
+1. Raw RSS only falls as features join ([2.4](../part-02-linear-regression/02-4-accuracy-of-model.qmd)'s noise-collector theorem). $C_p$ adds the expected optimism, ≈ 2σ²d/n, so models are compared on their *estimated test* error — noise columns now lose.
+2. Forward fails when a variable is useless alone but essential in pairs (its first step never picks it; the famous XOR-style trap). Backward fails when p ≥ n — the full model can't even be fitted (singular design).
+3. The selection step picked the covariates *because* they looked good in this sample; the post-selection p-values then test "is this good-looking feature good?" on the same data that chose it — double use of the evidence. Valid post-selection inference needs special machinery (or sample splitting: select on half, infer on the rest).
+4. The set of selected features varies wildly across resamples of the same population when features are correlated. Prediction: each lab reports a *different* "top biomarkers" list with similar performance — a reproducibility red flag that screams correlated features + overfit selection.
+5. (a) **Suppressor/joint variables** — useless marginally, essential jointly (their combination carries the signal). (b) **Low-marginal-but-nonlinear** contributors, or features whose signal cancels a confounder's — anything where the marginal projection hides the conditional effect ([2.5](../part-02-linear-regression/02-5-multiple-linear-regression.qmd) Q2's suppressor story).
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.feature_selection import SelectKBest, f_regression
+rng = np.random.default_rng(2)
+n = 200
+X = rng.normal(0, 1, (n, 6))
+y = 3 * X[:, 1] + rng.normal(0, 1, n)          # only x2 matters
+sel = SelectKBest(f_regression, k=2).fit(X, y)
+print("chosen feature indices:", sel.get_support(indices=True))
+print("F-scores:", sel.scores_.round(2))
+```
+
+```{pyodide}
+import numpy as np
+from itertools import combinations
+print("models for p=5:", sum(1 for size in range(1, 6) for _ in combinations(range(5), size)))
+print("models for p=20:", 2**20 - 1, "-> best subset is DEAD beyond small p")
+```
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+rng = np.random.default_rng(3)
+n = 80
+X = rng.normal(0, 1, (n, 4))
+y = 1 + 2 * X[:, 0] + rng.normal(0, 1, n)
+# Cp of the TRUE model vs the FULL model
+sig2 = sm.OLS(y, sm.add_constant(X)).fit().mse_resid
+def cp(cols):
+    rss = sm.OLS(y, sm.add_constant(X[:, list(cols)])).fit().ssr
+    return (rss + 2 * (len(cols) + 1) * sig2) / n
+print("Cp(true {0}):     ", round(cp([0]), 4))
+print("Cp(full 0-3):     ", round(cp([0, 1, 2, 3]), 4))
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(4)
+# selection instability: refit selection on bootstrap samples
+n = 60
+X = rng.normal(0, 1, (n, 4))
+X[:, 1] = 0.95 * X[:, 0] + rng.normal(0, 0.3, n)     # near-duplicate
+y = 2 * X[:, 0] + rng.normal(0, 1, n)
+from sklearn.feature_selection import SelectKBest, f_regression
+picks = []
+for b in range(200):
+    idx = rng.integers(0, n, n)
+    k = SelectKBest(f_regression, k=2).fit(X[idx], y[idx])
+    picks.append(tuple(k.get_support(indices=True)))
+import collections
+print(collections.Counter(picks).most_common(3))
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Implement **forward stepwise** from scratch: start empty; at each step add the feature whose inclusion most reduces RSS; stop when no addition improves $C_p$. Run it on the Section 1 dataset. Report the selected set and each step's Cp. Which step would BIC (heavier penalty, $\log n$ per parameter) have stopped at?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+from itertools import combinations
+
+rng = np.random.default_rng(0)
+n = 60
+X = rng.normal(0, 1, (n, 5))
+y = 2 * X[:, 0] - 1.5 * X[:, 2] + rng.normal(0, 1.5, n)
+sigma2 = sm.OLS(y, sm.add_constant(X)).fit().mse_resid
+
+def cp(cols):
+    rss = sm.OLS(y, sm.add_constant(X[:, list(cols)])).fit().ssr
+    return (rss + 2 * (len(cols) + 1) * sigma2) / n
+
+selected, history = [], []
+remaining = set(range(5))
+while remaining:
+    candidates = [(cp(selected + [j]), j) for j in remaining]
+    best_cp_new, best_j = min(candidates)
+    if history and best_cp_new >= history[-1] - 1e-12:
+        break                                    # Cp got worse: stop
+    selected.append(best_j)
+    history.append(best_cp_new)
+    remaining.discard(best_j)
+    print(f"added x{best_j}: Cp = {best_cp_new:.4f}, set = {selected}")
+print("forward selection final:", selected)
+```
+
+Forward picked the true pair, then stopped when Cp plateaued. Under BIC's $\log n$-per-parameter penalty the second variable sometimes fails to clear the bar at small n — penalty choice *is* a statement about how much you fear false positives vs missed variables.
+</details>
+
+**Exercise 2.** Selection-on-training vs leakage: build a 20-feature, 5-signal dataset (n = 150). Evaluate two pipelines by nested CV: (a) `SelectKBest(k=5)` **fitted on all data first**, then CV the logistic model on the pre-filtered matrix; (b) the identical selection *inside* the pipeline via GridSearchCV. Report both accuracies and the gap — this is feature-selection leakage priced in dollars.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+
+X, y = make_classification(n_samples=150, n_features=20, n_informative=5,
+                           n_redundant=2, random_state=5)
+outer = StratifiedKFold(5, shuffle=True, random_state=6)
+
+# (a) LEAKY: select on ALL data, then CV the model
+X_selected = SelectKBest(f_classif, k=5).fit_transform(X, y)
+leaky = cross_val_score(LogisticRegression(max_iter=4000), X_selected, y, cv=outer)
+
+# (b) honest: selection inside each fold
+pipe = make_pipeline(SelectKBest(f_classif, k=5), LogisticRegression(max_iter=4000))
+honest = cross_val_score(pipe, X, y, cv=outer)
+
+print(f"leaky (select-then-CV):  {leaky.mean():.4f}")
+print(f"honest (select inside):  {honest.mean():.4f}")
+print(f"leakage inflation:       {leaky.mean() - honest.mean():+.4f}")
+```
+
+The leaky number is a mirage: the CV folds' validation rows voted on which features matter. With weaker signal or fewer samples the gap widens; with abundant signal it vanishes — which is exactly why the bug survives in careless labs ([4.3](../part-04-validation-model-selection/04-3-cross-validation.qmd)'s rule 6).
+</details>
+
+**Exercise 3.** The filter-vs-joint failure, constructed: build data where x₁ and x₂ are independent noise marginally *uncorrelated* with y, but y depends on their product (interaction: $y = 2\,x_1 x_2\,u$, u noise). Run `SelectKBest(f_regression, k=2)` — check whether either is chosen; then fit a model with the engineered feature $x_1 x_2$ included and compare test MSE against the filter+OLS pipeline. State the design lesson in one sentence.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.feature_selection import SelectKBest, f_regression
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(7)
+n = 400
+X = rng.normal(0, 1, (n, 4))
+y = 2 * X[:, 0] * X[:, 1] + rng.normal(0, 1, n)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=8)
+
+sel = SelectKBest(f_regression, k=2).fit(X_tr, y_tr)
+print("filter picked features:", sel.get_support(indices=True), "(true pair: 0,1)")
+print("marginal F-scores:", sel.scores_.round(2), "- x0,x1 have ~zero signal alone")
+
+# with interaction engineered
+def feat(M):
+    return np.c_[M, M[:, 0] * M[:, 1]]
+m = LinearRegression().fit(feat(X_tr), y_tr)
+mse = np.mean((y_te - m.predict(feat(X_te)))**2)
+print(f"MSE with x0*x2 feature: {mse:.3f} (vs variance of y ≈ {y.var():.3f})")
+```
+
+Marginal filters are projections onto single axes ([2.5](../part-02-linear-regression/02-5-multiple-linear-regression.qmd)): interaction signal lives in the *product direction*, invisible to any per-feature score. Lesson: filters are cheap shortlists for enormous p, never the final selection procedure — and interaction-aware search or embedded methods (lasso on an engineered basis, trees) must take over where marginal views end.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Selection is part of the model.** Anything chosen from the data — features, transformations ([2.8](../part-02-linear-regression/02-8-nonlinear-transformations.qmd)), bin edges — must be re-derivable inside each CV fold, or your performance number describes a model that never existed.
+- **Stepwise p-value thresholds** ("add if p < 0.05") are not tests and don't control any error rate; they're heuristics with unknown operating characteristics. Prefer explicit penalties (Cp/AIC/BIC) or CV — quantities with definitions.
+- **Post-selection inference** is a real research area (selective inference, data carving) because naive SEs after stepwise/lasso are wrong in ways that matter. The pragmatic default: split-sample — select on half, fit and infer on the other half, at the cost of power.
+- **Selection frequency is the report**: with correlated features, print selection frequencies across bootstraps/subsamples (drill 4) instead of one cherry-picked set; a feature selected 55% of the time is a different claim from 99%.
+- **Filters buy speed at truth's expense**: at p = 500,000 univariate screens are the only affordable first pass — but always validate the shortlist jointly, and expect to miss interaction/suppressor structure (Exercise 3).
+- **Unstable selection often means collinearity** ([2.5](../part-02-linear-regression/02-5-multiple-linear-regression.qmd)): when two features share signal, subset selection coin-flips between them; ridge-style shrinkage or elastic net's grouping ([5.4](05-4-elastic-net.qmd)) is the structural fix.
+
+### Read & Refactor AI Code
+
+This AI-generated pipeline has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score, KFold
+from sklearn.metrics import accuracy_score
+
+X, y = make_classification(n_samples=300, n_features=15, n_informative=4,
+                           random_state=9)
+
+# BUG 1: select on ALL data
+selector = SelectKBest(f_classif, k=4).fit(X, y)
+Xs = selector.transform(X)
+
+# BUG 2: CV the model on the pre-selected matrix
+kf = KFold(5, shuffle=True, random_state=0)
+cv = cross_val_score(LogisticRegression(max_iter=4000), Xs, y, cv=kf)
+print("CV accuracy:", round(cv.mean(), 4))
+
+# BUG 3: p-value threshold stated as error control
+print("top features all have p < 0.05 -> FDR controlled at 5%")
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Selection before CV** — the folds' validation labels picked the features. Selection belongs inside the pipeline.
+2. **Downstream CV of a pre-filtered matrix** inherits bug 1; the number is inflated by the selection's peek at every row.
+3. **Univariate p < 0.05 over 15 features is ~0–1 expected false positives with NO FDR guarantee** — that's raw multiplicity ([12.4](../part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.qmd) preview); FDR requires explicit q-value/BH procedure over the full tested set.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+from sklearn.pipeline import make_pipeline
+
+X, y = make_classification(n_samples=300, n_features=15, n_informative=4,
+                           random_state=9)
+outer = StratifiedKFold(5, shuffle=True, random_state=0)
+pipe = make_pipeline(SelectKBest(f_classif, k=4),
+                     LogisticRegression(max_iter=4000))
+honest = cross_val_score(pipe, X, y, cv=outer)
+print("honest CV accuracy:", round(honest.mean(), 4),
+      "(selection re-fit inside every fold)")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Show that selecting the single feature with the largest |t-statistic| from M pure-noise features yields a feature whose in-sample |correlation| has expected value ≈ √(2 log M / n), and verify by simulation for n = 50, M = 1000. What does this tell you about "the top feature explains R² of the selected model" claims?
+
+<details>
+<summary>Hint</summary>
+
+The max of M i.i.d. half-normals scales like √(2 log M) — the same order statistic that drove [4.6 Q1](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)'s selection bonus.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Under the null each sample correlation is ≈ N(0, 1/n); the largest |r| among M is the max of M half-normal draws, whose expectation ≈ √(2 log M / n). Simulation:
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(10)
+n, M = 50, 1000
+best_r = []
+for rep in range(3000):
+    X = rng.normal(0, 1, (n, M))
+    y = rng.normal(0, 1, n)
+    rs = np.abs([np.corrcoef(X[:, j], y)[0, 1] for j in range(M)])
+    best_r.append(rs.max())
+theory = np.sqrt(2 * np.log(M) / n)
+print(f"E[max |r|] empirical = {np.mean(best_r):.4f}   theory = {theory:.4f}")
+print(f"implied in-sample R2 of the 'best feature': {np.mean(best_r)**2:.4f}")
+```
+
+≈ 0.38 correlation with **pure noise** — an in-sample R² near 0.14 for a feature that has nothing. Any "top feature" narrative built on in-sample fit of selected candidates inherits this order-statistic fiction; out-of-sample evaluation is the only corrective.
+</details>
+
+**Q2.** Design the **stability-selection** procedure: given a selection algorithm, sample B subsamples (half the rows), record each feature's selection frequency, and keep features selected in ≥ π (say 0.6) of subsamples. Implement it for forward selection on the Section 1 data (with correlated features added), report the frequency table, and explain (a) why high threshold controls false selections, (b) why correlated true features can also *fail* the threshold — and what that asymmetry means for your final claim.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(11)
+n = 80
+X = rng.normal(0, 1, (n, 4))
+X[:, 2] = 0.9 * X[:, 0] + rng.normal(0, 0.4, n)     # x3 ~ copy of x1
+y = 2 * X[:, 0] + rng.normal(0, 1, n)
+
+freq = np.zeros(4)
+B = 100
+for b in range(B):
+    idx = rng.choice(n, n // 2, replace=False)
+    Xb, yb = X[idx], y[idx]
+    remaining, sel = set(range(4)), []
+    sigma2 = sm.OLS(yb, sm.add_constant(Xb)).fit().mse_resid
+    while remaining:
+        cand = [(sm.OLS(yb, sm.add_constant(Xb[:, sorted(sel + [j])])).fit().ssr, j)
+                for j in remaining]
+        rss_new, j = min(cand)
+        cur_rss = sm.OLS(yb, sm.add_constant(Xb[:, sel])).fit().ssr if sel else np.sum((yb - yb.mean())**2)
+        d = len(sel) + 2
+        if len(sel) and (rss_new + 2 * d * sigma2) / n >= (cur_rss + 2 * (len(sel) + 1) * sigma2) / n:
+            break
+        sel.append(j); remaining.discard(j)
+    freq[sel] += 1
+
+print("selection frequencies over 100 half-samples:", dict(enumerate(freq / B)))
+```
+
+(a) A noise feature must beat the field in 60% of half-samples — vanishingly unlikely under the null (each has ~50% coin-flip chances, compounded downward). (b) x1 and x3 are *both* true (x3 inherits signal through correlation) yet each is selected only when the subsample's noise favors it over its twin — both can hover near 50% and miss a 0.6 threshold. The asymmetry: the procedure certifies *unique* contributors and abstains on interchangeable ones — which is honest reporting (say "x1 or its proxy x3"), not a flaw.
+</details>
+
+## 6. Complex Questions
+
+**C1 (selection × [4.6 tuning](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd) × [12.x](../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.qmd) stub).** Unify the three selection paradigms on one dataset: k chosen by CV (filter), λ chosen by CV (lasso, [5.3](05-3-lasso-regression.qmd) — implement with LassoCV), and Cp-based best subset — all nested inside a common outer 5-fold loop measuring the *whole procedure's* test MSE. Which procedure's outer error is lowest, and how does the ranking change if you compare their *inner* best scores instead? This experiment is the practical proof of "selection procedures must be evaluated as procedures."
+
+**C2 (selection × [1.5 resampling](../part-01-statistics-bridge/01-5-resampling-intuition.qmd)).** Bootstrap the entire selected-model pipeline (resample rows → re-run forward selection → predict at a fixed x₀) and produce a *predictive* distribution rather than a feature list. Then compare its 95% interval to the naive interval from the one selected model (formula SEs, ignoring selection). Quantify the undercoverage of the naive interval empirically over 200 true-data draws — this is post-selection uncertainty made visible.
+
+## 7. Summary
+
+- Selection has three families — subset, filter, embedded — and one law: selection is data-dependent, so it lives inside validation loops.
+- Cp/AIC/BIC convert fit into estimated test error; CV does it without σ̂² or parametric assumptions.
+- Forward fails on joint variables; backward fails when p ≥ n; filters fail on suppressors and interactions.
+- Post-selection p-values are fiction; use split-sample selection or specialized selective inference.
+- Selection instability across resamples is diagnostic (collinearity) and reportable (selection frequencies).
+- The max-of-M order statistic manufactures in-sample stars from pure noise — [4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd) everywhere.
+- Continuous selection — penalties instead of subsets — is smoother and scales to p ≫ n: [5.2 Ridge regression](05-2-ridge-regression.qmd).

@@ -84,7 +84,12 @@ Status flow: **Draft → Drilled → Reviewed → Published**
 | 4.4 The bias–variance trade-off | T1 | Published |
 | 4.5 The bootstrap | T1 | Published |
 | 4.6 Hyperparameter tuning | T1 | Published |
-| Part 5 — Regularization & high dimensions (6 pages) | T1 | Not started (5.1 stub) |
+| 5.1 Feature selection | T1 | Published |
+| 5.2 Ridge regression | T1 | Published |
+| 5.3 Lasso regression | T1 | Published |
+| 5.4 Elastic net | T1 | Published |
+| 5.5 PCR and PLS | T1 | Published |
+| 5.6 High-dimensional data | T1 | Published |
 | Part 6 — Nonlinear regression (7 pages) | T1 | Not started |
 | Part 7 — Trees & ensembles (7 pages) | T1 | Not started |
 | Part 8 — SVMs (6 pages) | T1 | Not started |

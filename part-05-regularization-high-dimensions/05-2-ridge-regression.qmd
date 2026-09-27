@@ -1,0 +1,457 @@
+---
+title: "5.2 Ridge Regression"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - scikit-learn
+    - matplotlib
+---
+
+Ridge regression keeps every feature but shrinks its coefficient toward zero, buying variance down with bias up. It is the canonical answer to collinearity ([2.5](../part-02-linear-regression/02-5-multiple-linear-regression.qmd)) and the first stopping point on the regularization dial that Part 5 spends three pages exploring.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+Ridge replaces least squares with penalized least squares:
+
+$$\hat{\beta}^{\text{ridge}} = \arg\min_\beta \Big\{ \sum_i (y_i - \beta_0 - x_i^\top\beta)^2 + \lambda \sum_j \beta_j^2 \Big\}$$
+
+Excluding the intercept from the penalty (as above — always, in practice): the *center* of the data shouldn't be regularized. The solution has a closed form:
+
+$$\hat{\beta} = (X^\top X + \lambda I)^{-1} X^\top y$$
+
+λ > 0 makes the matrix invertible *even when $X^\top X$ is not* — ridge exists precisely where OLS breaks ([2.5](../part-02-linear-regression/02-5-multiple-linear-regression.qmd)'s singular design). The closed form, verified against sklearn (on centered data, so no intercept needed):
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import Ridge
+
+rng = np.random.default_rng(0)
+n = 80
+x1 = rng.normal(0, 1, n)
+x2 = 0.9 * x1 + rng.normal(0, 0.4, n)          # collinear pair
+X = np.c_[x1, x2]
+y = 2 * x1 + rng.normal(0, 1, n)
+
+Xc, yc, m = X - X.mean(axis=0), y - y.mean(), y.mean()
+lam = 10.0
+beta_hand = np.linalg.solve(Xc.T @ Xc + lam * np.eye(2), Xc.T @ yc)
+
+ridge = Ridge(alpha=lam).fit(X, y)             # sklearn handles intercept
+print("closed form:", beta_hand.round(4))
+print("sklearn:    ", ridge.coef_.round(4))
+print(f"intercept: {ridge.intercept_:.4f} (≈ ȳ = {m:.4f})")
+```
+
+**Bias–variance in action** ([4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd)): λ buys variance down:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import Ridge
+
+rng = np.random.default_rng(1)
+xg = np.linspace(-1.5, 1.5, 200)
+truth = 2.0 * xg - 1.0 * xg**2
+
+lambdas = [0.0, 1.0, 100.0]
+P = {l: np.zeros((300, 200)) for l in lambdas}
+for s in range(300):
+    x = np.sort(rng.uniform(-1.5, 1.5, 25))
+    y = 2 * x - x**2 + rng.normal(0, 1, 25)
+    for lam in lambdas:
+        Xd = np.c_[x, x**2]
+        m = Ridge(alpha=lam).fit(Xd, y)
+        P[lam][s] = m.predict(np.c_[xg, xg**2])
+
+fig, ax = plt.subplots(figsize=(7, 3.4))
+for lam, c in zip(lambdas, ["red", "green", "purple"]):
+    ax.plot(xg, P[lam].mean(axis=0), color=c, lw=2, label=f"λ={lam}")
+ax.plot(xg, truth, "k--", lw=1, label="truth")
+ax.set(ylim=(-4.5, 3), xlabel="x", ylabel="ŷ", title="Larger λ: flatter, stabler, more biased")
+ax.legend()
+plt.show()
+```
+
+**The coefficient path** — every coefficient shrinking smoothly as λ grows (the visual signature of ridge, vs lasso's sharp zeros in [5.3](05-3-lasso-regression.qmd)):
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import Ridge
+from sklearn.preprocessing import StandardScaler
+
+rng = np.random.default_rng(2)
+n = 100
+X = rng.normal(0, 1, (n, 6))
+y = 3 * X[:, 0] - 2 * X[:, 1] + rng.normal(0, 1.5, n)
+Xs = StandardScaler().fit_transform(X)
+
+lams = 10.0 ** np.arange(-2, 4, 0.1)
+coefs = np.zeros((len(lams), 6))
+for i, lam in enumerate(lams):
+    coefs[i] = Ridge(alpha=lam).fit(Xs, y).coef_
+
+fig, ax = plt.subplots(figsize=(7, 3.4))
+for j in range(6):
+    ax.plot(lams, coefs[:, j], lw=1.5)
+ax.set_xscale("log")
+ax.axhline(0, color="gray", lw=0.8)
+ax.set(xlabel="λ (log scale)", ylabel="coefficient",
+       title="Ridge paths: smooth shrinkage, nothing hits zero")
+plt.show()
+```
+
+## 2. Concept Questions
+
+1. Why is ridge *not* scale-equivariant, and what preprocessing does that force on you?
+2. λ = 0 recovers which estimator? λ → ∞ recovers which prediction rule?
+3. Show from $(X^\top X + \lambda I)^{-1}$ why ridge is computable when p > n while OLS is not.
+4. Your colleague ridge-fits and then reports "effect of xⱼ = β̂ⱼ, p < 0.05." Two problems with that sentence?
+5. In the bias–variance decomposition at fixed x₀, what does increasing λ do to each term — and why does total error eventually rise?
+
+<details>
+<summary>Answers</summary>
+
+1. The penalty Σβⱼ² depends on coefficient *magnitudes*, so multiplying xⱼ by 10 (dividing βⱼ by 10) changes the penalty for the same fit. Standardize features first — the penalty then says "each SD of signal costs equally."
+2. λ = 0 → OLS (exact). λ → ∞ → coefficients → 0 → predictions collapse to ȳ (the mean-model of [2.1](../part-02-linear-regression/02-1-regression-setup.qmd)) — ridge interpolates between OLS and the null model.
+3. $(X^\top X + \lambda I)$ adds λ to every eigenvalue; even if $X^\top X$ has zero eigenvalues (p ≥ n or perfect collinearity), all become ≥ λ > 0 — invertible. OLS needs $X^\top X$ itself invertible.
+4. (1) β̂ⱼ is *shrunk* — it underestimates the effect by design; quoting it as an effect size biases every claim toward zero. (2) The usual SEs/p-values don't apply to penalized fits ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)'s warning) — ridge is for prediction; for inference use OLS on selected/refit models or Bayesian machinery.
+5. Variance falls (shrunk coefficients wobble less across training sets), bias² rises (systematically short of the truth), σ² untouched. Total = U-shaped in λ: the sweet spot is where marginal variance savings stop exceeding marginal bias cost.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import Ridge, LinearRegression
+rng = np.random.default_rng(3)
+X = rng.normal(0, 1, (100, 3))
+y = 2 * X[:, 0] + rng.normal(0, 1, 100)
+r0 = Ridge(alpha=0.0).fit(X, y)
+ols = LinearRegression().fit(X, y)
+print(np.allclose(r0.coef_, ols.coef_))          # alpha=0 IS OLS
+print(np.allclose(r0.intercept_, ols.intercept_))
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import Ridge
+rng = np.random.default_rng(4)
+# unscaled features -> unequal shrinkage
+X = np.c_[rng.normal(0, 1, 200), rng.normal(0, 100, 200)]
+y = 3 * X[:, 0] + 3 * X[:, 1] + rng.normal(0, 1, 200)
+r = Ridge(alpha=1.0).fit(X, y)
+print("raw coefs:", r.coef_.round(3), " <- x2's coefficient shrunk LESS (bigger x = smaller beta = cheaper)")
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+rs = make_pipeline(StandardScaler(), Ridge(alpha=1.0)).fit(X, y)
+print("scaled (per-SD):", rs.named_steps["ridge"].coef_.round(3))
+```
+
+```{pyodide}
+import numpy as np
+# ridge solves the singular case: p > n
+rng = np.random.default_rng(5)
+X = rng.normal(0, 1, (20, 50))
+y = rng.normal(0, 1, 20)
+from sklearn.linear_model import LinearRegression, Ridge
+try:
+    LinearRegression().fit(X, y)
+    print("OLS fitted (minimum-norm under the hood)")
+except Exception as e:
+    print("OLS:", type(e).__name__)
+r = Ridge(alpha=1.0).fit(X, y)
+print("ridge coefficient L2 norm:", round(float(np.linalg.norm(r.coef_)), 3))
+```
+
+```{pyodide}
+import numpy as np
+# effective degrees of freedom: tr(X(X'X + λI)^-1 X')
+rng = np.random.default_rng(6)
+X = rng.normal(0, 1, (30, 5))
+sv = np.linalg.svd(X, compute_uv=False)          # singular values
+for lam in [0.01, 1.0, 100.0]:
+    df_eff = np.sum(sv**2 / (sv**2 + lam))
+    print(f"λ={lam:>6}: effective df = {df_eff:.2f} (5 at λ→0, 0 at λ→∞)")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Prove the closed form: expand $\sum(y - X\beta)^2 + \lambda\beta^\top\beta$, differentiate in β, set to zero, solve. Then verify numerically that the ridge solution equals OLS on the *augmented* dataset obtained by appending rows of zeros y=0 (a trick: penalized = unpenalized with pseudo-data). What does each pseudo-row "say" to the fit?
+
+<details>
+<summary>Solution</summary>
+
+Objective: $(y - X\beta)^\top(y - X\beta) + \lambda\beta^\top\beta$. Gradient: $-2X^\top(y - X\beta) + 2\lambda\beta = 0 \Rightarrow (X^\top X + \lambda I)\beta = X^\top y \Rightarrow \hat\beta = (X^\top X + \lambda I)^{-1}X^\top y$. The augmentation: appending √λ·I as rows with targets 0 makes the unpenalized RSS on the augmented data exactly RSS + λ‖β‖² — so OLS-on-augmented = ridge.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import Ridge
+
+rng = np.random.default_rng(7)
+n, p = 40, 3
+X = rng.normal(0, 1, (n, p))
+y = X @ [1.5, -2.0, 0.5] + rng.normal(0, 1, n)
+lam = 3.0
+
+beta_hand = np.linalg.solve(X.T @ X + lam * np.eye(p), X.T @ y)
+Xa = np.vstack([X, np.sqrt(lam) * np.eye(p)])
+ya = np.concatenate([y, np.zeros(p)])
+beta_aug = np.linalg.solve(Xa.T @ Xa, Xa.T @ ya)
+print("closed form: ", beta_hand.round(6))
+print("augmented:   ", beta_aug.round(6))
+print("sklearn (no intercept):", Ridge(alpha=lam, fit_intercept=False)
+      .fit(X, y).coef_.round(6))
+```
+
+Each pseudo-row whispers: "imagine an observation where all features are √λ and the outcome is 0 — a fit with large coefficients would miss it." That's the prior in data clothing (and the Bayesian MAP connection of Complex C2).
+</details>
+
+**Exercise 2.** The collinearity payoff, priced: build y = 2x₁ + ε with x₂ = x₁ + noise (heavy collinearity, n = 60). For λ ∈ {0, 0.1, 1, 10, 100}: (a) record the variance of β̂₁ across 500 training sets (fix the scale by standardizing), (b) record test MSE on fresh data. Produce the two-row table. Which λ minimizes variance, which minimizes test MSE, and how does the OLS row (λ = 0) illustrate [2.5](../part-02-linear-regression/02-5-multiple-linear-regression.qmd)'s "coefficients see-saw"?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import Ridge
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+
+rng = np.random.default_rng(8)
+xg = np.linspace(-2, 2, 4000)
+coefs_1, tests = {}, {}
+for lam in [0.0, 0.1, 1.0, 10.0, 100.0]:
+    b1s, t_mses = [], []
+    for s in range(500):
+        x1 = rng.normal(0, 1, 60)
+        x2 = x1 + rng.normal(0, 0.2, 60)
+        X = np.c_[x1, x2]
+        y = 2 * x1 + rng.normal(0, 1, 60)
+        r = make_pipeline(StandardScaler(), Ridge(alpha=lam)).fit(X, y)
+        b1s.append(r.named_steps["ridge"].coef_[0])
+        x1t = rng.normal(0, 1, 3000)
+        Xt = np.c_[x1t, x1t + rng.normal(0, 0.2, 3000)]
+        yt = 2 * x1t + rng.normal(0, 1, 3000)
+        t_mses.append(np.mean((yt - r.predict(Xt))**2))
+    coefs_1[lam] = np.std(b1s)
+    tests[lam] = np.mean(t_mses)
+
+print("lambda : SD(scaled beta1) : test MSE")
+for lam in coefs_1:
+    print(f"{lam:>6}: {coefs_1[lam]:.4f} : {tests[lam]:.4f}")
+```
+
+SD of β̂₁ collapses monotonically as λ grows (variance cure), while test MSE bottoms around λ ≈ 1–10 and rises at λ = 100 (bias takes over) — the U-curve in one table. At λ = 0, note how unstable the standardized coefficient is despite the model predicting fine: collinearity wrecks *interpretation*, not prediction — and ridge is the interpretation-preserving compromise.
+</details>
+
+**Exercise 3.** Tune λ honestly ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)): with RidgeCV and with GridSearchCV-in-pipeline, select α on training data over a log grid; report the chosen α, its CV score, and a *nested* outer estimate of the whole procedure. Then compare the nested estimate against the naive `best_score_` — quantify the selection optimism you now expect.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.datasets import make_regression
+from sklearn.linear_model import RidgeCV, Ridge
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import cross_val_score, KFold
+
+X, y = make_regression(n_samples=200, n_features=30, n_informative=5,
+                       noise=20, random_state=9)
+alphas = 10.0 ** np.arange(-2, 4, 0.25)
+outer = KFold(5, shuffle=True, random_state=0)
+inner = KFold(5, shuffle=True, random_state=1)
+
+pipe = make_pipeline(StandardScaler(), RidgeCV(alphas=alphas))
+nested = cross_val_score(pipe, X, y, cv=outer)
+chosen_alpha = pipe.fit(X, y).named_steps["ridgecv"].alpha_
+print(f"chosen alpha: {chosen_alpha:.2f}")
+print(f"nested CV R2: {nested.mean():.4f} ± {nested.std():.4f}")
+
+# naive: inner best score on the full data
+from sklearn.model_selection import GridSearchCV
+g = GridSearchCV(make_pipeline(StandardScaler(), Ridge()),
+                 {"ridge__alpha": alphas}, cv=inner,
+                 scoring="r2").fit(X, y)
+print(f"inner best_score_ (optimistic): {g.best_score_:.4f}")
+print(f"selection optimism ≈ {g.best_score_ - nested.mean():+.4f}")
+```
+
+`best_score_` sits above the nested estimate by the usual order-statistic margin — now predictable, because you've measured this gap three ways ([4.1 Q2](../part-04-validation-model-selection/04-1-generalization-problem.qmd), [4.3 Exercise 2](../part-04-validation-model-selection/04-3-cross-validation.qmd), here).
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Standardize first — no exceptions.** Unscaled ridge penalizes measurement units, not information; the pipeline is the enforcement mechanism ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd)).
+- **Ridge coefficients are biased by construction** — never quote them as effect sizes or feed them to inference machinery. If you need effects after shrinkage: post-ridge OLS refit on the (all) features with honest caveats, or Bayesian ridge with credible intervals.
+- **The intercept is unpenalized** (sklearn's `fit_intercept=True` default) — centering by the intercept handles the mean; penalizing it would fight the data's level for no reason.
+- **λ's meaning is n-dependent**: sklearn minimizes $\frac{1}{2n}\|y-X\beta\|^2 + \alpha\|\beta\|^2$-style objectives, so "α = 1" means different shrinkage at n = 100 vs n = 100,000. Tune per dataset, never copy alphas between studies.
+- **Ridge keeps all p features** — if p ≫ n and most features are dead, ridge's predictions can still be good but its *weight spread* is ugly; that's lasso territory ([5.3](05-3-lasso-regression.qmd)).
+- **The SVD view**: ridge divides each principal-component direction's contribution by (1 + λ/sᵢ²) — low-variance directions ([9.2](../part-09-unsupervised-learning/09-2-principal-component-analysis.qmd) preview) are shrunk *hardest*. Ridge is soft PCR, which is exactly [5.5](05-5-pcr-pls.qmd)'s comparison.
+- **Correlated groups share credit smoothly** — two near-duplicates get similar shrunken coefficients (no coin-flip), which is often the scientifically honest answer, and exactly where lasso behaves worse ([5.4](05-4-elastic-net.qmd)).
+
+### Read & Refactor AI Code
+
+This AI-generated ridge pipeline has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.datasets import make_regression
+from sklearn.linear_model import Ridge
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score
+
+X, y = make_regression(n_samples=300, n_features=10, n_informative=4,
+                       effective_rank=2, noise=15, random_state=10)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=11)
+
+# BUG 1: unscaled features into ridge
+r = Ridge(alpha=10.0).fit(X_tr, y_tr)
+print("coefficients:", r.coef_.round(2))
+
+# BUG 2: alpha chosen on the test set
+for a in [0.01, 0.1, 1.0, 10.0, 100.0]:
+    r_a = Ridge(alpha=a).fit(X_tr, y_tr)
+    print(f"alpha={a:>6}: test R2 = {r2_score(y_te, r_a.predict(X_te)):.4f}")
+best_a = 100.0                                    # picked by eye from the list above
+
+# BUG 3: shrunken coefficients reported as effects
+print(f"effect of feature 0: {Ridge(alpha=best_a).fit(X_tr, y_tr).coef_[0]:.2f}")
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Unscaled ridge** penalizes columns by their units — the big-variance feature is shrunk least regardless of signal. StandardScaler inside a pipeline.
+2. **Test-set alpha shopping** — the test set spent on tuning ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)). Tune with RidgeCV/GridSearchCV on training folds.
+3. **Shrunken coefficient as "effect"** — it's biased toward zero by construction; and no p-value can accompany it. Report it as a model parameter of a predictive model, or do inference separately.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.datasets import make_regression
+from sklearn.linear_model import RidgeCV, Ridge
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+
+X, y = make_regression(n_samples=300, n_features=10, n_informative=4,
+                       effective_rank=2, noise=15, random_state=10)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=11)
+
+alphas = 10.0 ** np.arange(-2, 4, 0.25)
+pipe = make_pipeline(StandardScaler(),
+                     RidgeCV(alphas=alphas)).fit(X_tr, y_tr)
+print("CV-chosen alpha:", round(pipe.named_steps["ridgecv"].alpha_, 3))
+print("honest test R2:", round(pipe.score(X_te, y_te), 4))
+print("standardized (per-SD) parameters:",
+      pipe.named_steps["ridgecv"].coef_.round(2), "(shrunk — not effect sizes)")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Using the SVD $X = U S V^\top$, derive the ridge fit as $\hat y = U\, \text{diag}\!\left(\frac{s_i^2}{s_i^2 + \lambda}\right) U^\top y$ and conclude: (a) ridge shrinks each principal direction by the factor $s_i^2/(s_i^2 + \lambda)$; (b) directions with tiny $s_i$ (near-collinearity) are crushed first. Verify numerically on a rank-deficient design that ridge's fitted values are finite and stable while OLS's minimum-norm solution swings wildly across resamples.
+
+<details>
+<summary>Hint</summary>
+
+OLS fitted values are $U U^\top y$ (projection); ridge replaces the indicator $1\{s_i > 0\}$-style weights with smooth shrink factors.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+$\hat\beta = V\,\text{diag}\!\left(\frac{s_i}{s_i^2+\lambda}\right)U^\top y$, so $\hat y = X\hat\beta = U\,\text{diag}\!\left(\frac{s_i^2}{s_i^2+\lambda}\right)U^\top y$: each SVD direction passes through with a shrink factor — small-$s_i$ directions (where OLS divides by $s_i$, amplifying noise) are suppressed. Verification:
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import Ridge, LinearRegression
+
+rng = np.random.default_rng(12)
+fits_ols, fits_ridge = [], []
+xg = np.linspace(-2, 2, 50)
+for rep in range(200):
+    x = rng.uniform(-2, 2, 20)
+    x2 = x + rng.normal(0, 0.01, 20)          # near-duplicate column
+    y = 2 * x + rng.normal(0, 1, 20)
+    fits_ols.append(np.polyval(np.polyfit(x, y, 1), xg))
+    m = Ridge(alpha=1.0).fit(np.c_[x, x2], y)
+    fits_ridge.append(m.predict(np.c_[xg, xg]))
+
+print("SD of fitted values at x=1.0 across 200 fits:")
+print("  OLS (1 var): ", round(float(np.std([f[25] for f in fits_ols])), 4))
+print("  ridge (2 vars):", round(float(np.std([f[25] for f in fits_ridge])), 4))
+```
+
+The near-collinear second column makes OLS's fitted surface (here, its 1-var analogue's slope estimate) jitter; ridge's shrink factor on the small-$s$ direction stabilizes it. This SVD picture is also the precise link to PCR ([5.5](05-5-pcr-pls.qmd)): PCR *truncates* small directions (hard), ridge *damps* them (soft).
+</details>
+
+**Q2.** Bayesian ridge: with a Gaussian prior $\beta \sim N(0, \tau^2 I)$ and Gaussian likelihood, show the MAP estimate equals ridge with $\lambda = \sigma^2/\tau^2$. Verify numerically that `Ridge(alpha)`'s solution matches the posterior mode from a simple Gaussian-prior least-squares objective. What does this buy you (credible intervals, prior knowledge encoding) and what does it cost (name the assumption)?
+
+<details>
+<summary>Hint</summary>
+
+Maximize the log posterior: log-likelihood − ‖β‖²/(2τ²); match coefficients with the ridge objective.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Log posterior ∝ $-\frac{1}{2\sigma^2}\|y - X\beta\|^2 - \frac{1}{2\tau^2}\|\beta\|^2$. Multiplying by $2\sigma^2$: $\|y-X\beta\|^2 + \frac{\sigma^2}{\tau^2}\|\beta\|^2$ — ridge with $\lambda = \sigma^2/\tau^2$. The MAP of "Gaussian likelihood + zero-mean Gaussian prior" IS ridge.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import Ridge
+
+rng = np.random.default_rng(13)
+n, p = 50, 4
+X = rng.normal(0, 1, (n, p))
+beta_true = np.array([2.0, -1.0, 0.0, 0.5])
+y = X @ beta_true + rng.normal(0, 1, n)
+
+sigma2, tau2 = 1.0, 2.0
+lam = sigma2 / tau2
+map_hand = np.linalg.solve(X.T @ X + lam * np.eye(p), X.T @ y)
+print("MAP by hand:      ", map_hand.round(4))
+print("Ridge(alpha=lam): ", Ridge(alpha=lam, fit_intercept=False).fit(X, y).coef_.round(4))
+```
+
+Buy: a principled reading of λ (prior variance ratio), credible intervals from the posterior (Gaussian: covariance $(X^\top X/\sigma^2 + I/\tau^2)^{-1}$), and a place to encode genuine prior knowledge (e.g., effects near zero and bounded). Cost: the prior assumption itself — credible intervals are statements *conditional on* Gaussianity of effects, and treating the prior as "just regularization" while quoting Bayesian intervals is having it both ways.
+</details>
+
+## 6. Complex Questions
+
+**C1 (ridge × [4.4 bias–variance](../part-04-validation-model-selection/04-4-bias-variance.qmd)).** Measure the full decomposition across λ: 300 training sets (n = 40, p = 20, 5 real features), record bias²/variance of predictions on a fixed grid for λ ∈ {0.01, 1, 100}. Show the variance curve falling monotonically, bias² rising, and the sum bottoming between — then locate the λ that CV chose on one representative dataset and mark it on the decomposition. How close is CV's choice to the decomposition optimum?
+
+**C2 (ridge × [9.2 PCA](../part-09-unsupervised-learning/09-2-principal-component-analysis.qmd) stub × [5.5](05-5-pcr-pls.qmd) preview).** Construct the classic pathological direction: y driven by a component whose variance is *smallest* (signal in the noise directions of X). Show ridge (which damps low-variance directions) underperforms OLS-with-selectkbest or PLS here, and quantify the gap by CV. This is the "ridge fails when variance ≠ relevance" experiment — the exact motivation for supervised direction methods, and the reason [5.5](05-5-pcr-pls.qmd) exists.
+
+## 7. Summary
+
+- Ridge = least squares + λ‖β‖²; closed form $(X^\top X + \lambda I)^{-1}X^\top y$; λ > 0 rescues singular problems.
+- Bias for variance: paths shrink smoothly, never to zero; λ interpolates OLS → mean-model.
+- Standardize first; leave the intercept unpenalized; tune α by CV inside a pipeline; nested CV for claims.
+- Shrunken coefficients are parameters, not effect sizes — no naive p-values.
+- SVD view: each direction damped by $s_i^2/(s_i^2+\lambda)$ — soft, stable, blind to direction relevance.
+- Collinear groups share credit smoothly — honest under duplication, unlike coin-flip subset selection.
+- Shrink-to-zero is often what you actually want — sparsity next: [5.3 Lasso regression](05-3-lasso-regression.qmd).
