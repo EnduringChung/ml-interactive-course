@@ -29,71 +29,55 @@
     <lastmod>2026-09-27T07:36:57.646Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-03-classification-glm/03-5-knn-classification.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-05-regularization-high-dimensions/05-3-lasso-regression.html</loc>
+    <lastmod>2026-09-27T08:34:54.630Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-05-regularization-high-dimensions/05-4-elastic-net.html</loc>
+    <lastmod>2026-09-27T08:59:01.327Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-05-regularization-high-dimensions/05-2-ridge-regression.html</loc>
+    <lastmod>2026-09-27T08:30:11.193Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-03-classification-glm/03-2-why-not-linear-regression.html</loc>
     <lastmod>2026-09-27T07:36:57.646Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-03-classification-glm/03-6-generalized-linear-models.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-03-classification-glm/03-3-logistic-regression.html</loc>
     <lastmod>2026-09-27T07:36:57.645Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-03-classification-glm/03-4-generative-classifiers.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-03-classification-glm/03-1-classification-fundamentals.html</loc>
     <lastmod>2026-09-27T07:36:57.645Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-03-classification-glm/03-1-5-auprc.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-03-classification-glm/03-7-model-comparison.html</loc>
     <lastmod>2026-09-27T07:36:57.644Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/index.html</loc>
-    <lastmod>2026-09-27T07:36:57.649Z</lastmod>
-  </url>
-  <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-4-accuracy-of-model.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-3-accuracy-of-coefficients.html</loc>
     <lastmod>2026-09-27T07:36:57.644Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-5-multiple-linear-regression.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-2-simple-linear-regression.html</loc>
     <lastmod>2026-09-27T07:36:57.643Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-9-knn-regression.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-8-nonlinear-transformations.html</loc>
     <lastmod>2026-09-27T07:36:57.643Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-1-regression-setup.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-7-interaction-terms.html</loc>
     <lastmod>2026-09-27T07:36:57.642Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-10-regression-assumptions.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-6-categorical-predictors.html</loc>
     <lastmod>2026-09-27T07:36:57.642Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-01-statistics-bridge/01-4-statistical-inference.html</loc>
-    <lastmod>2026-09-27T07:36:57.641Z</lastmod>
-  </url>
-  <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-01-statistics-bridge/01-5-resampling-intuition.html</loc>
-    <lastmod>2026-09-27T07:36:57.641Z</lastmod>
-  </url>
-  <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-12-multiple-testing-bioinformatics/12-3-family-wise-error-rate.html</loc>
-    <lastmod>2026-09-27T07:36:57.640Z</lastmod>
-  </url>
-  <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.html</loc>
-    <lastmod>2026-09-27T07:36:57.640Z</lastmod>
-  </url>
-  <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.html</loc>
-    <lastmod>2026-09-27T07:36:57.640Z</lastmod>
-  </url>
-  <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-12-multiple-testing-bioinformatics/12-6-differential-expression.html</loc>
-    <lastmod>2026-09-27T07:36:57.640Z</lastmod>
-  </url>
-  <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-01-statistics-bridge/01-2-relationships.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-01-statistics-bridge/01-3-probability-essentials.html</loc>
     <lastmod>2026-09-27T07:36:57.641Z</lastmod>
   </url>
   <url>
@@ -101,48 +85,84 @@
     <lastmod>2026-09-27T07:36:57.641Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-01-statistics-bridge/01-3-probability-essentials.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-01-statistics-bridge/01-2-relationships.html</loc>
     <lastmod>2026-09-27T07:36:57.641Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-6-categorical-predictors.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-12-multiple-testing-bioinformatics/12-6-differential-expression.html</loc>
+    <lastmod>2026-09-27T07:36:57.640Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.html</loc>
+    <lastmod>2026-09-27T07:36:57.640Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.html</loc>
+    <lastmod>2026-09-27T07:36:57.640Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-12-multiple-testing-bioinformatics/12-3-family-wise-error-rate.html</loc>
+    <lastmod>2026-09-27T07:36:57.640Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-01-statistics-bridge/01-5-resampling-intuition.html</loc>
+    <lastmod>2026-09-27T07:36:57.641Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-01-statistics-bridge/01-4-statistical-inference.html</loc>
+    <lastmod>2026-09-27T07:36:57.641Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-10-regression-assumptions.html</loc>
     <lastmod>2026-09-27T07:36:57.642Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-7-interaction-terms.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-1-regression-setup.html</loc>
     <lastmod>2026-09-27T07:36:57.642Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-8-nonlinear-transformations.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-9-knn-regression.html</loc>
     <lastmod>2026-09-27T07:36:57.643Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-2-simple-linear-regression.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-5-multiple-linear-regression.html</loc>
     <lastmod>2026-09-27T07:36:57.643Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-3-accuracy-of-coefficients.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-02-linear-regression/02-4-accuracy-of-model.html</loc>
     <lastmod>2026-09-27T07:36:57.644Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-03-classification-glm/03-7-model-comparison.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/index.html</loc>
+    <lastmod>2026-09-27T08:42:32.674Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-03-classification-glm/03-1-5-auprc.html</loc>
     <lastmod>2026-09-27T07:36:57.644Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-03-classification-glm/03-1-classification-fundamentals.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-03-classification-glm/03-4-generative-classifiers.html</loc>
     <lastmod>2026-09-27T07:36:57.645Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-03-classification-glm/03-3-logistic-regression.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-03-classification-glm/03-6-generalized-linear-models.html</loc>
     <lastmod>2026-09-27T07:36:57.645Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-03-classification-glm/03-2-why-not-linear-regression.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-03-classification-glm/03-5-knn-classification.html</loc>
     <lastmod>2026-09-27T07:36:57.646Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-05-regularization-high-dimensions/05-5-pcr-pls.html</loc>
+    <lastmod>2026-09-27T08:39:50.591Z</lastmod>
   </url>
   <url>
     <loc>https://enduringchung.github.io/ml-interactive-course/part-05-regularization-high-dimensions/05-1-feature-selection.html</loc>
-    <lastmod>2026-09-27T07:36:57.646Z</lastmod>
+    <lastmod>2026-09-27T08:27:55.523Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-05-regularization-high-dimensions/05-6-high-dimensional.html</loc>
+    <lastmod>2026-09-27T08:42:05.861Z</lastmod>
   </url>
   <url>
     <loc>https://enduringchung.github.io/ml-interactive-course/part-09-unsupervised-learning/09-2-principal-component-analysis.html</loc>
