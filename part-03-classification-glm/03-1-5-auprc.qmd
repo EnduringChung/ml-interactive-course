@@ -1,0 +1,9 @@
+---
+title: "Coming soon"
+tier: 1
+engine: markdown
+---
+
+This page has not been published yet. It is scheduled in the [build order](/index.qmd) and will follow the same seven-section template as every other page.
+
+Check back soon — progress is tracked in the [course home](/index.qmd).

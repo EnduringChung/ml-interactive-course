@@ -1,0 +1,82 @@
+---
+title: "ML, Statistics & LLM — Interactive Course"
+engine: markdown
+---
+
+An interactive course on **machine learning, statistics, and large language models**, with a running theme of biological data analysis. Every code cell on this site runs **directly in your browser** — no installation, no server, no account. It works especially well in **Safari on iPad**.
+
+## How to use this site
+
+1. Open a page (start with [0.1 Python for Numerical Work](part-00-python-foundations/00-1-python-basics.qmd)).
+2. Read the **Basic Concept** section and run the worked example by pressing **Run Code** on the cell.
+3. Edit the cell — change a number, swap a dataset — and run it again. This is where learning happens.
+4. Answer the **Concept Questions** from memory, then do the **Drills**.
+5. Work through **Exercises**, **Advanced Questions**, and **Complex Questions**. Hints and full solutions are inside collapsible blocks — try the problem *before* opening them.
+
+Your edits stay on your device; refresh the page to return to the original code.
+
+## The three execution tiers
+
+| Tier | What it means | Where it runs |
+|---|---|---|
+| **T1 — Live** | Cells are fully editable and runnable in-browser (Pyodide / webR) | Right here, on this site |
+| **T2 — Frozen output** | Real code with pre-computed outputs, plus a downloadable script | Read here; run locally |
+| **T3 — Colab/local** | Lesson text + live concept cells, heavy compute via a Colab badge | Google Colab or your machine |
+
+Parts 0–1 below are **fully Tier 1**. Later parts layer in T2 (Bioconductor differential expression) and T3 (PyTorch, single-cell, local LLMs).
+
+## Course map
+
+| Part | Topic | Status |
+|---|---|---|
+| **0** | Python and Data Foundations | **Building now** |
+| **1** | Statistics Bridge for ML | **Building now** |
+| 2 | Linear Regression and Prediction | Planned |
+| 3 | Classification and GLMs | Planned |
+| 4 | Validation, Uncertainty, Model Selection | Planned |
+| 5 | Regularization, Selection, High Dimensions | Planned |
+| 6 | Nonlinear Regression Models | Planned |
+| 7 | Tree-Based Models and Ensembles | Planned |
+| 8 | Support Vector Machines | Planned |
+| 9 | Unsupervised Learning | Planned |
+| 10 | Deep Learning with PyTorch | Planned (T3) |
+| 11 | Survival Analysis and Censored Data | Planned |
+| 12 | Multiple Testing and Bioinformatics Statistics | Planned (12.6 is T2) |
+| 13 | Large Language Models | Planned (13.5–13.6 are T3) |
+| A | Deriving the Formulas | Planned |
+
+## What's inside each page
+
+Every subtopic page follows the same seven-section template, so your study loop is always identical:
+
+1. **Basic Concept** — plain language + one worked example
+2. **Concept Questions** — check the concept landed
+3. **Drills & Exercises** — rebuild reflexes, then solve fuller problems
+4. **Advanced Information & Pitfalls** — edge cases, and a flawed AI snippet to fix
+5. **Advanced Questions** — with hints and solutions
+6. **Complex Questions** — deliberately cross topic boundaries
+7. **Summary** — takeaways and what comes next
+
+## Quick self-test
+
+Run this cell to confirm the live engine works on your device:
+
+```{pyodide}
+#| autorun: true
+#| fig-width: 7
+#| fig-height: 3.5
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(42)
+x = np.linspace(0, 4 * np.pi, 200)
+y = np.sin(x) + rng.normal(0, 0.1, size=x.size)
+
+plt.plot(x, y, lw=1, label="noisy sine")
+plt.plot(x, np.sin(x), lw=2, label="signal")
+plt.legend()
+plt.title("If you can see this plot, your browser engine works")
+plt.show()
+```
+
+If the plot appears, you are ready. Start with [Part 0](part-00-python-foundations/00-1-python-basics.qmd).

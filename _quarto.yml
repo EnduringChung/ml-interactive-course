@@ -1,0 +1,57 @@
+project:
+  type: website
+
+# All pages are pure client-side documents: no local Python/R execution
+# happens at render time. {pyodide} / {webr} cells run in the reader's
+# browser via the quarto-live extension, so the lightweight markdown
+# engine is all we need.
+engine: markdown
+
+website:
+  title: "ML, Statistics & LLM — Interactive Course"
+  description: "An interactive machine-learning, statistics and LLM course that runs entirely in your browser (iPad-ready)."
+  site-url: https://enduringchung.github.io/ml-interactive-course/
+  repo-url: https://github.com/EnduringChung/ml-interactive-course
+  repo-actions: [edit, issue]
+  page-navigation: true
+  navbar:
+    background: primary
+    search: true
+    left:
+      - text: "Home"
+        href: index.qmd
+    right:
+      - icon: github
+        href: https://github.com/EnduringChung/ml-interactive-course
+  sidebar:
+    - id: course
+      title: "Course"
+      style: floating
+      align: left
+      collapse-level: 1
+      contents:
+        - index.qmd
+        - section: "Part 0 — Python & Data Foundations"
+          contents:
+            - part-00-python-foundations/00-1-python-basics.qmd
+            - part-00-python-foundations/00-2-numpy.qmd
+            - part-00-python-foundations/00-3-pandas.qmd
+            - part-00-python-foundations/00-4-visualization-eda.qmd
+            - part-00-python-foundations/00-5-data-splitting.qmd
+        - section: "Part 1 — Statistics Bridge for ML"
+          contents:
+            - part-01-statistics-bridge/01-1-descriptive-statistics.qmd
+            - part-01-statistics-bridge/01-2-relationships.qmd
+            - part-01-statistics-bridge/01-3-probability-essentials.qmd
+            - part-01-statistics-bridge/01-4-statistical-inference.qmd
+            - part-01-statistics-bridge/01-5-resampling-intuition.qmd
+
+format:
+  live-html:
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    number-sections: false
+    css: assets/styles.css
+    crossref:
+      chapters: true

@@ -1,0 +1,332 @@
+---
+title: "0.1 Python for Numerical Work"
+tier: 1
+engine: markdown
+---
+
+Python is the substrate everything else in this course is written in. Before touching NumPy, pandas, or scikit-learn, your reflexes in **core Python** — types, functions, comprehensions, error messages — need to be automatic. This page drills exactly those reflexes, with a bias toward the numerical/data style of Python rather than web or scripting styles.
+
+> **Tier 1 — every cell below runs live in your browser. Edit and re-run them.**
+
+## 1. Basic Concept
+
+Python is a **dynamically typed** language: names are labels attached to objects, not boxes with fixed types. For numerical work you mostly live with four scalar types (`int`, `float`, `bool`, `str`) and four container types (`list`, `tuple`, `dict`, `set`).
+
+One fact causes more numerical bugs than anything else: **Python `float` is IEEE-754 binary floating point**, so most decimal fractions cannot be stored exactly.
+
+```{pyodide}
+#| autorun: true
+print(0.1 + 0.2)              # 0.30000000000000004 — NOT 0.3
+print(0.1 + 0.2 == 0.3)       # False!
+print(abs(0.1 + 0.2 - 0.3) < 1e-12)   # True — the correct way to compare floats
+```
+
+The second fact to internalize: **`/` is always true division; `//` is floor division; `%` is the remainder.**
+
+```{pyodide}
+#| autorun: true
+print(7 / 2, 7 // 2, 7 % 2)   # 3.5 3 1
+print(-7 // 2)                # -4  (floors toward negative infinity, not toward zero!)
+```
+
+A **function** is defined with `def`, returns with `return` (no `return` means it returns `None`), and can take default arguments:
+
+```{pyodide}
+def gc_content(seq):
+    """Fraction of bases that are G or C. Works on upper or lower case."""
+    seq = seq.upper()
+    if len(seq) == 0:
+        return 0.0
+    return (seq.count("G") + seq.count("C")) / len(seq)
+
+print(gc_content("ATGGCCatta"))    # (2 G... count: G,C,C,G,G,C = 6) / 10 -> 0.6
+print(gc_content(""))              # 0.0 — guard against division by zero
+```
+
+**Comprehensions** are the idiomatic way to transform collections. If you are writing a `for` loop whose only job is to build a list, you should usually write a comprehension instead:
+
+```{pyodide}
+squares = [x**2 for x in range(6)]
+print(squares)                                  # [0, 1, 4, 9, 16, 25]
+
+# With a condition (filter):
+even_squares = [x**2 for x in range(10) if x % 2 == 0]
+print(even_squares)                             # [0, 4, 16, 36, 64]
+
+# Dict comprehension:
+len_map = {gene: len(gene) for gene in ["BRCA1", "TP53", "MYC"]}
+print(len_map)   # {'BRCA1': 5, 'TP53': 4, 'MYC': 3}
+```
+
+**f-strings** format values into text — you will use them constantly to report results:
+
+```{pyodide}
+mean_expr, sd_expr = 12.4791, 3.2048
+print(f"mean = {mean_expr:.2f} ± {sd_expr:.2f}")     # mean = 12.48 ± 3.20
+print(f"{1/3:.1%}")                                   # 33.3%  (% formatting multiplies by 100)
+print(f"{1234567:,}")                                 # 1,234,567
+```
+
+## 2. Concept Questions
+
+Answer from memory first, then open each answer to check.
+
+1. What does `10 / 4` evaluate to, and what type is the result?
+2. Why is `0.1 + 0.2 == 0.3` `False`? Name the underlying cause.
+3. What is the difference between a `list` and a `tuple`? Give one practical consequence.
+4. What does a function return if you never write `return`?
+5. In `f"{x:.2f}"`, what does the `.2f` part do?
+
+<details>
+<summary>Answers</summary>
+
+1. `2.5`, a **float**. In Python 3, `/` always produces a float, even for whole-number results (`8 / 2` is `4.0`).
+2. `0.1` and `0.2` have no exact representation in **binary** floating point (IEEE-754). Their nearest representable values don't sum to the nearest representable `0.3`. Compare with a tolerance (`math.isclose`) instead.
+3. Lists are **mutable**, tuples are **immutable**. Consequence: tuples can be dictionary keys and elements of sets; lists cannot. Also, accidentally mutating a tuple raises an error, which can protect data.
+4. `None`.
+5. Format `x` as a fixed-point number with exactly 2 digits after the decimal point (rounding half-to-even on the decimal representation).
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict each line's output *before* running. These rebuild reflexes — do them until automatic.
+
+```{pyodide}
+print([x**2 for x in range(6)])            # [0, 1, 4, 9, 16, 25]
+print(7 // 2, 7 % 2, 7 / 2)                # 3 1 3.5
+print(sum(range(101)))                     # 5050
+print(round(2.675, 2))                     # 2.67 (!) — floating-point representation, not a Python bug
+print(int("42") + 8)                       # 50
+```
+
+```{pyodide}
+print("abc" * 3)                            # abcabcabc
+print("1,2,3".split(","))                   # ['1', '2', '3']
+print("-".join(["a", "b", "c"]))            # a-b-c
+print(list(zip("ab", [1, 2])))              # [('a', 1), ('b', 2)]
+print(list(enumerate("hi", start=1)))       # [(1, 'h'), (2, 'i')]
+```
+
+```{pyodide}
+print(sorted([3, 1, 2]))                    # [1, 2, 3]
+print({k: k*k for k in [1, 2, 3]})          # {1: 1, 2: 4, 3: 9}
+print(isinstance(3, int), isinstance(3.0, int))   # True False
+print(bool([]), bool([0]))                  # False True  (empty container is falsy; [0] is truthy)
+print((1, 2) + (3,))                        # (1, 2, 3)  — note the trailing comma
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Write a function `celsius_to_fahrenheit(c)` that converts a temperature and returns the result **rounded to 1 decimal place**. Then use it in a comprehension to convert `[0, 37, 100]`.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+def celsius_to_fahrenheit(c):
+    return round(c * 9/5 + 32, 1)
+
+print([celsius_to_fahrenheit(c) for c in [0, 37, 100]])
+# [32.0, 98.6, 212.0]
+```
+</details>
+
+**Exercise 2.** Given the DNA string below, compute (a) its length, (b) GC content as a percentage with 1 decimal, (c) its reverse complement. Use one comprehension and one dictionary somewhere.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+seq = "ATGGCCATTGTAATGGGCCGCTGAAAGGGTGCCCGATAG"
+
+# (a) length
+print(len(seq))
+
+# (b) GC percent
+gc_pct = 100 * sum(1 for b in seq if b in "GC") / len(seq)
+print(f"{gc_pct:.1f}%")
+
+# (c) reverse complement via a dict comprehension + slicing
+comp = {"A": "T", "T": "A", "G": "C", "C": "G"}
+revcomp = "".join(comp[b] for b in reversed(seq))
+print(revcomp)
+```
+
+Note: `reversed(seq)` + join is O(n); building a string with `+=` in a loop is O(n²) — a classic performance trap.
+</details>
+
+**Exercise 3.** FizzBuzz, data edition: for integers 1–20, print `Bio` if divisible by 3, `Stats` if divisible by 5, `BioStats` if divisible by both, otherwise the number — as a single list of strings.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+result = [
+    "BioStats" if n % 15 == 0
+    else "Bio" if n % 3 == 0
+    else "Stats" if n % 5 == 0
+    else str(n)
+    for n in range(1, 21)
+]
+print(result)
+```
+
+Order matters: check the compound condition (`% 15 == 0`) first, otherwise the simple cases win. Same idea as writing mutually exclusive `if/elif` branches.
+</details>
+
+**Exercise 4.** Parse this mini-FASTA (a real task shape in bioinformatics) and report each sequence's length and GC%:
+
+```
+>gene1
+ATGGCC
+>gene2
+GCGCGCGCGT
+```
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+fasta = ">gene1\nATGGCC\n>gene2\nGCGCGCGCGT"
+
+records = {}
+name = None
+for line in fasta.splitlines():
+    if line.startswith(">"):
+        name = line[1:]
+        records[name] = ""
+    elif name is not None:
+        records[name] += line
+
+for gene, seq in records.items():
+    gc = 100 * sum(b in "GC" for b in seq) / len(seq)
+    print(f"{gene}: length={len(seq)}, GC={gc:.1f}%")
+```
+
+`sum(b in "GC" for b in seq)` works because `True`/`False` sum as 1/0 — an idiom worth owning.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+**Pitfalls that bite numerical/data Python specifically:**
+
+- **Mutable default arguments are created once**, at function definition — not at each call. `def f(x, acc=[])` shares *the same list* across all calls. This is the single most common "haunted function" bug.
+- **`is` compares identity, `==` compares value.** Never write `x is 5` — it happens to work for small ints in CPython and breaks everywhere else.
+- **Floats in loops accumulate error.** Summing 10 million floats with `+` loses precision; use `math.fsum` or better, NumPy (`np.sum` uses pairwise summation).
+- **Chained comparison is a feature:** `0 < x < 1` means `(0 < x) and (x < 1)`. Nice, but it changes short-circuit semantics.
+- **Names resolve at call time, not definition time** (closures see the *current* value of outer variables, a classic loop-closure bug).
+- **Everything is an object**: `1` and `True` compare equal (`1 == True`), and `bool` is a subclass of `int`. So `[1, 2].count(True)` counts `True`, not `1`... except it counts *both*, because `True == 1`. Watch out in data cleaning.
+
+### Read & Refactor AI Code
+
+The following AI-generated snippet looks reasonable but contains **three bugs**. Run it, observe the wrong behavior, find the bugs, and fix them in the editor.
+
+```{pyodide}
+def accumulate_readings(value, readings=[]):        # BUG 1 lurking
+    readings.append(value)
+    return readings
+
+def is_hot(temp):
+    return temp is 30.0                             # BUG 2
+
+def mean_of_half(values):
+    return sum(values) // len(values)               # BUG 3
+
+# --- driver: expected [10.0], then [10.0, 20.0] ---
+print(accumulate_readings(10.0))
+print(accumulate_readings(20.0))    # surprise!
+
+print(is_hot(30.0))                 # surprise!
+
+print(mean_of_half([1, 2, 3, 4]))   # expected 2.5 — surprise!
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **Mutable default argument.** The default list is created once, so the second call appends to the first call's list. Fix: default to `None` and create the list inside.
+2. **`is` with floats.** Identity comparison, not equality; `30.0` is not the *same object* as the literal in the function. Fix: `==`, or better `math.isclose` for computed floats.
+3. **`//` instead of `/`.** Floor division silently truncates the mean. Fix: `/`.
+
+```{pyodide}
+#| edit: false
+import math
+
+def accumulate_readings(value, readings=None):
+    if readings is None:
+        readings = []
+    readings.append(value)
+    return readings
+
+def is_hot(temp):
+    return math.isclose(temp, 30.0)
+
+def mean_of_half(values):
+    return sum(values) / len(values)
+
+print(accumulate_readings(10.0))    # [10.0]
+print(accumulate_readings(20.0))    # [20.0]
+print(is_hot(30.0))                 # True
+print(mean_of_half([1, 2, 3, 4]))   # 2.5
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Explain precisely why `0.1 + 0.2 != 0.3` in terms of binary representation. Why is `0.5` stored exactly but `0.1` not?
+
+<details>
+<summary>Hint</summary>
+
+Write 0.1, 0.2, 0.5 as sums of powers of 1/2. Which terminate?
+</details>
+
+<details>
+<summary>Solution</summary>
+
+IEEE-754 doubles store numbers as ±m × 2^e with a 53-bit significand. A decimal fraction is exactly representable only if it is a dyadic rational — a fraction whose denominator is a power of 2. `0.5 = 1/2` is dyadic: exact. `0.1 = 1/10` needs denominator `2 × 5`; the factor 5 is impossible in binary, so 0.1 rounds to the nearest 53-bit binary fraction: `0.1000000000000000055511151231257827...`. Adding the two rounded values `0.1 + 0.2` gives a value whose *rounded* nearest double is `0.30000000000000004`, one ulp above `0.3`'s nearest double. Consequence for practice: never test float equality; test `abs(a-b) < tol` or `math.isclose(a, b, rel_tol=1e-9, abs_tol=0.0)`. For exact decimal money/counting semantics use `decimal.Decimal` or integers.
+</details>
+
+**Q2.** What does this print, and why?
+
+```{pyodide}
+funcs = []
+for f in [1, 2, 3]:
+    funcs.append(lambda: f * f)
+
+print([g() for g in funcs])
+```
+
+<details>
+<summary>Hint</summary>
+
+Closures capture *variables*, not *values*. When do the lambdas look up `f`?
+</details>
+
+<details>
+<summary>Solution</summary>
+
+`[9, 9, 9]`. Each lambda closes over the **variable** `f`; by the time they are called, the loop finished and `f` holds `3`, so every call computes `3*3`. Fix by binding at definition time: `lambda f=f: f*f` (default argument evaluated immediately), or use a factory function `def make(f): return lambda: f*f`. The same late-binding logic explains why a list of functions that reference a module-level config variable all change behavior when you reassign that variable.
+</details>
+
+## 6. Complex Questions
+
+**C1 (functions × strings × loops → bioinformatics).** Write `translate(seq)` that translates a DNA string to an amino-acid one-letter string using the standard genetic code, handling (a) lowercase input, (b) a trailing partial codon, (c) stop codons marked `*`. Test on `ATGGCCATTGTAATGGGCCGCTGAAAGGGTGCCCGATAG` (you can hardcode just the codons you need, or a 64-entry dict). When you reach [0.2 NumPy](00-2-numpy.qmd), consider which parts of this problem could be *vectorized* — and which fundamentally cannot (hint: the lookup table is not arithmetic).
+
+**C2 (this page × [1.1 Descriptive statistics](../part-01-statistics-bridge/01-1-descriptive-statistics.qmd)).** Write a pure-Python function `summary(xs)` returning a dict with `n`, `mean`, `median`, `min`, `max`, computed without importing anything. Then check: what happens with an empty list, a list of one element, and a list containing `None`? Design your function's error behavior deliberately (raise `ValueError`? skip `None`?) — this is exactly the design decision pandas makes for you with `skipna=True`.
+
+## 7. Summary
+
+- Python names point to objects; types live on the objects, not the names.
+- `/` is true division, `//` floors, `%` gives the remainder; floats are IEEE-754 binary — compare with `math.isclose`, never `==`.
+- Comprehensions > loops for building collections; f-strings > string concatenation for output.
+- Functions returning `None` by default and mutable default arguments are top sources of silent bugs.
+- `is` checks identity; `==` checks equality; empty containers are falsy.
+- Closures look up variables at call time — late binding breaks loop-generated functions.
+- Pure-Python numeric loops are slow: the moment you have arrays of numbers, you want [0.2 NumPy](00-2-numpy.qmd), which pushes loops into compiled code and changes how you express numerical ideas entirely.

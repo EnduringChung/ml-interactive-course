@@ -1,0 +1,368 @@
+---
+title: "1.4 Statistical Inference"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scipy
+    - matplotlib
+---
+
+Inference answers the question every experiment asks: **is this pattern real, or would chance produce it?** Confidence intervals quantify uncertainty about a population quantity; hypothesis tests quantify how surprising the data would be under a "nothing is happening" model. Both are built on one idea — the sampling distribution of a statistic.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+**The standard error.** A sample mean varies from sample to sample with SD ≈ $s/\sqrt{n}$ — the **standard error (SE)**. Small n means the SE is big means the sample mean is a shaky estimate of the population mean.
+
+**Confidence interval.** A 95% CI for a mean is approximately
+
+$$\bar{x} \pm t_{0.975,\,n-1} \cdot \frac{s}{\sqrt{n}}$$
+
+where the t-quantile widens the interval for small samples. Interpretation (get this exactly right): if the sampling procedure were repeated many times, **95% of the resulting intervals would contain the true mean** — it is a property of the procedure, not a 95% probability statement about this particular interval.
+
+```{pyodide}
+#| autorun: true
+import numpy as np
+from scipy import stats
+
+x = np.array([5.1, 4.9, 5.0, 5.2, 4.8, 5.3, 4.7, 5.0])
+n = len(x)
+xbar, s = x.mean(), x.std(ddof=1)
+se = stats.sem(x)                        # standard error, ddof handled
+t_crit = stats.t.ppf(0.975, df=n - 1)
+
+print(f"mean = {xbar:.3f}, SE = {se:.3f}, t* = {t_crit:.3f}")
+print(f"95% CI = ({xbar - t_crit*se:.3f}, {xbar + t_crit*se:.3f})")
+
+# one call does it all:
+ci = stats.t.interval(0.95, loc=xbar, scale=se, df=n-1)
+print("scipy CI:", tuple(round(v, 3) for v in ci))
+```
+
+**Hypothesis test logic.** State $H_0$ (no effect) → compute a statistic measuring departure from $H_0$ → the **p-value** is P(data at least this extreme | $H_0$). Small p = the null struggles to explain the data. It is *not* P($H_0$ | data).
+
+```{pyodide}
+#| autorun: true
+import numpy as np
+from scipy import stats
+
+# One-sample t-test: is mean expression different from 5.0?
+x = np.array([5.6, 4.9, 5.3, 5.1, 5.8, 4.7, 5.4])
+res = stats.ttest_1samp(x, popmean=5.0)
+print(f"t = {res.statistic:.3f}, p = {res.pvalue:.4f}")
+
+# Two-sample (Welch — unequal variances, the safe default):
+ctrl = np.array([10.2, 9.8, 10.5, 10.1, 9.9])
+trt  = np.array([11.5, 11.0, 12.1, 11.3, 11.8])
+res2 = stats.ttest_ind(trt, ctrl, equal_var=False)
+print(f"Welch t = {res2.statistic:.3f}, p = {res2.pvalue:.4f}")
+```
+
+**Errors and power.** Two ways to be wrong: **Type I** — declare an effect under a true null (rate = α); **Type II** — miss a real effect (rate = β); **power** = 1 − β, driven by effect size, n, α, and noise.
+
+```{pyodide}
+#| autorun: true
+import numpy as np
+rng = np.random.default_rng(0)
+
+# Empirical Type I rate: 5000 experiments where H0 is TRUE (same distribution)
+rejects = 0
+for _ in range(5000):
+    a = rng.normal(0, 1, 20)
+    b = rng.normal(0, 1, 20)
+    rejects += stats.ttest_ind(a, b).pvalue < 0.05
+print("Type I rate:", rejects / 5000)        # ≈ 0.05 — the test is calibrated
+
+# Empirical power: H0 is FALSE (true shift 0.8 SD)
+power = sum(
+    stats.ttest_ind(rng.normal(0.8, 1, 20), rng.normal(0, 1, 20)).pvalue < 0.05
+    for _ in range(5000)
+) / 5000
+print("power at shift 0.8, n=20:", power)     # ≈ 0.68
+```
+
+## 2. Concept Questions
+
+1. A 95% CI is (2.1, 3.9). Is "P(true mean is in (2.1, 3.9)) = 0.95" a correct reading?
+2. Why does a p-value **not** tell you the probability the null hypothesis is true?
+3. What does the t in "t-test" buy you over a z-test, and when does the distinction vanish?
+4. Your test on n = 5 has p = 0.20. Which conclusions are valid: (a) "no effect exists", (b) "effect not demonstrated", (c) "need more data or a better design"?
+5. Why is `equal_var=False` (Welch) the sensible default for two-sample t-tests?
+
+<details>
+<summary>Answers</summary>
+
+1. **No.** The interval is now fixed — it either contains the mean or not. The 95% describes the *procedure's* long-run success rate across hypothetical repetitions. (Frequentist probability attaches to procedures, not fixed quantities.)
+2. The p-value is computed **assuming the null is true**; it can't then assign that null a probability. It is P(data at least this extreme | H₀) — evidence about the *data under H₀*, not about H₀ given the data. That reversal is exactly Bayes' rule, and frequentist testing deliberately doesn't do it (a prior on hypotheses would be required).
+3. t replaces the known population σ with the estimated s, adding uncertainty that widens critical values (t₀.₉₇₅,₄ = 2.78 vs z = 1.96). As df → ∞, t → z; by n ≈ 30–50 the difference is negligible.
+4. (b) and (c) only. Absence of evidence is not evidence of absence; a high p-value at tiny n is uninformative, not exculpatory. Never conclude "no effect" without a power/equivalence argument.
+5. Real biological groups rarely have equal variances, and Student's pooled t can inflate false positives under inequality; Welch's correction keeps Type I error near nominal with negligible power loss — so it's the robust default.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from scipy import stats
+print(stats.t.ppf(0.975, df=9).round(4))     # 2.2622 — the t-table value
+print(stats.t.ppf(0.975, df=99).round(4))    # 1.9842 — approaching z = 1.96
+print(stats.norm.ppf(0.975).round(4))        # 1.9600
+print(stats.sem([1., 2., 3., 4., 5.]).round(4))   # 0.7071 = 1.581/√5
+```
+
+```{pyodide}
+import numpy as np
+from scipy import stats
+x = np.array([5.1, 4.9, 5.0, 5.2, 4.8])      # mean exactly 5.0
+res = stats.ttest_1samp(x, 5.0)
+print(res.statistic, res.pvalue)             # t = 0.0, p = 1.0 — data sits ON the null
+
+y = np.array([6.1, 5.9, 6.0, 6.2, 5.8])
+print(stats.ttest_ind(x, y, equal_var=False).pvalue.round(6))   # ~1e-4
+print(stats.ttest_rel(x + 1, x).pvalue)      # paired: shift detected exactly
+```
+
+```{pyodide}
+import numpy as np
+from scipy import stats
+rng = np.random.default_rng(1)
+a, b = rng.normal(0, 1, 30), rng.normal(0.5, 1, 30)
+print(stats.ttest_ind(a, b, equal_var=False).pvalue.round(4))
+print(stats.mannwhitneyu(a, b).pvalue.round(4))   # rank-based fallback
+print(stats.wilcoxon(a - b + 0.5).pvalue.round(4))# paired rank test on differences
+```
+
+```{pyodide}
+import numpy as np
+from scipy import stats
+rng = np.random.default_rng(2)
+# 95% CI capture simulation: ~95% of intervals contain the truth
+hits, runs = 0, 2000
+for _ in range(runs):
+    x = rng.normal(10, 2, 25)
+    lo, hi = stats.t.interval(0.95, loc=x.mean(), scale=stats.sem(x), df=24)
+    hits += lo <= 10 <= hi
+print("capture rate:", hits / runs)          # ≈ 0.95
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** For the two-sample experiment below, compute (a) Welch t-test, (b) the 95% CI of each group mean, (c) the 95% CI for the **difference** in means (bootstrap is fine). State the decision and the estimate-with-uncertainty sentence you would put in a report.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy import stats
+
+rng = np.random.default_rng(7)
+ctrl = rng.normal(10.0, 1.5, 12)
+trt  = rng.normal(11.5, 1.8, 10)
+
+# (a)
+res = stats.ttest_ind(trt, ctrl, equal_var=False)
+print(f"Welch t = {res.statistic:.3f}, p = {res.pvalue:.4f}")
+
+# (b)
+for name, g in [("ctrl", ctrl), ("trt", trt)]:
+    lo, hi = stats.t.interval(0.95, loc=g.mean(), scale=stats.sem(g), df=len(g)-1)
+    print(f"{name}: mean {g.mean():.2f}, 95% CI ({lo:.2f}, {hi:.2f})")
+
+# (c) bootstrap CI for the difference
+diffs = [rng.choice(trt, len(trt), replace=True).mean()
+         - rng.choice(ctrl, len(ctrl), replace=True).mean()
+         for _ in range(10_000)]
+lo, hi = np.percentile(diffs, [2.5, 97.5])
+print(f"diff = {trt.mean() - ctrl.mean():.2f}, boot 95% CI ({lo:.2f}, {hi:.2f})")
+```
+
+Report sentence: "Treatment increased the marker by an estimated 1.5 units (bootstrap 95% CI 0.3 to 2.7; Welch p = 0.02)." The CI is the *quantitative* claim; the p-value only grades the surprise under "no difference." Also note the CI excludes 0 exactly when p < 0.05 (two-sided) — consistency check.
+</details>
+
+**Exercise 2.** Multiple testing preview, empirically: simulate 100 independent two-group experiments under the global null (α = 0.05 each). (a) Expected number of "significant" results? (b) Empirical probability that *at least one* is significant? (c) Repeat at α = 0.001. What family-wise lesson emerges?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy import stats
+rng = np.random.default_rng(11)
+
+def experiment_family(alpha, m_experiments=100, reps=2000):
+    sig_counts, any_sig = [], 0
+    for _ in range(reps):
+        pvals = [stats.ttest_ind(rng.normal(0,1,15), rng.normal(0,1,15)).pvalue
+                 for _ in range(m_experiments)]
+        k = sum(np.array(pvals) < alpha)
+        sig_counts.append(k)
+        any_sig += k > 0
+    return np.mean(sig_counts), any_sig / reps
+
+for alpha in [0.05, 0.001]:
+    mean_k, p_any = experiment_family(alpha)
+    print(f"alpha={alpha}: mean #significant = {mean_k:.2f}, "
+          f"P(at least one) = {p_any:.3f}  (theory ≈ {1-(1-alpha)**100:.3f})")
+```
+
+At α = 0.05, ~5 false positives per 100-null family and ≈ 99.4% chance of at least one. The family-wise error explodes with the number of tests — the problem Bonferroni and FDR ([12.3](../part-12-multiple-testing-bioinformatics/12-3-family-wise-error-rate.qmd), [12.4](../part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.qmd)) solve.
+</details>
+
+**Exercise 3.** Demonstrate the effect of **skew on the t-test/CI**: sample n = 10 from a lognormal; bootstrap the sampling distribution of the mean; compare the bootstrap CI to the t-formula CI. Which is trustworthy here, and what sample size restores the t-approximation (test empirically)?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy import stats
+rng = np.random.default_rng(3)
+
+for n in [10, 100]:
+    x = stats.lognorm.rvs(s=1.0, scale=5, size=n, random_state=0)
+    t_lo, t_hi = stats.t.interval(0.95, loc=x.mean(), scale=stats.sem(x), df=n-1)
+
+    boots = stats.lognorm.rvs(s=1.0, scale=5, size=(5000, n), random_state=1).mean(axis=1)
+    b_lo, b_hi = np.percentile(boots, [2.5, 97.5])
+    print(f"n={n}: t-CI ({t_lo:.2f}, {t_hi:.2f})  boot-CI ({b_lo:.2f}, {b_hi:.2f})")
+```
+
+At n = 10 the mean's true sampling distribution is strongly right-skewed — the symmetric t-CI is a poor description (and its 95% coverage is off). The bootstrap CI inherits the skew. At n = 100 the CLT has done its work and the two CIs nearly agree. Lesson: **t-methods assume approximate normality of the sampling distribution**, which skewed small samples violate; alternatives are log-transform, nonparametric tests, or larger n.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **p-value misreadings** (all wrong, all common): P(H₀ true) = p; p = 0.03 means "3% chance the result is chance"; p > 0.05 means "no effect"; p = 0.049 vs 0.051 is a meaningful difference. The p-value is one number about one conditional probability — treat it as such.
+- **The t-test compares means; it does not "prove normality"** — with n = 5 you cannot even *check* the assumption well. Prefer Welch + report effect size + CI.
+- **Paired vs unpaired is a design property**: repeated measures on the same unit demand paired analysis (`ttest_rel`); pairing halves the noise only if the pairing is real.
+- **Effect size ≠ significance**: at n = 100,000, a 0.1% difference gets p ≈ 0; at n = 5, a huge effect gets p ≈ 0.3. Report effect + CI, let n decide detectability, not importance.
+- **One-sided tests halve the p-value but require pre-registered direction** — switching sides after looking at data is p-hacking.
+- **Stopping rules break calibration**: "collect until p < 0.05" inflates Type I error far above 5% (the simulation drill adapts to demonstrate this).
+
+### Read & Refactor AI Code
+
+This AI-generated analysis has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from scipy import stats
+
+rng = np.random.default_rng(15)
+before = rng.normal(10, 2, 20)
+after  = before * 1.1 + rng.normal(0, 0.5, 20)   # paired design, real +10% effect
+
+# BUG 1: paired data, unpaired test
+p1 = stats.ttest_ind(before, after).pvalue
+
+# BUG 2: p-value misinterpretation in the conclusion
+print(f"p = {p1:.4f} -> 96% chance the treatment works" if p1 < 0.05
+      else f"p = {p1:.4f} -> treatment proven useless")
+
+# BUG 3: peeking loop — collect until significant
+n, found = 2, None
+while True:
+    a = rng.normal(0, 1, n); b = rng.normal(0, 1, n)
+    if stats.ttest_ind(a, b).pvalue < 0.05:
+        found = n
+        break
+    n += 1
+print("found significance at n =", found)
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **Design mismatch**: `after` is generated *from* `before` — paired structure. The unpaired test throws away the pairing and most of the power. Use `ttest_rel` (or test the differences).
+2. **Both printed conclusions are wrong**: small p is not "96% chance the treatment works" (it's P(data|H₀), not P(H₀|data) or power), and large p never "proves useless". Correct sentence: "data would be surprising under no-effect (p = ...)".
+3. **Sequential peeking**: continuing until significance guarantees eventual "significance" even under a true null — Type I error ≈ 100%. Fix: pre-set n, or use a formal sequential design (alpha-spending); simplest demonstration — fix n and rerun.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy import stats
+
+rng = np.random.default_rng(15)
+before = rng.normal(10, 2, 20)
+after  = before * 1.1 + rng.normal(0, 0.5, 20)
+
+res = stats.ttest_rel(after, before)          # paired test
+diff = after - before
+lo, hi = stats.t.interval(0.95, loc=diff.mean(), scale=stats.sem(diff), df=len(diff)-1)
+print(f"paired t = {res.statistic:.3f}, p = {res.pvalue:.6f}")
+print(f"mean change = {diff.mean():.2f} (95% CI {lo:.2f} to {hi:.2f})")
+print("Interpretation: under 'no change', data this extreme would be very unlikely.")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Derive why the SE of a mean is $s/\sqrt{n}$ using the variance-addition rule from [1.3](01-3-probability-essentials.qmd), and explain the practical arms race it implies: to halve the SE of the *mean*, how much more data do you need? To halve the noise of *each measurement*?
+
+<details>
+<summary>Hint</summary>
+
+Write Var(x̄) = Var(Σxᵢ/n²) with independence, then take square roots twice.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+With independent $x_i$ of variance $\sigma^2$: $\text{Var}(\bar x) = \text{Var}\!\big(\tfrac{1}{n}\sum x_i\big) = \tfrac{1}{n^2}\,n\sigma^2 = \sigma^2/n$, so $\text{SE} = \sigma/\sqrt n$ — square-root law. Halving the SE of the mean requires **4× the data**; the SE of the *mean* is about precision of knowledge, and knowledge is expensive. Halving the noise of each *measurement* (σ) is an instrument/protocol question, not a statistics question — and it pays off in every subsequent analysis. First optimize measurement noise, then buy n.
+</details>
+
+**Q2.** Construct and demonstrate the "optional stopping" inflation: under a true null, run the peeking loop (test after every new pair, stop at p < 0.05 or n = 200). Estimate the realized Type I error. Compare to a fixed-n = 200 test. What does this say about A/B test dashboards that highlight "significance" daily?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy import stats
+rng = np.random.default_rng(21)
+
+def peeking_false_positive():
+    a, b = [], []
+    for _ in range(200):
+        a.append(rng.normal(0, 1)); b.append(rng.normal(0, 1))
+        if stats.ttest_ind(a, b).pvalue < 0.05:
+            return True
+    return False
+
+peek = np.mean([peeking_false_positive() for _ in range(300)])
+fixed = np.mean([
+    stats.ttest_ind(rng.normal(0,1,200), rng.normal(0,1,200)).pvalue < 0.05
+    for _ in range(300)
+])
+print(f"peeking Type I ≈ {peek:.2f}   fixed-n Type I ≈ {fixed:.2f}")
+```
+
+Peeking inflates the false-positive rate from 5% to roughly 30–50% — the more checkpoints, the worse. Daily-looked-at dashboards with "significance" badges are exactly this experiment; the fixes are fixed horizons, sequential designs (alpha spending), or Bayesian monitoring with pre-agreed decision rules.
+</details>
+
+## 6. Complex Questions
+
+**C1 (inference × [0.5 Data splitting](../part-00-python-foundations/00-5-data-splitting.qmd)).** Two models score 0.81 and 0.84 accuracy on the same 250-sample test set. Use the binomial SE machinery to judge whether they differ; then design the evaluation protocol (repeated splits or K-fold, paired comparison per fold) that would let you *test* the difference honestly. What makes the paired fold-wise comparison better than comparing two independent error bars?
+
+**C2 (inference × [2.4 Accuracy of the full model](../part-02-linear-regression/02-4-accuracy-of-model.qmd) preview).** Fit a simple linear regression to 30 noisy points; use the standard errors of slope and intercept (available from `scipy.stats.linregress` or a small manual computation) to build 95% CIs. Now re-fit on 300 points of the same process. How do the SEs scale, and why does "collect 10× more data" not always shrink *practical* uncertainty (name the two components: sampling error vs measurement/bias)?
+
+## 7. Summary
+
+- Inference = sampling distributions: SE = s/√n; means shrink noise by √n — 4× data per 2× precision.
+- CI: range of parameter values the data can't refute (at the chosen level); it's the procedure that has 95% coverage, not your interval.
+- p-value = P(data this extreme | H₀); never P(H₀), never "chance of being right."
+- Welch two-sample t is the default; paired designs need paired tests; ranks for non-normal data.
+- Power depends on effect, n, α, noise — underpowered studies "fail" without evidence of absence.
+- Multiple tests and optional stopping break the 5% guarantee; corrections and fixed protocols restore it.
+- When assumptions are shaky, resample the data itself: bootstraps and permutation tests — [1.5 Resampling intuition](01-5-resampling-intuition.qmd).

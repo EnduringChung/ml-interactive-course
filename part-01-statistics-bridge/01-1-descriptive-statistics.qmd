@@ -1,0 +1,301 @@
+---
+title: "1.1 Descriptive Statistics"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - scipy
+    - matplotlib
+---
+
+Descriptive statistics compress a sample into a few honest numbers: **where** is the center, **how wide** is the spread, **what shape** is the distribution. Every model diagnostic, every "significant difference," every anomaly alert you will ever compute rests on these primitives — so the definitions (including the ones with silent variants, like population vs sample SD) must be reflexes.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+**Center.** The **mean** $\bar{x} = \frac{1}{n}\sum x_i$ is the balance point; the **median** is the middle value by rank. They coincide for symmetric data; for right-skewed data, mean > median (a few large values drag the mean).
+
+**Spread.** The **variance** is the average squared deviation from the mean. Two flavors:
+
+$$s^2_{\text{pop}} = \frac{1}{n}\sum (x_i - \bar{x})^2 \qquad s^2_{\text{sample}} = \frac{1}{n-1}\sum (x_i - \bar{x})^2$$
+
+The $n-1$ (**Bessel's correction**) in the sample version compensates for the fact that $\bar{x}$ was *estimated from the same data* — deviations from an estimated center are systematically too small. Standard deviation is the square root, back in data units.
+
+```{pyodide}
+#| autorun: true
+import numpy as np
+
+x = np.array([2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0])
+
+print("mean:  ", np.mean(x))                     # 5.0
+print("median:", np.median(x))                   # 4.5
+print("var (pop,   ddof=0):", np.var(x))         # 4.0
+print("var (sample, ddof=1):", np.var(x, ddof=1))# 4.571... — 8/7 × the population var
+print("sd  (sample):        ", np.std(x, ddof=1))
+```
+
+**Position and shape.** **Quartiles** split the sorted data into quarters; the **IQR** (Q3 − Q1) is the spread of the middle half — robust to outliers. **Skewness** measures asymmetry (positive = right tail).
+
+```{pyodide}
+#| autorun: true
+import numpy as np
+from scipy import stats
+
+x = np.array([2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0])
+
+q1, q2, q3 = np.percentile(x, [25, 50, 75])
+print("Q1, Q2, Q3:", q1, q2, q3)          # 4.0 4.5 5.75
+print("IQR:", q3 - q1)                     # 1.75
+print("skew:", stats.skew(x))              # ≈ 0.60 — right tail pulls
+
+skewed = stats.lognorm.rvs(s=0.8, scale=10, size=500, random_state=1)
+print("lognormal: mean =", round(skewed.mean(), 2),
+      " median =", round(np.median(skewed), 2))    # mean > median: skew in numbers
+```
+
+**Robustness ranking** (how much a single extreme value can move the statistic):
+
+- mean, SD — sensitive (breakdown point 0%)
+- median, IQR — robust (breakdown point 50%)
+- trimmed mean — tunable middle ground
+
+## 2. Concept Questions
+
+1. Why does the sample variance divide by $n-1$ instead of $n$?
+2. Your gene-expression distribution has mean 210 and median 85. What shape do you suspect, and which two numbers would you report?
+3. Is the IQR affected by multiplying all values by 10? By adding one extreme value?
+4. When is the mode the most informative measure of center?
+5. What does `ddof=0` vs `ddof=1` change in `np.std`, and which does pandas use by default?
+
+<details>
+<summary>Answers</summary>
+
+1. Deviations are taken from the **sample mean**, which is itself fitted to the data; the fitted center absorbs part of the variability, shrinking deviations. Dividing by the **degrees of freedom** $n-1$ unbias the estimate of the *population* variance (for normal data, exactly).
+2. Strong **right skew** (a minority of very high values). Report **median and IQR** (robust pair); if you must report the mean, report it with the median so the skew is visible.
+3. Multiplying by 10: IQR scales by 10 (it's in data units). One extreme value beyond the fences: IQR is unaffected as long as it doesn't cross the 25th/75th percentiles — that's the point of quartile-based spread.
+4. For **categorical or discrete** data ("most common category"), and for **multimodal** continuous data where mean and median both describe nothing real ("typical patient: bimodal, modes at X and Y").
+5. `ddof` = delta degrees of freedom subtracted from n. `ddof=0` → population formula; `ddof=1` → sample formula. **NumPy defaults to 0, pandas to 1** — mixing pandas and NumPy without noticing this is a classic silent bug.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+x = np.array([1.0, 2.0, 3.0, 4.0])
+print(np.mean(x), np.median(x))                    # 2.5 2.5
+print(np.var(x), np.var(x, ddof=1))                # 1.25 1.666...
+print(np.std([5, 5, 5]))                           # 0.0 — no spread, no info
+print(np.percentile(np.arange(1, 6), 25))          # 2.0 — linear interpolation
+```
+
+```{pyodide}
+import numpy as np
+from scipy import stats
+print(stats.skew([1, 2, 2, 3, 100]))               # big positive — single heavy tail
+print(stats.iqr([1, 2, 3, 4, 100]))                # 2.0 — the 100 barely moves quartiles
+print(np.mean([1, 2, np.nan]))                     # nan — NaN poisons aggregates
+print(np.nanmean([1, 2, np.nan]))                  # 1.5
+import pandas as pd
+print(pd.Series([1, 2, 2, 3]).mode().tolist())     # [2]
+print(pd.Series([1, 2, 3]).std(), np.std([1, 2, 3]))   # 1.0 vs 0.816... — ddof defaults differ!
+```
+
+```{pyodide}
+import numpy as np
+from scipy import stats
+x = stats.lognorm.rvs(s=0.8, scale=10, size=10000, random_state=0)
+print("mean ≈ median?", np.isclose(x.mean(), np.median(x), rtol=0.1))  # False — skew
+z = (x - x.mean()) / x.std()               # z-scores
+print(z.mean().round(12), z.std().round(4))             # 0.0 ≈ 1.0 — invariant check
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Write `summarize(x)` returning `{"n", "mean", "sd", "median", "iqr", "min", "max"}` using sample SD. Test it on normal data and on lognormal data; state which summary number changes most between the two and why.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy import stats
+
+def summarize(x):
+    x = np.asarray(x, dtype=float)
+    return {
+        "n": len(x),
+        "mean": np.mean(x),
+        "sd": np.std(x, ddof=1),
+        "median": np.median(x),
+        "iqr": stats.iqr(x),
+        "min": np.min(x),
+        "max": np.max(x),
+    }
+
+norm = stats.norm.rvs(0, 1, 500, random_state=0)
+logn = stats.lognorm.rvs(s=1.0, scale=1, size=500, random_state=0)
+
+print("normal:   ", {k: round(v, 3) for k, v in summarize(norm).items()})
+print("lognormal:", {k: round(v, 3) for k, v in summarize(logn).items()})
+```
+
+The **mean and SD** blow up under lognormal data (they inherit the heavy tail), while median and IQR stay near their symmetric-data values — the empirical demonstration of robustness. Report median/IQR for skewed data.
+</details>
+
+**Exercise 2.** IQR outlier rule: flag values outside $[Q_1 - 1.5\,\text{IQR},\ Q_3 + 1.5\,\text{IQR}]$ in the dataset below. Then compute z-scores and flag $|z| > 3$. Compare the flagged sets and explain the disagreement.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+x = np.array([12.1, 11.8, 12.3, 12.0, 11.9, 12.2, 11.7, 12.4, 12.1, 25.0])
+
+q1, q3 = np.percentile(x, [25, 75])
+iqr = q3 - q1
+lo, hi = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+print("IQR rule flags:", x[(x < lo) | (x > hi)])       # [25.0]
+
+z = (x - x.mean()) / x.std(ddof=1)
+print("z>3 rule flags:  ", x[np.abs(z) > 3])           # [] — nothing!
+
+print("max |z| =", np.abs(z).max().round(2))
+```
+
+The z-score rule **uses the mean and SD — which the outlier itself inflates**. One extreme value widened the SD so much that even the outlier isn't 3 SDs out (masking). Quartile-based rules don't have this self-blinding property: for small samples, prefer the IQR fence.
+</details>
+
+**Exercise 3.** Empirically verify Bessel's correction: sample `n = 5` points from a known distribution many times; for each sample compute variance with `ddof=0` and `ddof=1`; average each. Which average converges to the true variance?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(0)
+
+true_var = 4.0                          # N(0, 2²) has variance 4
+draws = rng.normal(0, 2, size=(200_000, 5))
+v0 = draws.var(axis=1, ddof=0).mean()   # biased: E[s²] < σ²
+v1 = draws.var(axis=1, ddof=1).mean()   # unbiased: E[s²] = σ²
+
+print(f"ddof=0: {v0:.4f}   ddof=1: {v1:.4f}   truth: {true_var}")
+```
+
+`ddof=0` averages to $0.8\sigma^2$ here ($(n-1)/n = 4/5$) — a 20% underestimate, every time, silently. This is why the divisor choice is not a technicality.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **pandas vs NumPy ddof defaults disagree** (pandas `std/var` use `ddof=1`; NumPy uses `ddof=0`). Numbers in mixed reports can differ by ~√(n/(n−1)) for no reason.
+- **NaN handling differs**: `np.mean` poisons, `np.nanmean` skips, pandas `.mean()` skips *and warns differently* — know which behavior produced a reported number.
+- **Percentile interpolation**: `np.percentile` linearly interpolates by default; small-n quartiles depend on this convention (9 conventions exist; R's `type=7` matches NumPy's `linear`).
+- **SD is not the "typical deviation"** for skewed data: with a heavy right tail, most deviations are *below* the SD. IQR communicates spread more honestly there.
+- **The mean minimizes squared error, the median absolute error** — which is why least squares regression ([Part 2](../part-02-linear-regression/02-1-regression-setup.qmd)) is mean-focused and least-absolutes-deviations is median-focused.
+- **`stats.mode` behavior changed across SciPy versions** (now returns a `ModeResult` object); `pd.Series.mode` is the stable, readable choice.
+- **Descriptives ≠ inference**: a summary is a claim about *this sample*; Part 1.4 is about claims regarding the *population*.
+
+### Read & Refactor AI Code
+
+This AI-generated summary function has **three bugs**. Run it on the test data and find them.
+
+```{pyodide}
+import numpy as np
+
+def summary_stats(values):
+    values = np.array(values)
+    return {
+        "n": len(values),
+        "mean": np.mean(values),
+        "sd": np.std(values),            # BUG 1
+        "median": np.median(values),
+        "iqr": np.percentile(values, 75) - np.percentile(values, 25),
+        "range": np.max(values) - np.min(values),   # BUG 2 input
+    }
+
+data = [5.2, 4.9, 5.1, np.nan, 5.0, 4.8]          # note the NaN
+print(summary_stats(data))                         # BUG 3: observe the output
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **Population SD (`ddof=0`)** — for a *sample* summary this underestimates spread; specify and use `ddof=1`.
+2. **No NaN policy** — the function dies on the NaN (`mean` → nan, `max` → nan) without telling the caller whether NaNs were dropped. Make the policy explicit.
+3. **`range` on data containing NaN** raises/propagates nan; also "range" is a fragile descriptives choice (a single typo'd value sets it) — min/max separately at most, or a robust span.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+def summary_stats(values, dropna=True):
+    values = np.asarray(values, dtype=float)
+    if dropna:
+        values = values[~np.isnan(values)]
+    if len(values) == 0:
+        raise ValueError("no non-missing values")
+    return {
+        "n": len(values),
+        "mean": float(np.mean(values)),
+        "sd": float(np.std(values, ddof=1)),
+        "median": float(np.median(values)),
+        "iqr": float(np.percentile(values, 75) - np.percentile(values, 25)),
+        "min": float(np.min(values)),
+        "max": float(np.max(values)),
+    }
+
+data = [5.2, 4.9, 5.1, np.nan, 5.0, 4.8]
+print(summary_stats(data))
+print(summary_stats(data, dropna=False))   # explicit: caller decides
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Prove (or verify by simulation) that the sample mean is the value $c$ minimizing $\sum_i (x_i - c)^2$, and the sample median minimizes $\sum_i |x_i - c|$. What does each say about *which errors* the mean vs median take most seriously?
+
+<details>
+<summary>Hint</summary>
+
+Differentiate $\sum (x_i-c)^2$ in $c$; for the absolute value, argue by moving $c$ across data points and counting how many terms' slope changes.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Mean: $f(c)=\sum(x_i-c)^2$ has $f'(c) = -2\sum(x_i-c)$, zero exactly at $c=\bar{x}$ (second derivative $2n>0$). Median: $g(c)=\sum|x_i-c|$ has slope $= (\#\,\text{points} < c) - (\#\,\text{points} > c)$, which changes sign where the counts balance — the median. So the mean's optimality is defined in **squared** error: a single far point contributes quadratically, dominating the objective — hence the mean chases outliers. The median's objective is **linear** in each error: one far point costs the same as one near point — hence its robustness. This one paragraph explains robust statistics, why least-squares regression is outlier-sensitive, and why quantile regression exists.
+</details>
+
+**Q2.** Two labs each report SD ≈ 2.0 for the same assay. Lab A ran n = 5, Lab B ran n = 5,000. Construct a scenario where both reports are true, and explain which additional number distinguishes them (preview: it is not the SD).
+
+<details>
+<summary>Solution</summary>
+
+Both labs can honestly report $s \approx 2.0$ — SD describes *individual* measurement spread and barely depends on n. What distinguishes them is the precision of their **estimated means**: the standard error $s/\sqrt{n}$ ≈ 0.89 for Lab A vs 0.028 for Lab B — a 30-fold difference. SD answers "how noisy is one measurement," SE answers "how well do I know the center." Confusing the two (reporting SD where SE is meant, or vice versa) is a notorious publication bug; the inference machinery that formalizes it arrives in [1.4 Statistical inference](01-4-statistical-inference.qmd).
+</details>
+
+## 6. Complex Questions
+
+**C1 (descriptives × [0.4 EDA](../part-00-python-foundations/00-4-visualization-eda.qmd)).** For the lognormal samples from Section 1, produce side-by-side: (a) histogram of x, (b) histogram of log x with a normal-density overlay scaled to the log data. Which *single transformation* converts all the robust-vs-sensitive summary disagreements (mean/median, SD/IQR) into non-issues, and what does that imply about *when* those disagreements matter?
+
+**C2 (descriptives × [3.1.5 AUPRC](../part-03-classification-glm/03-1-5-auprc.qmd) preview).** A screening cohort has 1% disease prevalence. Compute the mean/median of the binary label vector and explain, in descriptive-statistics language, why accuracy is a nearly useless summary for a classifier on this data (predicting all-healthy scores 99%). Which descriptive statistic of the *confusion matrix* would you report instead, and why is it robust to the prevalence imbalance?
+
+## 7. Summary
+
+- Center: mean (balance, sensitive) vs median (rank, robust); skew shows as mean − median.
+- Spread: SD for symmetric data, IQR for skewed; ddof=0 vs 1 is a real bias, and pandas/NumPy disagree by default.
+- Quartiles + IQR fences detect outliers without being blinded by them; z-scores can be.
+- NaN policy is part of the statistic: nan-skipping is a decision, not a default to trust blindly.
+- Mean ↔ squared error, median ↔ absolute error: robustness follows from the loss function.
+- SD describes single measurements; SE describes the precision of a mean — next pages formalize this.
+- Summaries describe samples; to argue about populations you need probability and inference: [1.2 Relationships](01-2-relationships.qmd) first asks how two variables *move together*.

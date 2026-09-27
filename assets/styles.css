@@ -1,0 +1,11 @@
+/* Course site — small readability tweaks for the live-html format */
+
+/* Give interactive code cells a bit more breathing room */
+.quarto-live-cell {
+  margin-block: 1em;
+}
+
+/* Keep tables of the course map readable on iPad */
+table {
+  font-size: 0.9em;
+}

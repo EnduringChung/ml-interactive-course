@@ -1,0 +1,333 @@
+---
+title: "0.2 NumPy"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+---
+
+NumPy is the foundation of the entire Python scientific stack: pandas, scikit-learn, statsmodels, and PyTorch all speak NumPy arrays. The core skill is not memorizing functions — it is learning to think in **whole-array operations** instead of element-by-element loops.
+
+> **Tier 1 — every cell below runs live. Predict, then run.**
+
+## 1. Basic Concept
+
+A NumPy **ndarray** is an N-dimensional grid of values that are **all the same type** (`dtype`), stored in one contiguous block of memory. Because the data is homogeneous and contiguous, operations can be dispatched as compiled loops over memory — this is **vectorization**, and it is typically 10–100× faster than a Python loop.
+
+Three attributes define an array's shape story:
+
+```{pyodide}
+#| autorun: true
+import numpy as np
+
+a = np.array([[1.0, 2.0, 3.0],
+              [4.0, 5.0, 6.0]])
+print(a.shape)    # (2, 3) — 2 rows, 3 columns
+print(a.dtype)    # float64 — every element is the same type
+print(a.ndim)     # 2 — number of axes
+```
+
+**Vectorization replaces loops.** Here is the same computation both ways:
+
+```{pyodide}
+import numpy as np
+import time
+
+rng = np.random.default_rng(0)
+n = 1_000_000
+x = rng.normal(size=n)
+
+# Loop version
+t0 = time.perf_counter()
+total = 0.0
+for xi in x:
+    total += xi * xi
+t1 = time.perf_counter()
+
+# Vectorized version
+t2 = time.perf_counter()
+total_vec = np.sum(x * x)
+t3 = time.perf_counter()
+
+print(f"loop:       {t1 - t0:.3f} s")
+print(f"vectorized: {t3 - t2:.4f} s")
+```
+
+**Broadcasting** is how NumPy applies operations between arrays of *different but compatible* shapes. Rule: compare shapes from the **right**; each dimension pair must be equal or one of them must be 1; missing (left) dimensions are treated as 1.
+
+```{pyodide}
+#| autorun: true
+import numpy as np
+
+row = np.arange(3)              # shape (3,)
+M = np.ones((4, 3))             # shape (4, 3)
+print(M + row)                  # row broadcasts down the 4 rows -> shape (4, 3)
+
+col = np.arange(4).reshape(4, 1)   # shape (4, 1)
+print(col + row)                   # (4,1) and (3,) broadcast -> (4, 3) outer-sum grid
+```
+
+This is how you normalize a matrix by column means without writing a loop:
+
+```{pyodide}
+#| autorun: true
+import numpy as np
+
+rng = np.random.default_rng(1)
+X = rng.normal(10, 3, size=(5, 4))       # pretend: 5 samples × 4 genes
+X_centered = X - X.mean(axis=0)          # (5,4) - (4,) -> column means subtracted
+print(X_centered.mean(axis=0).round(12)) # all zeros
+```
+
+## 2. Concept Questions
+
+1. What are the three attributes that describe an array's structure?
+2. Why is `np.array([1, 2, 3]) * np.array([10, 20, 30])` *not* the dot product, and what is it?
+3. Which shapes can broadcast together: `(4, 3)` with `(3,)`? `(4, 3)` with `(4,)`?
+4. What does `axis=0` mean when calling `.sum()` on a 2-D array?
+5. `a = np.arange(5); b = a[::2]; b[0] = 99` — did `a` change? Why?
+
+<details>
+<summary>Answers</summary>
+
+1. `shape` (size per axis), `dtype` (element type), `ndim` (number of axes).
+2. `*` on arrays is **elementwise** multiplication → `[10, 40, 90]`. The dot product is `a @ b` → `140`.
+3. `(4, 3)` with `(3,)`: **yes** — `(3,)` is treated as `(1, 3)` and broadcasts across rows. `(4, 3)` with `(4,)`: **no** — right-aligned, `3` vs `4` conflict → `ValueError`. Fix by making it a column: `x[:, None]` or `x.reshape(-1, 1)`.
+4. Collapse axis 0, i.e. **reduce across rows**, producing one value per column.
+5. Yes. Basic slicing returns a **view** sharing memory with `a`, so writing to `b` writes to `a`. Use `b = a[::2].copy()` when you need independence.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict each output before running.
+
+```{pyodide}
+import numpy as np
+print(np.arange(10)[3:7])                      # [3 4 5 6]
+print(np.zeros((2, 3)).shape)                  # (2, 3)
+print(np.linspace(0, 1, 5))                    # [0. 0.25 0.5 0.75 1.]
+print(np.array([1, 2, 3]) + 10)                # [11 12 13]
+print(np.array([1, 2, 3]) * np.array([10, 20, 30]))   # [10 40 90]  (elementwise!)
+```
+
+```{pyodide}
+import numpy as np
+a = np.arange(4).reshape(2, 2)
+print(a.sum(axis=0), a.sum(axis=1))            # [2 4] [1 5]
+print(np.array([True, False, True]).sum())     # 2  (booleans sum as 1/0)
+x = np.arange(10)
+print(x[x % 3 == 0])                           # [0 3 6 9]  (boolean mask indexing)
+print(np.argmax([1, 3, 2]))                    # 1  (index of the max, not the max)
+```
+
+```{pyodide}
+import numpy as np
+print(np.round(np.array([2.5, 3.5])))          # [2. 4.] — banker's rounding (to even)!
+v = np.array([1.0, 2.0, np.nan])
+print(np.mean(v), np.nanmean(v))               # nan 1.5
+d = np.array([1, 2, 3], dtype=np.int8)
+print(d + np.int8(2))                          # [3 4 5]; dtype stays int8 — overflow risk
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(0)
+print(rng.integers(1, 7, size=5))    # 5 dice rolls; HIGH (7) is EXCLUSIVE
+print(rng.normal(0, 1, size=3))      # 3 standard normals
+A = np.array([[1., 2.], [3., 4.]])
+print(A @ A)                         # matrix product: [[7,10],[15,22]]
+print(A * A)                         # elementwise: [[1,4],[9,16]]
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Given the expression matrix below (4 genes × 6 samples), z-score **each gene** (each row) using vectorized code — no loops.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(7)
+E = rng.integers(0, 200, size=(4, 6)).astype(float)
+
+z = (E - E.mean(axis=1, keepdims=True)) / E.std(axis=1, keepdims=True)
+print(z.round(2))
+print(z.mean(axis=1).round(12), z.std(axis=1).round(12))   # ~0 and ~1 per row
+```
+
+The `keepdims=True` keeps shape `(4,1)` so broadcasting subtracts the right mean from the right cells. Without it, `(4,)` broadcasts across the wrong axis and NumPy raises an error — or worse, silently "works" on a square matrix.
+</details>
+
+**Exercise 2.** Simulate 1,000 experiments of 100 fair coin flips each. Estimate the probability that an experiment yields **more than 60 heads**. Do it with one function call, no loops.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(42)
+
+flips = rng.binomial(n=100, p=0.5, size=1000)   # heads per experiment
+prob = (flips > 60).mean()
+print(prob)                                      # ≈ 0.018 ± sampling noise
+```
+
+Sanity check against theory: `P(X > 60)`, X~Binomial(100, 0.5) ≈ 0.0176 — `(flips > 60).mean()` estimates it via Monte Carlo. The trick `(condition).mean()` — counting by averaging booleans — is used constantly in simulation work.
+</details>
+
+**Exercise 3.** Compute all pairwise Euclidean distances between the rows of a `(5, 2)` coordinate array using **broadcasting only**.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+pts = np.array([[0., 0.], [1., 0.], [0., 1.], [3., 4.], [5., 12.]])
+
+diff = pts[:, None, :] - pts[None, :, :]    # (5,1,2) - (1,5,2) -> (5,5,2)
+dists = np.sqrt((diff ** 2).sum(axis=2))    # (5, 5)
+print(dists.round(2))
+print(dists[3, 4])                           # 8.944... = |(3,4)-(5,12)|
+```
+
+The `(i, 1, k) - (1, j, k)` pattern broadcasts every row against every row simultaneously. This exact pattern reappears inside KNN, K-means, and kernel methods later in the course.
+</details>
+
+**Exercise 4.** One-hot encode the integer labels `[2, 0, 3, 1]` into a 4-column binary matrix **without loops**.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+labels = np.array([2, 0, 3, 1])
+
+onehot = np.eye(4, dtype=int)[labels]
+print(onehot)
+```
+
+`np.eye(4)` is the 4×4 identity; fancy-indexing its rows by `labels` selects row `2`, row `0`, etc. Same output as `sklearn.preprocessing.OneHotEncoder`, in one line.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Views vs copies.** Slicing returns a view (memory shared, mutating it mutates the parent); fancy indexing and boolean masking return copies. Silent aliasing bugs look like "my data changed itself."
+- **Integer overflow is silent.** `np.array([127], dtype=np.int8) + np.int8(1)` wraps to `-128` with no warning. NumPy does not upcast like Python ints.
+- **`NaN` poisons aggregates.** `np.mean` of an array with one `NaN` is `NaN`. Use the `nan*` family (`np.nanmean`, `np.nansum`) — but think about *why* values are missing before averaging around them (see [9.3 Missing values](../part-09-unsupervised-learning/09-3-missing-values.qmd) later in the course).
+- **`rng.integers(low, high)` is high-exclusive**; `rng.random()` spans `[0, 1)`. Off-by-one here produces subtly wrong simulations.
+- **Broadcasting errors vs broadcasting bugs.** Shape mismatches raise loud errors, but *compatible* misaligned shapes (e.g. `(4,1)` vs `(4,)`) broadcast "successfully" into something semantically wrong. Print `.shape` when results look insane.
+- **`np.round` uses round-half-to-even**, unlike naive expectations (`np.round(2.5)` → `2.0`). Same rule as Python's built-in `round`.
+- **Floating-point comparison**: `(a - b) == 0` fails for computed floats; use `np.isclose` / `np.allclose` for arrays.
+
+### Read & Refactor AI Code
+
+This AI-generated "normalizer" has **three bugs**. Run it, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+
+def normalize_rows(X):
+    result = np.zeros(X.shape)
+    for i in range(X.shape[0]):
+        for j in range(X.shape[1]):
+            result[i, j] = (X[i, j] - X[:, j].mean()) / X[:, j].std()   # BUG 1
+    return result
+
+X = np.array([[1.0, 200.0],
+              [2.0, 300.0],
+              [3.0, 500.0]])
+
+Z = normalize_rows(X)
+print(Z.mean(axis=1).round(3))   # BUG 2 exposure: if rows were normalized, these would be 0
+print(Z.std(axis=0).round(3))    # BUG 2 exposure: ones here reveal COLUMN normalization
+
+small = np.array([120, 125, 127], dtype=np.int8)
+print(small + 10)            # BUG 3: silent overflow — watch the signs
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **Wrong axis / loop mindset**: it *claims* to normalize rows but computes statistics over `X[:, j]` — **columns**. For this square matrix the result is column z-scores, exposed by the two checks: row means are not 0, column SDs are 1. (On a non-square matrix the claim and code would diverge even more visibly.) The double loop is also exactly what NumPy exists to avoid.
+2. **No invariant check in the original**: whoever ran this trusted it because column-SD printed `1`s — a check that *passes* while testing the wrong axis. Always assert the invariant that matches the claim (row means ≈ 0 for row normalization).
+3. **int8 overflow**: values are within int8 range at construction, but adding 10 in int8 arithmetic wraps past 127 into negatives, silently. Cast to a wider dtype first.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+def normalize_rows(X):
+    X = X.astype(np.float64)                       # avoid integer overflow
+    mu = X.mean(axis=1, keepdims=True)
+    sd = X.std(axis=1, keepdims=True)
+    return (X - mu) / sd
+
+X = np.array([[1.0, 200.0],
+              [2.0, 300.0],
+              [3.0, 500.0]])
+Z = normalize_rows(X)
+print(Z.mean(axis=1).round(12))    # zeros — invariant holds
+print(Z.std(axis=1).round(12))     # ones  — invariant holds
+
+small = np.array([250, 260, 270], dtype=np.int16)
+print(small + 10)                  # [260 270 280]
+```
+
+And the honest one-liner replacing the whole loop: `(X - X.mean(axis=1, keepdims=True)) / X.std(axis=1, keepdims=True)`.
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Why is `x[:, None]` the standard fix when `(n,)` fails to broadcast against `(n, m)`? Explain using the right-to-left alignment rule, and give the two operations for which this asymmetry matters most (column-scaling and row-scaling).
+
+<details>
+<summary>Hint</summary>
+
+Draw `(n,)` as `(1, n)` after alignment and ask which axis it then stretches along.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Right-aligned, `(n,)` behaves like `(1, n)`: it varies along **columns**, so `M + v` adds `v[j]` to every row's j-th entry (row-constant). To scale/shift per **row** (statistics across columns), you need a `(n, 1)` array: `x[:, None]` inserts an axis so the vector varies down rows and broadcasts across columns. It matters most in (1) `M - M.mean(axis=1, keepdims=True)`-style centering and (2) distance computations `A[:, None, :] - B[None, :, :]`. The general discipline: every broadcast bug is a shape bug — print shapes, don't guess.
+</details>
+
+**Q2.** `np.arange(0, 1, 0.1)` and `np.linspace(0, 1, 10)` look like they should produce the same thing. Explain the actual difference and why `linspace` is preferred for evenly spaced sampling in continuous ranges.
+
+<details>
+<summary>Hint</summary>
+
+How does each decide the step size, and which endpoint is excluded?
+</details>
+
+<details>
+<summary>Solution</summary>
+
+`arange(start, stop, step)` computes values as `start + k*step` and **excludes** `stop`, accumulating floating-point step error along the way — so `np.arange(0, 1, 0.1)` yields 10 points ending at ≈0.9 (and can even produce a surprising extra point when the step doesn't divide the range cleanly). `linspace(start, stop, num)` takes the **count** of points and includes both endpoints by default, placing them by index division so spacing is as even as binary floats allow. Rule of thumb: `arange` for integer steps (e.g. `np.arange(10)`), `linspace` for float sampling of an interval.
+</details>
+
+## 6. Complex Questions
+
+**C1 (NumPy × [0.5 Data splitting](00-5-data-splitting.qmd)).** Using only `rng.permutation` and slicing, implement `train_test_split(X, y, frac=0.8, seed=0)` yourself. Then verify it agrees with `sklearn.model_selection.train_test_split` *in spirit* (same sizes, same seed → same partition) — where do the implementations necessarily differ? What does this exercise teach you about what `random_state` actually guarantees?
+
+**C2 (NumPy × [9.2 PCA](../part-09-unsupervised-learning/09-2-principal-component-analysis.qmd) preview).** Center a random `(100, 3)` matrix column-wise, compute its covariance with `np.cov(Z, rowvar=False)`, and take `np.linalg.eigh` of it. What is the sum of eigenvalues, and how does it relate to `np.trace` of the covariance and to the total variance `Z.var(axis=0, ddof=1).sum()`? This identity (total variance = trace = sum of eigenvalues) is the backbone of PCA's "explained variance ratio."
+
+## 7. Summary
+
+- An ndarray is a homogeneous, contiguous grid: `shape`, `dtype`, `ndim` describe everything.
+- Vectorization pushes loops into compiled code — think in whole-array expressions.
+- Broadcasting aligns shapes from the right; `1`s stretch; make column vectors with `x[:, None]`.
+- Slices are views, masks/fancy indices are copies; `keepdims=True` keeps broadcasting honest.
+- Booleans sum as 1/0: `(cond).mean()` is an estimator, not a trick.
+- Watch int8 overflow, NaN-poisoned aggregates, exclusive `high` in `integers`, and banker's rounding.
+- Arrays hold the numbers; **labeled** data with mixed types needs pandas — next page.
+
+Next: [0.3 pandas](00-3-pandas.qmd) puts names, labels, and mixed types on top of this machinery — and introduces its own selection and grouping semantics that you must drill separately.

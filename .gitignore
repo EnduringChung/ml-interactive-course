@@ -1,0 +1,9 @@
+/.quarto/
+/_site/
+/_book/
+/.jupyter_cache/
+.DS_Store
+*.html
+/.quarto-ignore
+
+**/*.quarto_ipynb

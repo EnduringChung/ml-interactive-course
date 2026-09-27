@@ -1,0 +1,350 @@
+---
+title: "1.2 Relationships Between Variables"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - scipy
+    - matplotlib
+---
+
+How do two variables move together? **Covariance** and **correlation** quantify co-movement; regression ([Part 2](../part-02-linear-regression/02-1-regression-setup.qmd)) will *model* it. The skill here is knowing what r measures, what it ignores, and the four ways it lies.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+**Covariance** averages the products of paired deviations:
+
+$$\text{cov}(x, y) = \frac{1}{n-1}\sum_i (x_i - \bar{x})(y_i - \bar{y})$$
+
+Positive when variables move together, negative when opposed — but its magnitude depends on the units (expression levels in raw counts vs log-CPM give different covariances for the same relationship). The **Pearson correlation** fixes units by dividing both SDs:
+
+$$r = \frac{\text{cov}(x,y)}{s_x s_y} \in [-1, 1]$$
+
+```{pyodide}
+#| autorun: true
+import numpy as np
+
+x = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+y = 2.0 * x + 1.0                       # perfect linear relation
+
+print(np.cov(x, y, ddof=1))             # covariance matrix; cov(x,y) = 5.0
+print(np.corrcoef(x, y)[0, 1])          # r = 1.0 — units and scale cancel
+print(np.corrcoef(x, 500 - 30*x)[0, 1])  # -1.0 — perfectly linear, opposite direction
+```
+
+Key reading: **r measures linear association strength, not slope** (slope lives in regression) and not agreement (r = 1 for y = x + 100, which disagrees by 100 everywhere).
+
+**Spearman correlation** = Pearson correlation applied to **ranks**. It detects any *monotone* relationship and shrugs at outliers:
+
+```{pyodide}
+#| autorun: true
+import numpy as np
+from scipy import stats
+
+x = np.array([1, 2, 3, 4, 5], dtype=float)
+print(stats.spearmanr(x, np.exp(x)).statistic)      # 1.0 — perfectly monotone, nonlinear
+print(stats.pearsonr(x, np.exp(x)).statistic.round(3))  # < 1 — curvature costs Pearson
+```
+
+And the classical caution — **curvature**: quadratic data can have r ≈ 0 over a symmetric range even though the variables are perfectly dependent:
+
+```{pyodide}
+#| autorun: true
+#| fig-width: 7
+#| fig-height: 3
+import numpy as np
+import matplotlib.pyplot as plt
+
+x = np.linspace(-3, 3, 100)
+y = x**2 + np.random.default_rng(0).normal(0, 0.3, 100)
+
+r = np.corrcoef(x, y)[0, 1]
+print(f"r = {r:.3f}   (perfect dependence, r ≈ 0)")
+
+fig, ax = plt.subplots(figsize=(6, 3))
+ax.scatter(x, y, s=10)
+ax.set_title(f"y = x² + noise:  r = {r:.2f} — always plot!")
+plt.show()
+```
+
+## 2. Concept Questions
+
+1. Why is covariance useless for comparing relationships measured in different units, and what exactly does dividing by $s_x s_y$ fix?
+2. What is the relationship between r and the R² of simple linear regression?
+3. Give two datasets where Spearman = 1 but Pearson < 1.
+4. Does r = 0 mean "no relationship"? Does r = 0.9 mean "x causes y"?
+5. One outlier flips your r from +0.6 to −0.6. Which coefficient is more trustworthy here, and why?
+
+<details>
+<summary>Answers</summary>
+
+1. Covariance's magnitude scales with the units of *both* variables (cov(x, y) = 5 for x in minutes is 300 for x in seconds). Pearson divides by the product of SDs — a pure number in [−1, 1] — so relationships are comparable across studies, units, and scalings.
+2. For simple linear regression, $R^2 = r^2$ — the fraction of y's variance explained by the best straight line. r = 0.7 → the line explains 49%.
+3. Any **perfectly monotone but nonlinear** pair: (x, eˣ), (x, x³) over positive x, (age, income) rising with diminishing returns. Ranks are identical; straightness is not.
+4. No and no. r = 0 only rules out *linear* association (quadratics, U-shapes, interactions can be strong). r measures association; causation requires design (randomization, natural experiments) or much stronger modeling assumptions.
+5. Spearman. A single point moved Pearson's estimate violently because r is built from raw deviations — the outlier dominates both $s_x$, $s_y$ and the cross-products. Spearman caps any point's influence at "one rank step."
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+print(np.cov([1, 2, 3], [4, 6, 8], ddof=1))     # [[1., 2.], [2., 4.]] — y = 2x
+print(np.corrcoef([1, 2, 3], [4, 6, 8])[0, 1])  # 1.0
+x = np.array([1., 2., 3., 4.])
+print(np.corrcoef(x, x**2)[0, 1].round(3))      # 0.984 — strong curve, r < 1
+```
+
+```{pyodide}
+import numpy as np
+from scipy import stats
+x = np.arange(1., 6.)
+print(stats.pearsonr(x, 10*x + 7).statistic)        # 1.0 — scale/shift don't matter
+print(stats.spearmanr(x, x**3).statistic)           # 1.0 — monotone
+print(stats.pearsonr(x, np.array([5., 3., 4., 1., 2.])).statistic.round(3))
+# −0.9 — strong negative even though y is not linear in x
+```
+
+```{pyodide}
+import numpy as np
+from scipy import stats
+rng = np.random.default_rng(2)
+x = rng.normal(0, 1, 50)
+y = 0.7 * x + rng.normal(0, 1, 50)
+print(np.corrcoef(x, y)[0, 1].round(3))          # ≈ 0.55–0.6: r ≈ signal/sqrt(signal²+noise²)
+outlier = np.array([8.0, -8.0])                  # one leveraged point
+x2, y2 = np.append(x, outlier[0]), np.append(y, outlier[1])
+print(np.corrcoef(x2, y2)[0, 1].round(3))        # r jumps — one point, huge swing
+```
+
+```{pyodide}
+import pandas as pd, numpy as np
+rng = np.random.default_rng(3)
+df = pd.DataFrame(rng.normal(size=(100, 3)), columns=["a", "b", "c"])
+df["d"] = df["a"] * 0.5 + rng.normal(0, 0.5, 100)
+print(df.corr(numeric_only=True).round(2))       # correlation matrix at a glance
+print(df["a"].corr(df["d"], method="spearman").round(3))
+```
+
+### Exercises (with solutions)
+
+**Exercise 1 — Anscombe's quartet, cell 1.** This classic dataset has 4 pairs with (nearly) identical mean, SD, r ≈ 0.816, and regression line — utterly different shapes. Build pair I and pair III, compute their summary statistics, and plot both.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 8
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy import stats
+
+xs = np.array([10, 8, 13, 9, 11, 14, 6, 4, 12, 7, 5], dtype=float)
+y1 = np.array([8.04, 6.95, 7.58, 8.81, 8.33, 9.96, 7.24, 4.26, 10.84, 4.82, 5.68])
+y3 = np.array([7.46, 6.77, 12.74, 7.11, 7.81, 8.84, 6.08, 5.39, 8.15, 6.42, 5.73])
+
+for name, y in [("I", y1), ("III", y3)]:
+    print(name,
+          f"mean(y)={y.mean():.2f}", f"sd(y)={y.std(ddof=1):.2f}",
+          f"r={np.corrcoef(xs, y)[0,1]:.3f}")
+
+fig, axes = plt.subplots(1, 2, figsize=(8, 3.2), sharex=True, sharey=True)
+for ax, y, t in zip(axes, [y1, y3], ["I: linear-ish", "III: one outlier drives all"]):
+    ax.scatter(xs, y, s=25)
+    m, b = np.polyfit(xs, y, 1)
+    ax.plot(np.sort(xs), m*np.sort(xs)+b, color="red", lw=1)
+    ax.set_title(t)
+fig.tight_layout()
+plt.show()
+```
+
+Identical r, identical fitted line — because r and OLS are single-number summaries that different data structures can satisfy. Summary statistics *compress away* exactly the things you care about; plotting is not optional.
+</details>
+
+**Exercise 2.** Construct data where adding ONE observation flips the sign of Pearson r (from negative to positive), while Spearman barely moves. Report all three r values before/after.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy import stats
+rng = np.random.default_rng(7)
+
+x = rng.normal(0, 1, 40)
+y = -0.8 * x + rng.normal(0, 0.4, 40)      # solid negative relationship
+
+def report(x, y, tag):
+    print(tag,
+          "pearson:", round(stats.pearsonr(x, y).statistic, 3),
+          "spearman:", round(stats.spearmanr(x, y).statistic, 3))
+
+report(x, y, "before:")
+x2 = np.append(x, 10.0)        # far right
+y2 = np.append(y, 10.0)        # and high — one leveraged point
+report(x2, y2, "after: ")      # Pearson now positive; Spearman ~unchanged
+```
+
+The added point sits at the extreme corner, contributing huge cross-deviations $(x_i-\bar x)(y_i-\bar y)$ — enough to outvote 40 points. Spearman only sees "new highest x, new highest y" — one rank step on each side. Any reported Pearson on real data should come with a scatterplot or a rank-correlation cross-check.
+</details>
+
+**Exercise 3.** For a bivariate normal sample (n = 30, true ρ = 0), empirically show the sampling distribution of r under the null, and verify that |r| > $2/\sqrt{n-1}$ (rough 5% rule) happens about 5% of the time.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(1)
+
+n, trials = 30, 20_000
+rs = []
+for _ in range(trials):
+    a, b = rng.normal(size=n), rng.normal(size=n)
+    rs.append(np.corrcoef(a, b)[0, 1])
+rs = np.array(rs)
+
+print("sd of r under null ≈ 1/sqrt(n-1) =", round(1/np.sqrt(n-1), 3),
+      " empirical:", round(rs.std(), 3))
+print("P(|r| > 2/sqrt(n-1)) =", (np.abs(rs) > 2/np.sqrt(n-1)).mean().round(3))
+```
+
+≈ 0.05: with n = 30, "noise correlations" of ±0.37 are routine. Two implications: small-n correlation claims need formal tests ([1.4](01-4-statistical-inference.qmd)), and *large* correlation matrices ([0.3 pandas](../part-00-python-foundations/00-3-pandas.qmd) drills) will always show impressive-looking r values somewhere — that's multiplication of opportunities, not biology.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Correlation ≠ causation** — and neither correlation nor its absence is about *linear vs nonlinear*: r ≈ 0 coexists with perfect functional dependence (the x² plot).
+- **Range restriction and range enhancement**: selecting only high-GPA applicants *lowers* r; mixing two clusters *inflates* it (Simpson's paradox lives here — see Complex Questions).
+- **Pearson needs rough linearity and tolerates outliers badly; Spearman needs only monotonicity** but discards magnitude information (two datasets with identical ranks can have very different practical effect sizes).
+- **Correlation matrices in high dimensions** (10,000 genes → 50M pairs): extreme r values appear by chance alone (Exercise 3 logic × opportunities). Multiple-testing discipline ([Part 12](../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.qmd)) applies to "top correlated pairs" lists.
+- **Averaging correlations across groups is invalid** (r is not on an additive scale — use Fisher z, or analyze per group).
+- **Bootstrap or Fisher-z CI for r**, never "r ± 0.05" from folklore. Formal test: `stats.pearsonr` returns the p-value alongside.
+
+### Read & Refactor AI Code
+
+This AI-generated "correlation report" has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from scipy import stats
+
+rng = np.random.default_rng(9)
+x = rng.normal(50, 10, 30)            # e.g. age
+y = 20 + 0.3 * x + rng.normal(0, 2, 30)
+
+r, p = stats.pearsonr(x, y)
+print(f"r = {r:.2f}")                 # fine so far
+
+# BUG 1: force causality in the interpretation
+print(f"increasing x by 1 causes y to increase by {r:.2f}")
+
+# BUG 2: average correlations across two opposite subgroups
+x_a, y_a = x[:15], y[:15]
+x_b, y_b = -x[:15], -y[:15]           # mirrored subgroup
+r_a = np.corrcoef(x_a, y_a)[0, 1]
+r_b = np.corrcoef(x_b, y_b)[0, 1]
+print(f"avg r across groups: {(r_a + r_b) / 2:.3f}")
+
+# BUG 3: declare 'no relationship' from r ≈ 0 on a U-shape
+xs = np.linspace(-2, 2, 100)
+ys = xs**2 + rng.normal(0, 0.1, 100)
+print("r =", np.corrcoef(xs, ys)[0, 1].round(3), "-> no relationship")
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **r ≠ slope and ≠ causation.** The slope estimate is `np.polyfit`'s job, and "causes" needs design evidence, not correlation.
+2. **Averaging r across groups is invalid** and hides sign flips; here group r's may be +1 and −1, "averaging" to 0 while both groups have perfect (opposite) associations. Report per-group r (or Fisher-z average with justification).
+3. **r ≈ 0 ≠ no relationship.** The U-shaped dependence is perfect; Pearson only tests the linear projection.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy import stats
+
+rng = np.random.default_rng(9)
+x = rng.normal(50, 10, 30)
+y = 20 + 0.3 * x + rng.normal(0, 2, 30)
+
+slope, intercept = np.polyfit(x, y, 1)
+r, p = stats.pearsonr(x, y)
+print(f"r = {r:.2f}; fitted slope = {slope:.3f} (association, not causation)")
+
+x_a, y_a, x_b, y_b = x[:15], y[:15], -x[:15], -y[:15]
+print("group r's:", np.corrcoef(x_a, y_a)[0,1].round(3),
+      np.corrcoef(x_b, y_b)[0,1].round(3), "— report separately, never average")
+
+xs = np.linspace(-2, 2, 100)
+ys = xs**2 + rng.normal(0, 0.1, 100)
+print("pearson:", np.corrcoef(xs, ys)[0,1].round(3),
+      "spearman:", stats.spearmanr(xs, ys).statistic.round(3),
+      "-> plot first: perfect non-monotone dependence")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Show that for simple linear regression the fitted slope is $b = r \cdot (s_y / s_x)$, and explain the two failure modes of "reading" r as if it were an effect size.
+
+<details>
+<summary>Hint</summary>
+
+Write the OLS slope for standardized variables; then unstandardize.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Standardize both variables: $\tilde x = (x-\bar x)/s_x$, $\tilde y = (y-\bar y)/s_y$. For standardized data the OLS slope is $\sum \tilde x_i \tilde y_i / \sum \tilde x_i^2 = (n-1)\,\text{cov}/(n-1)\,\text{var} = r$. Rescaling back multiplies by $s_y/s_x$, giving $b = r s_y/s_x$. Failure modes: (1) **slope from r** — r = 0.5 means nothing about units; a weak correlation with huge $s_y/s_x$ can be a big effect. (2) **r as slope** — the *same* physical relationship yields different r if you restrict the x-range (range restriction lowers both spread and r) while the slope $r s_y/s_x$ is more stable. Report both: r (strength of linear association), slope (effect per unit x), CI each.
+</details>
+
+**Q2.** The t-statistic for testing ρ = 0 is $t = r\sqrt{(n-2)/(1-r^2)}$. Verify numerically that `stats.pearsonr`'s p-value matches the two-sided t-test with df = n−2, then explain what happens to that p-value's meaning when you compute it for the *largest* of 10,000 gene-pair correlations.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy import stats
+rng = np.random.default_rng(4)
+n = 40
+a, b = rng.normal(size=n), rng.normal(size=n)
+r, p = stats.pearsonr(a, b)
+t = r * np.sqrt((n - 2) / (1 - r**2))
+p_t = 2 * stats.t.sf(abs(t), df=n - 2)
+print(round(p, 6), round(p_t, 6))     # identical
+```
+
+The p-value is calibrated for **one pre-specified pair**. For the maximum over 10,000 pairs, the test is applied to the extreme order statistic of ~10,000 correlated tests: even under global null, the smallest p-value is routinely ≪ 0.05 (probability of at least one "significant" pair ≈ 1 − 0.95¹⁰⁰⁰⁰ ≈ 1). The honest procedure re-tests the selected pair in fresh data or applies family-wise/FDR correction — the entire subject of [Part 12](../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.qmd).
+</details>
+
+## 6. Complex Questions
+
+**C1 (relationships × [0.3 pandas](../part-00-python-foundations/00-3-pandas.qmd) — Simpson's paradox).** Build 3 groups where within every group r(y, x) is positive, but pooled over all groups r is strongly negative. (Give group intercepts very different levels and equal within-group slopes.) Then answer: which correlation should a model use — and how does adding group dummies ([2.6 Categorical predictors](../part-02-linear-regression/02-6-categorical-predictors.qmd)) resolve the conflict?
+
+**C2 (relationships × [9.2 PCA](../part-09-unsupervised-learning/09-2-principal-component-analysis.qmd) preview).** Generate 3 correlated variables, compute the correlation matrix, and its eigenvalues. What does the dominant eigenvalue/eigenvector tell you about how many "real directions" the data has? Relate this to why the scatter-matrix drill of [0.4](../part-00-python-foundations/00-4-visualization-eda.qmd) becomes unreadable at 50 variables and PCA becomes necessary.
+
+## 7. Summary
+
+- Covariance is direction × scale; Pearson r standardizes it to [−1, 1]; Spearman replaces values with ranks.
+- r describes linear association only: U-shapes hide at r ≈ 0; monotone curves lose r < 1.
+- r² is explained-variance for a straight line; slope is r·(sy/sx) — never confuse strength with effect size.
+- One outlier can flip Pearson; Spearman caps that influence — report both when data is dirty.
+- Sampling noise gives |r| ≈ 0.3 routinely at n = 30; scanning many pairs manufactures "discoveries."
+- Per-group correlation, plots, and range questions come before any causal sentence.
+- Association is a description; deciding whether a pattern would *reappear in new samples* requires probability and inference — [1.3 Probability essentials](01-3-probability-essentials.qmd).

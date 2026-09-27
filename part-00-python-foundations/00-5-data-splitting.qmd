@@ -1,0 +1,351 @@
+---
+title: "0.5 Data Splitting"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - scikit-learn
+---
+
+Every model in this course will be judged by one rule: **performance on data it did not see during training.** The mechanics of splitting data seem trivial — and that's exactly why leakage bugs are so common. This page drills the mechanics so they're automatic before Part 2 builds models on top of them.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+The **test set** estimates how a model performs on new data. The core failure mode is **leakage**: any information from the test set (or from future data) influencing the training process inflates that estimate.
+
+The basic protocol with `sklearn.model_selection.train_test_split`:
+
+```{pyodide}
+#| autorun: true
+import numpy as np
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(0)
+X = rng.normal(size=(100, 3))                  # 100 samples, 3 features
+y = X @ np.array([2.0, -1.0, 0.5]) + rng.normal(0, 0.5, 100)
+
+X_tr, X_te, y_tr, y_te = train_test_split(
+    X, y, test_size=0.25, random_state=42
+)
+print(X_tr.shape, X_te.shape)                  # (75, 3) (25, 3)
+print(y_tr.shape, y_te.shape)
+```
+
+`random_state` seeds the shuffling: same seed → identical split → reproducible results. It does **not** make the split "better."
+
+For **classification** with imbalanced classes, use `stratify=y` so each split preserves class proportions:
+
+```{pyodide}
+#| autorun: true
+import numpy as np
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(1)
+y = np.array(["disease"] * 10 + ["healthy"] * 90)     # 10% positive
+X = rng.normal(size=(100, 2))
+
+tr, te = train_test_split(y, test_size=0.3, random_state=0, stratify=y)
+print("train:", np.mean(tr == "disease"), " test:", np.mean(te == "disease"))
+# both ≈ 0.10 — proportions preserved
+
+tr2, te2 = train_test_split(y, test_size=0.3, random_state=0)
+print("unstratified test:", np.mean(te2 == "disease"))   # may be far from 0.10
+```
+
+One split gives one noisy number. **K-fold cross-validation** averages over K splits — every sample is in a validation fold exactly once:
+
+```{pyodide}
+#| autorun: true
+import numpy as np
+from sklearn.model_selection import KFold
+
+kf = KFold(n_splits=5, shuffle=True, random_state=0)
+for i, (tr_idx, va_idx) in enumerate(kf.split(np.arange(10))):
+    print(f"fold {i}: train={sorted(tr_idx)} valid={sorted(va_idx)}")
+```
+
+## 2. Concept Questions
+
+1. Why must the test set be used **once**, at the end — what exactly is lost if you peek repeatedly?
+2. What does `stratify=y` protect you from, and when is it useless?
+3. Why does `random_state` matter in research code even when results "should" be stable?
+4. In 5-fold CV, how many times is each sample used for validation, and how many times for training?
+5. Your test R² is *better* than your training R². Give one benign explanation and one suspicious one.
+
+<details>
+<summary>Answers</summary>
+
+1. Repeatedly peeking at test performance and making choices (features, hyperparameters, stopping) based on it **trains on the test set through you**: the estimate stops being out-of-sample and becomes optimistically biased. The test set's value is spent by adaptation.
+2. It preserves **class proportions** across splits — essential for rare classes (a 2% class can be absent from a small test split). Useless/unnecessary for regression (continuous y), and it can't fix *too small* data: if a class has fewer members than folds, even stratified splitting fails.
+3. Same seed → same split → **run-to-run reproducibility**, which is what makes bug fixes, reviewer requests, and controlled comparisons possible. Unseeded splits confound "different partition" with "different method."
+4. Exactly **once** for validation; **K−1 = 4** times for training (in different combinations).
+5. Benign: the test split happens to be easy, or training metrics are computed on a *regularized* objective (e.g. penalized loss) while test R² is unpenalized. Suspicious: leakage — test information reached training (scaled together, duplicated rows, feature derived from the outcome). Investigate, don't celebrate.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import train_test_split
+X = np.arange(100).reshape(-1, 1)
+y = np.arange(100)
+
+a, b = train_test_split(X, test_size=0.2, random_state=1)
+print(a.shape, b.shape)                    # (80, 1) (20, 1)
+c, d = train_test_split(X, test_size=0.2, random_state=1)
+print(np.array_equal(a, c))                # True — same seed, same split
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import train_test_split
+y = np.array([0]*8 + [1]*2)                # 80/20 classes
+tr, te = train_test_split(y, test_size=0.5, random_state=0, stratify=y)
+print(tr.mean(), te.mean())                # 0.2 0.2 — stratified
+tr, te = train_test_split(y, test_size=0.5, random_state=0)
+print(te)                                  # may contain 0 or 2 positives by luck
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import KFold
+kf = KFold(n_splits=5, shuffle=False)
+sizes = [(len(tr), len(va)) for tr, va in kf.split(np.arange(25))]
+print(sizes)            # contiguous blocks without shuffle; last fold gets remainder
+print(set(sum([list(va) for tr, va in kf.split(np.arange(25))], [])) == set(range(25)))
+# True — every sample validated exactly once
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import train_test_split
+X = np.arange(10).reshape(-1, 1); y = np.arange(10)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.3, random_state=7)
+print(X_tr.ravel())        # shuffled X
+print(y_tr)                # y shuffled IDENTICALLY — X/y pairing preserved
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Simulate a small classification dataset (500 samples, 2% positives), split it badly (no stratify, seed chosen "unluckily") and well (stratify). Report positives in each test set. Then quantify: repeat the unstratified split 500 times and report the *range* of positive counts in the test set.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(3)
+y = np.array([1] * 10 + [0] * 490)
+X = rng.normal(size=(500, 2))
+
+_, y_bad = train_test_split(y, test_size=0.2, random_state=0)
+_, y_good = train_test_split(y, test_size=0.2, random_state=0, stratify=y)
+print("unstratified test positives:", y_bad.sum())   # could be 0 — silent evaluation failure
+print("stratified test positives:", y_good.sum())     # exactly 2
+
+counts = []
+for seed in range(500):
+    _, yb = train_test_split(y, test_size=0.2, random_state=seed)
+    counts.append(yb.sum())
+print("min/max positives over 500 splits:", min(counts), max(counts))
+```
+
+A test set with **zero positives** makes recall, AUC, and AUPRC literally undefined. Stratification is not cosmetic.
+</details>
+
+**Exercise 2.** Write a 5-fold CV loop **by hand** (KFold + explicit fit/predict on a `LinearRegression`) for the synthetic regression data from Section 1, collecting validation R² per fold. Report the mean and the **standard deviation across folds** — then explain why that SD, not just the mean, matters.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.model_selection import KFold
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(0)
+X = rng.normal(size=(100, 3))
+y = X @ np.array([2.0, -1.0, 0.5]) + rng.normal(0, 1.0, 100)   # noisier than Section 1
+
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+scores = []
+for tr_idx, va_idx in kf.split(X):
+    model = LinearRegression().fit(X[tr_idx], y[tr_idx])
+    scores.append(model.score(X[va_idx], y[va_idx]))
+
+scores = np.array(scores)
+print("fold R2:", scores.round(3))
+print(f"mean={scores.mean():.3f}  sd={scores.std(ddof=1):.3f}")
+```
+
+The mean estimates expected performance; the **SD across folds** estimates how *stable* that number is. Mean ± SD ≈ 0.85 ± 0.06 and mean ± SD ≈ 0.85 ± 0.30 are very different claims about your model — an unstable CV is a red flag for high variance (see [4.4 Bias–variance trade-off](../part-04-validation-model-selection/04-4-bias-variance.qmd)).
+</details>
+
+**Exercise 3 — the leakage lab.** Build a dataset where one feature is *derived from the outcome* (`leaky = y + noise`). Compare (a) a model trained with the leaky feature vs (b) without, using a proper split. Then do it "wrong": scale X on the **full** dataset before splitting. Which comparisons change? Quantify each difference.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import StandardScaler
+
+rng = np.random.default_rng(5)
+n = 300
+X_true = rng.normal(size=(n, 3))
+y = X_true @ [1.5, -2.0, 1.0] + rng.normal(0, 1, n)
+X_leaky = np.column_stack([X_true, y + rng.normal(0, 0.05, n)])   # outcome smuggled in
+
+# (a) leaky feature, clean protocol
+Xtr, Xte, ytr, yte = train_test_split(X_leaky, y, random_state=0)
+r2_leaky = LinearRegression().fit(Xtr, ytr).score(Xte, yte)
+
+# (b) honest feature set, clean protocol
+Xtr, Xte, ytr, yte = train_test_split(X_true, y, random_state=0)
+r2_clean = LinearRegression().fit(Xtr, ytr).score(Xte, yte)
+
+# (c) scaling fitted on ALL data (mild leakage; with LinearRegression the
+#     damage is small here, but the pattern is the bug)
+scaler = StandardScaler().fit(X_true)                    # WRONG: includes test rows
+Xs = scaler.transform(X_true)
+Xtr, Xte, ytr, yte = train_test_split(Xs, y, random_state=0)
+r2_scaled_wrong = LinearRegression().fit(Xtr, ytr).score(Xte, yte)
+
+print(f"leaky feature R2:        {r2_leaky:.4f}  (near-perfect — red flag)")
+print(f"honest R2:               {r2_clean:.4f}")
+print(f"pre-split scaling R2:    {r2_scaled_wrong:.4f}")
+```
+
+Read the results: the leaky feature produces near-perfect accuracy **by construction** — the single most common way "too good to be true" results reach publication. Pre-split scaling is the same crime at lower dose: test-row means/variances shaped the training inputs.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Leakage taxonomy**: (1) *feature leakage* — a column derived from y (outcomes aggregated into features, "post-treatment" variables); (2) *preprocessing leakage* — scaling/imputation/feature selection fitted before the split; (3) *duplication leakage* — the same patient/sample appearing in train and test; (4) *temporal leakage* — shuffling time series so the model trains on the future.
+- **The fix for (2) is always the same shape**: fit the transformer inside the training fold only — `StandardScaler().fit(X_tr)`, then `.transform(X_te)`. In pipelines: `make_pipeline(StandardScaler(), Ridge())` + `cross_val_score` does this mechanically and correctly.
+- **Duplicate rows before splitting**: drop_duplicates / group-aware splitting by patient ID (`GroupKFold`) — not by row.
+- **`test_size` semantics**: float = proportion, int = absolute count. Tiny test sets (n < ~30 per class) make *every* performance estimate mostly noise ([4.1 The generalization problem](../part-04-validation-model-selection/04-1-generalization-problem.qmd)).
+- **`shuffle=False` is the correct default for time-ordered data** — `train_test_split` shuffles by default, which is wrong for temporal splits.
+- **Reproducibility chain**: seed the split *and* any stochastic model; a notebook is only reproducible if every source of randomness is pinned.
+
+### Read & Refactor AI Code
+
+This AI-generated evaluation pipeline contains **three bugs**, two of them leakage. Run it, then fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+
+rng = np.random.default_rng(11)
+n = 400
+X = rng.normal(size=(n, 4))
+true_p = 1 / (1 + np.exp(-(X @ [1.0, -1.0, 0.5, 0.0])))
+y = (rng.uniform(size=n) < true_p).astype(int)
+
+# BUG 1: scale using the full dataset
+scaler = StandardScaler().fit(X)
+Xs = scaler.transform(X)
+
+# BUG 2: unstratified split of an imbalanced outcome
+X_tr, X_te, y_tr, y_te = train_test_split(Xs, y, test_size=0.3, random_state=0)
+
+# BUG 3: score the model on its own training data
+model = LogisticRegression(max_iter=1000).fit(X_tr, y_tr)
+print("accuracy:", model.score(X_tr, y_tr))
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **Pre-split scaling** — test statistics leaked into training inputs. Fit the scaler on `X_tr` only.
+2. **No stratification** — with ~48% positives here it's tolerable, but the code must not *depend on luck*; make `stratify=y` unconditional.
+3. **Evaluating on training data** — `score(X_tr, y_tr)` measures memorization, not generalization. Score on `X_te, y_te`.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+
+rng = np.random.default_rng(11)
+n = 400
+X = rng.normal(size=(n, 4))
+true_p = 1 / (1 + np.exp(-(X @ [1.0, -1.0, 0.5, 0.0])))
+y = (rng.uniform(size=n) < true_p).astype(int)
+
+X_tr, X_te, y_tr, y_te = train_test_split(
+    X, y, test_size=0.3, random_state=0, stratify=y
+)
+scaler = StandardScaler().fit(X_tr)            # train statistics only
+X_tr_s = scaler.transform(X_tr)
+X_te_s = scaler.transform(X_te)                # same transform, no re-fit
+
+model = LogisticRegression(max_iter=1000).fit(X_tr_s, y_tr)
+print("train accuracy:", model.score(X_tr_s, y_tr))
+print("test  accuracy:", model.score(X_te_s, y_te))
+```
+
+Test ≤ train, and both are believable — that's what an honest pipeline looks like.
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** A reviewer asks why your cross-validation used `shuffle=True, random_state=42`. Justify both choices, and explain when `shuffle=True` would be **wrong**.
+
+<details>
+<summary>Hint</summary>
+
+What order were the rows in? What does an unshuffled KFold fold look like if the table is sorted by group or by time?
+</details>
+
+<details>
+<summary>Solution</summary>
+
+`shuffle=True` protects against **order artifacts**: real data frames are often sorted (by site, date, or outcome), and unshuffled KFold then makes folds that are systematically different from each other — e.g. sorted-by-class data can place an entire class in one fold, making it a training-only class for other folds. `random_state` makes the shuffling deterministic so the estimate is reproducible and comparable across code changes. `shuffle=True` is wrong when **row order carries information**: time series (train must precede test — use `TimeSeriesSplit`), spliced biological batches where you want to generalize to a *new* batch (use `GroupKFold`/leave-one-batch-out instead), and grouped data where rows share a subject (shuffle splits subject's rows across train/test — leakage). The seed is part of the protocol, like the test set itself.
+</details>
+
+**Q2.** Your test set has 200 samples and true accuracy 80%. What is the standard error of the *measured* accuracy, and what does that imply about differences of 1–2 points between two models' test scores?
+
+<details>
+<summary>Hint</summary>
+
+Binomial SE = √(p(1−p)/n). Compute it for p = 0.8, n = 200.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+SE = √(0.8·0.2/200) = √0.0008 ≈ **0.028** (2.8 percentage points). Two models measured 81% vs 83% on this test set differ by ~0.7 SE — indistinguishable from partition noise. Implications: (1) report uncertainty with test metrics, not just points; (2) prefer cross-validation for comparisons (averages over splits); (3) reserve the biggest test set you can afford; (4) resist leaderboard-grade conclusions from small test sets. This is the bridge to [4.1 The generalization problem](../part-04-validation-model-selection/04-1-generalization-problem.qmd) and [4.3 Cross-validation](../part-04-validation-model-selection/04-3-cross-validation.qmd).
+</details>
+
+## 6. Complex Questions
+
+**C1 (splitting × [0.4 EDA](00-4-visualization-eda.qmd)).** Construct a dataset where the *test set's* marginal distribution differs visibly from training's (e.g. sample y-dependent data, then split unstratified). Plot both test histograms. Then explain, quantitatively, how a covariate-shifted test set changes the *meaning* of every metric you compute on it — and why stratify/shuffling fixes the *estimation* but not a genuinely shifted deployment population.
+
+**C2 (splitting × [1.5 Resampling](../part-01-statistics-bridge/01-5-resampling-intuition.qmd)).** Repeated train/test splitting (50 random 80/20 splits) gives a distribution of test R². Compare its spread to the K-fold spread from Exercise 2. Which estimator has lower variance here, and what does each split in the repeated scheme *share* with the others that K-fold handles differently? (This previews why repeated CV and bootstrap ([4.5 Bootstrap](../part-04-validation-model-selection/04-5-bootstrap.qmd)) exist.)
+
+## 7. Summary
+
+- Test data answers one question — "how does this do on new data?" — and must be spent once.
+- `train_test_split(test_size, random_state, stratify=y)`: stratify classes, seed everything.
+- K-fold: every sample validated once; report mean **and** across-fold SD.
+- Leakage has four faces: y-derived features, pre-fit preprocessing, duplicate subjects, shuffled time.
+- The universal fix: fit preprocessing inside training folds — or just use a `Pipeline`.
+- Small/imbalanced test sets produce undefined metrics and noisy numbers; SE of accuracy ≈ √(p(1−p)/n).
+- Part 0's toolkit is complete. Next, Part 1 builds the statistical language — centers, spread, probability, and inference — that turns those splits and plots into claims: [1.1 Descriptive statistics](../part-01-statistics-bridge/01-1-descriptive-statistics.qmd).

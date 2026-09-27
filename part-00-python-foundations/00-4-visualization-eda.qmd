@@ -1,0 +1,400 @@
+---
+title: "0.4 Visualisation & Exploratory Analysis"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - matplotlib
+---
+
+Exploratory Data Analysis (EDA) is the discipline of interrogating data **before** modeling: distributions first, relationships second, anomalies always. matplotlib is the plotting engine under nearly every Python plotting library (pandas plotting calls it, seaborn wraps it), so we drill it directly.
+
+> **Tier 1 — every cell below runs live. Re-plot, don't just read plots.**
+
+## 1. Basic Concept
+
+matplotlib has two layers: the **pyplot state machine** (`plt.plot(...)`) for quick plots, and the **object-oriented interface** (`fig, ax = plt.subplots()`; then `ax.plot(...)`) which is the right habit for anything non-trivial. Anatomy you should be able to name: `Figure` (the canvas), `Axes` (one plot panel), axis (with limits, ticks, labels), title, legend.
+
+```{pyodide}
+#| autorun: true
+#| fig-width: 7
+#| fig-height: 3.5
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+x = np.linspace(0, 10, 200)
+y = 0.5 * x + rng.normal(0, 1, 200)
+
+fig, ax = plt.subplots()
+ax.scatter(x, y, s=8, alpha=0.5, label="samples")
+xs = np.array([x.min(), x.max()])
+ax.plot(xs, 0.5 * xs, color="red", lw=2, label="true line")
+ax.set_xlabel("x")
+ax.set_ylabel("y")
+ax.set_title("Every plot needs labeled axes")
+ax.legend()
+plt.show()
+```
+
+The three plots that carry 90% of EDA:
+
+```{pyodide}
+#| autorun: true
+#| fig-width: 8.5
+#| fig-height: 3
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(1)
+vals = rng.lognormal(1.0, 0.6, 300)                 # right-skewed data
+
+fig, axes = plt.subplots(1, 3, figsize=(8.5, 3))
+axes[0].hist(vals, bins=25, color="steelblue", edgecolor="white")
+axes[0].set_title("Histogram — distribution")
+axes[1].boxplot(vals)
+axes[1].set_title("Boxplot — center, spread, outliers")
+axes[2].scatter(np.arange(300), vals, s=8, alpha=0.5)
+axes[2].set_title("Run chart — order & drift")
+fig.tight_layout()
+plt.show()
+```
+
+**EDA is a loop, not a plot.** The minimal protocol you should run on *any* new table:
+
+1. `.head()`, `.shape`, `.dtypes` — what is this, actually?
+2. `.describe()` and `.isna().sum()` — ranges, centers, holes.
+3. Histogram of every numeric column — skew, multimodality, impossible values (negative ages).
+4. Scatter/correlation for relationships you care about.
+5. Boxplots by group — does grouping explain spread?
+
+```{pyodide}
+#| autorun: true
+import numpy as np
+import pandas as pd
+
+rng = np.random.default_rng(2)
+n = 200
+eda = pd.DataFrame({
+    "group":  rng.choice(["A", "B"], n),
+    "age":    rng.integers(20, 80, n),
+    "marker": rng.lognormal(2, 0.5, n).round(2),
+})
+print(eda.describe().round(2))     # marker: mean >> median? skew flag
+print(eda.groupby("group")["marker"].agg(["mean", "median", "count"]))
+```
+
+## 2. Concept Questions
+
+1. In `fig, ax = plt.subplots()`, what is the type and role of `ax`?
+2. Your histogram has one tall bar at 0 and a flat sea of bars to the right. What transform should you almost certainly try?
+3. Why is `alpha=0.3` or smaller essential when scatter-plotting thousands of points?
+4. What does a boxplot's whisker-cap convention actually mark, and what is plotted as individual points?
+5. Name two questions a `groupby` + boxplot answers that `describe()` alone cannot.
+
+<details>
+<summary>Answers</summary>
+
+1. `ax` is an **Axes** object — one panel. All plotting methods hang off it (`ax.hist`, `ax.set_xlabel`); the OO interface avoids pyplot's hidden global state and is required for multi-panel figures.
+2. A **log transform** (`np.log10` / `np.log1p`). Mean ≫ median in `.describe()` is the numeric tell; a spike at zero with a long right tail is the visual tell.
+3. Overplotting: with thousands of points, opaque markers hide density — the plot then shows only *where points exist*, not *where they concentrate*. Alpha (transparency) makes density visible as darkness.
+4. Whiskers mark the most extreme data points within 1.5×IQR of the quartiles; points beyond are drawn individually as (candidate) outliers. The fence is a convention, not a definition of "outlier."
+5. Whether distributions **differ in shape** (not just center) between groups, and whether **sample sizes are comparable** (a tiny group's mean is noise). `describe()` pools everything.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Small plotting reflexes. For each: predict the shape of the output, run, compare.
+
+```{pyodide}
+#| fig-width: 6.5
+#| fig-height: 3
+import numpy as np
+import matplotlib.pyplot as plt
+rng = np.random.default_rng(4)
+
+fig, axes = plt.subplots(1, 2, figsize=(6.5, 3))
+axes[0].hist(rng.normal(0, 1, 5000), bins=30)
+axes[0].set_title("normal")
+axes[1].hist(rng.exponential(1, 5000), bins=30)
+axes[1].set_title("exponential (skewed)")
+fig.tight_layout()
+plt.show()
+```
+
+```{pyodide}
+#| fig-width: 6.5
+#| fig-height: 3
+import numpy as np
+import matplotlib.pyplot as plt
+rng = np.random.default_rng(5)
+x = rng.normal(0, 1, 800)
+y = 0.8 * x + rng.normal(0, 0.5, 800)
+
+fig, axes = plt.subplots(1, 2, figsize=(6.5, 3))
+axes[0].scatter(x, y, s=6, alpha=0.3)                     # opaque vs alpha: compare!
+axes[1].scatter(x, y, s=6)
+fig.tight_layout()
+plt.show()
+```
+
+```{pyodide}
+#| fig-width: 6.5
+#| fig-height: 3
+import numpy as np
+import matplotlib.pyplot as plt
+rng = np.random.default_rng(6)
+g = rng.choice(["ctrl", "low", "high"], 300)
+v = rng.normal(10, 2, 300) + (g == "high") * 3 - (g == "low") * 2
+
+fig, ax = plt.subplots(figsize=(5, 3))
+order = ["ctrl", "low", "high"]
+ax.boxplot([v[g == k] for k in order], tick_labels=order)   # list of arrays = wide-by-group
+ax.set_ylabel("marker")
+plt.show()
+```
+
+```{pyodide}
+#| fig-width: 6.5
+#| fig-height: 3
+import numpy as np
+import matplotlib.pyplot as plt
+rng = np.random.default_rng(7)
+counts = rng.poisson(50, 30)
+
+fig, ax = plt.subplots(figsize=(5.5, 3))
+ax.bar(np.arange(30), counts)             # bar for counts by category/index
+ax.plot(np.arange(30), np.cumsum(counts) / 20, color="red")  # arbitrary 2nd line — see pitfalls!
+ax.set_title("bar + line (note the misleading scales)")
+plt.show()
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Full EDA pass on the simulated cohort in one figure: (a) 2×2 grid with histograms of `age`, `log10(marker)`, a scatter of age vs log-marker, and a boxplot of log-marker by group. Every panel titled and every axis labeled.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7.5
+#| fig-height: 5.5
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(2)
+n = 200
+df = pd.DataFrame({
+    "group":  rng.choice(["A", "B"], n),
+    "age":    rng.integers(20, 80, n),
+    "marker": rng.lognormal(2, 0.5, n),
+})
+df["log_marker"] = np.log10(df["marker"])
+
+fig, axes = plt.subplots(2, 2, figsize=(7.5, 5.5))
+axes[0, 0].hist(df["age"], bins=20, color="steelblue", edgecolor="white")
+axes[0, 0].set(title="Age", xlabel="years", ylabel="count")
+axes[0, 1].hist(df["log_marker"], bins=20, color="darkorange", edgecolor="white")
+axes[0, 1].set(title="log10 marker", xlabel="log10(marker)", ylabel="count")
+axes[1, 0].scatter(df["age"], df["log_marker"], s=8, alpha=0.4)
+axes[1, 0].set(xlabel="age", ylabel="log10 marker", title="Age vs marker")
+axes[1, 1].boxplot(
+    [df.loc[df["group"] == k, "log_marker"] for k in ["A", "B"]],
+    tick_labels=["A", "B"],
+)
+axes[1, 1].set(title="log marker by group", ylabel="log10(marker)")
+fig.tight_layout()
+plt.show()
+```
+
+Note the log transform before plotting the skewed marker — the histogram becomes readable and the boxplot comparison becomes fair.
+</details>
+
+**Exercise 2.** Demonstrate **bin-width sensitivity**: plot the same 200-point sample as 5, 20, and 100-bin histograms side by side. Write one sentence on what the "right" number of bins depends on.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 8.5
+#| fig-height: 2.8
+import numpy as np
+import matplotlib.pyplot as plt
+rng = np.random.default_rng(9)
+x = rng.normal(0, 1, 200)
+
+fig, axes = plt.subplots(1, 3, figsize=(8.5, 2.8))
+for ax, bins in zip(axes, [5, 20, 100]):
+    ax.hist(x, bins=bins, color="steelblue", edgecolor="white")
+    ax.set_title(f"bins={bins}")
+fig.tight_layout()
+plt.show()
+```
+
+There is no "right" bin count — it depends on **sample size and the question** (rough guides: Sturges `1+log2(n)`, Freedman–Diaconis based on IQR). With n=200, 100 bins mostly display sampling noise; 5 bins can hide bimodality. Look at several.
+</details>
+
+**Exercise 3.** Build a **scatter matrix** (pairplot by hand): for the 3 numeric columns of the cohort, produce a 3×3 grid, diagonal = histograms, off-diagonal = scatter. No seaborn.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7
+#| fig-height: 6
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(2)
+df = pd.DataFrame({
+    "age":    rng.integers(20, 80, 200),
+    "marker": rng.lognormal(2, 0.5, 200),
+    "score":  rng.normal(50, 10, 200),
+})
+cols = df.columns.tolist()
+k = len(cols)
+
+fig, axes = plt.subplots(k, k, figsize=(7, 6))
+for i in range(k):
+    for j in range(k):
+        ax = axes[i, j]
+        if i == j:
+            ax.hist(df[cols[i]], bins=20, color="steelblue")
+        else:
+            ax.scatter(df[cols[j]], df[cols[i]], s=5, alpha=0.3)
+        if i == k - 1:
+            ax.set_xlabel(cols[j])
+        if j == 0:
+            ax.set_ylabel(cols[i])
+fig.tight_layout()
+plt.show()
+```
+
+This double loop is the whole idea of a pairs plot (R: `GGally::ggpairs`). You will later recognize PCA and clustering as ways to make such grids *interpretable* in high dimensions.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Y-axis truncation exaggerates differences.** Bar charts starting at non-zero are a classic misleading visual (and a classic reviewer complaint). For line charts truncation is fine; for bars, don't.
+- **Dual axes are a lie amplifier.** Two independent y-scales let you manufacture any "correlation." Prefer two stacked panels sharing an x-axis.
+- **Log scales with zeros/negatives break** (`log(0) = -inf`): use `symlog` or transform with `np.log1p` after checking for non-positives.
+- **Histograms are model statements**: bins impose structure that may not exist (bimodality can appear/vanish with bin width — Exercise 2).
+- **Correlation plots lie under nonlinearity**: r ≈ 0 says "no *linear* relation," nothing more (see [1.2 Relationships](../part-01-statistics-bridge/01-2-relationships.qmd)).
+- **Colorblind-safe palettes** (`tab10`, viridis) and direct labeling beat red-green pairs and remote legends.
+- **matplotlib in Pyodide**: always end with `plt.show()`; set `fig-width`/`fig-height` cell options (inches) rather than `figsize` when you want consistent embedding.
+
+### Read & Refactor AI Code
+
+This AI-generated figure has **four problems** (three visual, one data). Run it, list them *before* opening the solution.
+
+```{pyodide}
+#| fig-width: 6.5
+#| fig-height: 3
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(13)
+treated = rng.normal(11.8, 1.5, 40)
+control = rng.normal(10.0, 1.5, 40)
+
+fig, axes = plt.subplots(1, 2, figsize=(6.5, 3))
+
+axes[0].bar(["control", "treated"], [control.mean(), treated.mean()], color=["gray", "red"])
+axes[0].set_ylim(9.0, 12.5)                       # problem 1
+axes[0].set_title("Treatment effect")
+
+axes[1].scatter(np.arange(40), control)
+axes[1].scatter(np.arange(40), treated)           # problem 2
+axes[1].set_title("Subjects")
+
+vals = np.concatenate([control, treated])
+axes[0].hist(vals)                                # problem 3 (and it lands on the bar Axes)
+
+plt.show()                                        # problem 4
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **Truncated bar axis** (y from 9.0): turns a modest mean difference into a towering bar. Bars must start at 0 — or better, show the *distribution* instead of two means.
+2. **Unlabeled, indistinguishable scatter series**: same color/marker for both groups, no legend, x-axis meaningless. Need labels + legend + real x (e.g. strip/jitter plot).
+3. **Wrong Axes**: the histogram is drawn on the *bar chart's* panel (`axes[0]`), overwriting the bars. Use the intended panel (`axes[1]` or a third).
+4. **State-machine mixing**: `plt.show()` after building with `fig, axes` is fine, but any further `plt.hist`-style calls would target the *current* figure implicitly. Stay in one interface.
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(13)
+treated = rng.normal(11.8, 1.5, 40)
+control = rng.normal(10.0, 1.5, 40)
+
+fig, axes = plt.subplots(1, 2, figsize=(7, 3.2))
+
+axes[0].boxplot([control, treated], tick_labels=["control", "treated"])
+axes[0].set_ylabel("marker")
+axes[0].set_title("Distributions (not just means)")
+
+axes[1].scatter(np.arange(40), control, alpha=0.6, label="control")
+axes[1].scatter(np.arange(40), treated, alpha=0.6, label="treated")
+axes[1].set_xlabel("subject index")
+axes[1].set_ylabel("marker")
+axes[1].legend()
+axes[1].set_title("Individual subjects")
+
+fig.tight_layout()
+plt.show()
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** A colleague says: "the histogram is bimodal, so there are two subpopulations." Give three alternative explanations and describe the EDA you would run to distinguish them.
+
+<details>
+<summary>Hint</summary>
+
+Think: sampling noise (Exercise 2), mixtures of process regimes (batch), and transform artifacts.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+(a) **Sampling noise**: with small n, bin counts fluctuate into a fake second mode — re-draw with different bin widths/seeds (Exercise 2 logic) and bootstrap the histogram. (b) **Batch/technical structure**: data collected in two runs, sites, or instruments — color the histogram by batch; check within-batch shape; a two-sample test across the suspected split ([1.4 Statistical inference](../part-01-statistics-bridge/01-4-statistical-inference.qmd)) should vanish within batch. (c) **Transform artifact**: e.g. log of a mixture of a point-mass at zero plus positives, or periodic rounding (integer counts). Plot untransformed, check value granularity. Also consider a genuine mixture — but the burden of proof is after (a)–(c) are excluded: overlay a fitted two-component normal mixture and check the gap depth.
+</details>
+
+**Q2.** Explain why `ax.set_yscale("log")` often "fixes" a scatter where the vertical spread grows with x, and what that visual pattern implies for modeling choices later (name the variance structure).
+
+<details>
+<summary>Solution</summary>
+
+Funnel-shaped residuals — spread proportional to the mean level — indicate **multiplicative** noise: y = f(x)·ε rather than y = f(x) + ε. Multiplicative error becomes additive and roughly homoscedastic after a log transform, which is why log axes tidy such plots. Modeling consequence: fit the model to `log(y)` (or use a GLM with a log link and variance proportional to mean², gamma/Poisson-style), rather than vanilla least squares which weights the large-y points overwhelmingly. The EDA observation is literally a specification diagnostic for [Part 2 regression](../part-02-linear-regression/02-1-regression-setup.qmd).
+</details>
+
+## 6. Complex Questions
+
+**C1 (EDA × [0.3 pandas](00-3-pandas.qmd)).** Using `groupby` + the plotting drills, construct the "small multiples" figure: one histogram per group on a shared x-range. Which two pandas/matplotlib mechanics make shared scales essential for honest comparison, and what does each group's `count` tell you about how much to trust each panel?
+
+**C2 (EDA × [1.1 Descriptive statistics](../part-01-statistics-bridge/01-1-descriptive-statistics.qmd)).** Generate lognormal data, then plot mean and median of increasing samples (n = 5, 10, 50, 200, 1000, each resampled many times) as dot strips. Which estimator's strip narrows faster, and how does the histogram shape you saw in Section 1 predict that result? Connect: skew → sampling distribution of the mean vs median → why "median for skewed data" is a *precision* claim, not just an aesthetic one.
+
+## 7. Summary
+
+- EDA protocol: head/dtypes → describe/isna → distributions → relationships → by-group comparisons.
+- Use the OO interface (`fig, ax = plt.subplots()`); label everything; end cells with `plt.show()`.
+- Alpha and jitter reveal density; truncated bar axes and dual y-axes manufacture stories.
+- Transform skewed data (log) *before* comparing and plotting — mean ≫ median is the flag.
+- Bin width is an assumption; look at several before claiming structure.
+- Boxplots compare distributions; scatter matrices compare everything pairwise.
+- Pictures suggest; only inference decides — next page sets up the train/test discipline that makes model evaluation honest: [0.5 Data splitting](00-5-data-splitting.qmd).

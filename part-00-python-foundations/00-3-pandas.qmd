@@ -1,0 +1,324 @@
+---
+title: "0.3 pandas"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+---
+
+NumPy arrays are fast but anonymous — columns have no names, rows have no identity, and mixed types are impossible. **pandas** adds labels. It is the Python twin of R's data frame (the tidyverse's `tibble`), and it will be your main tool for loading, cleaning, and summarizing data before any model sees it.
+
+> **Tier 1 — every cell below runs live. Predict, then run.**
+
+## 1. Basic Concept
+
+A **DataFrame** is a rectangular table: each **column** is a **Series** (a labeled 1-D array with one `dtype`), and rows share an **index**. Think: dict of columns + shared row labels.
+
+```{pyodide}
+#| autorun: true
+import pandas as pd
+
+df = pd.DataFrame({
+    "sample":   ["S1", "S2", "S3", "S4"],
+    "tissue":   ["tumor", "normal", "tumor", "normal"],
+    "expr":     [12.5, 8.1, 15.2, 7.9],
+    "n_reads":  [2_100_000, 1_800_000, 2_500_000, 1_750_000],
+})
+print(df)
+print(df.dtypes)          # object = text; float64/int64 = numeric
+```
+
+**Two selectors, two jobs.** `loc` selects **by label**, `iloc` by **integer position**, and both use `[rows, columns]`:
+
+```{pyodide}
+#| autorun: true
+import pandas as pd
+df = pd.DataFrame(
+    {"expr": [12.5, 8.1, 15.2, 7.9], "tissue": ["tumor", "normal", "tumor", "normal"]},
+    index=["S1", "S2", "S3", "S4"],
+)
+print(df.loc["S2", "expr"])          # by label: 8.1
+print(df.iloc[1, 0])                 # by position: 8.1
+print(df.loc[df["expr"] > 10])       # boolean filter (rows where expr > 10)
+print(df.loc[df["tissue"] == "tumor", "expr"])   # filter rows, pick one column
+```
+
+**groupby** is the split–apply–combine engine and probably the single most used pandas verb:
+
+```{pyodide}
+#| autorun: true
+import pandas as pd
+df = pd.DataFrame({
+    "tissue": ["tumor", "normal", "tumor", "normal", "tumor"],
+    "expr":   [12.5, 8.1, 15.2, 7.9, 11.0],
+})
+print(df.groupby("tissue")["expr"].mean())            # one statistic
+print(df.groupby("tissue")["expr"].agg(["mean", "std", "count"]))  # several at once
+```
+
+**merging** joins two tables on a key — the same mental model as SQL joins:
+
+```{pyodide}
+#| autorun: true
+import pandas as pd
+expr = pd.DataFrame({"gene": ["BRCA1", "TP53", "EGFR"], "log2fc": [1.2, -0.8, 2.5]})
+anno = pd.DataFrame({"gene": ["BRCA1", "TP53"], "chr": [17, 17]})
+
+merged = expr.merge(anno, on="gene", how="left")   # keep all expr rows
+print(merged)
+print(merged["chr"].isna().sum())                   # 1 — EGFR had no annotation
+```
+
+## 2. Concept Questions
+
+1. What is the difference between `df["expr"]` and `df[["expr"]]`?
+2. When do `loc` and `iloc` give different answers for the same-looking call?
+3. Why does `df[df["expr"] > 10]["expr"] = 0` silently fail to change `df`?
+4. What does `how="left"` in `merge` guarantee, and what can it create?
+5. What does `df.groupby("tissue")["expr"].transform("mean")` return, and how is it different from `.mean()`?
+
+<details>
+<summary>Answers</summary>
+
+1. `df["expr"]` returns a **Series**; `df[["expr"]]` returns a **one-column DataFrame**. Many methods (`.T`, joining, multiple columns) behave differently on the two.
+2. When the index labels are not `0..n-1` (e.g. after filtering, or a named index). `loc["S2", ...]` finds the row *named* S2; `iloc[1, ...]` finds the *second* row whatever it's called.
+3. **Chained indexing**: the first bracket may return a temporary copy, so the assignment can land on a copy that's then discarded (the classic `SettingWithCopyWarning`). The correct form assigns through one `loc` call: `df.loc[df["expr"] > 10, "expr"] = 0`.
+4. Left merge keeps **every row of the left table**; rows with no match on the right get `NaN` in the right columns (a merge "fan-out" can also *multiply* rows if the key is duplicated on the right).
+5. `transform("mean")` returns a Series **the same length/index as `df`** — the group mean broadcast back to each row — so you can subtract it to center within groups. `.mean()` returns one row per group.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+We'll build one small cohort table and predict outputs before running each cell.
+
+```{pyodide}
+import pandas as pd
+import numpy as np
+rng = np.random.default_rng(3)
+df = pd.DataFrame({
+    "patient": [f"P{i:02d}" for i in range(1, 13)],
+    "group":   rng.choice(["control", "treated"], size=12),
+    "age":     rng.integers(30, 70, size=12),
+    "marker":  rng.normal(10, 2, size=12).round(2),
+})
+print(df.head(3))
+print(df.shape)                        # (12, 4)
+print(df["group"].value_counts())      # class balance — always look first
+```
+
+```{pyodide}
+import pandas as pd, numpy as np
+# (re-run the cell above first so df exists)
+print(df["age"].mean(), df["age"].median())          # two centers
+print(df.loc[df["group"] == "treated", "marker"].mean())   # group mean, one line
+print(df.sort_values("marker", ascending=False).head(3)["patient"].tolist())
+print(df["age"].quantile([0.25, 0.5, 0.75]).to_list())
+```
+
+```{pyodide}
+import pandas as pd, numpy as np
+# (requires df from above)
+df2 = df.assign(marker_z=(df["marker"] - df["marker"].mean()) / df["marker"].std())
+print(df2["marker_z"].std().round(12))               # 1.0 — invariant check
+print(df.groupby("group")["marker"].agg(["mean", "std", "count"]))
+print(pd.crosstab(df["group"], df["age"] > 50))      # group × age>50 contingency
+```
+
+```{pyodide}
+import pandas as pd, numpy as np
+# missing data drill
+dmg = df.copy()
+dmg.loc[2, "marker"] = np.nan
+dmg.loc[5, "age"] = np.nan
+print(dmg.isna().sum())                # count NAs per column
+print(dmg["marker"].mean())            # pandas skips NaN by default (skipna)
+print(dmg.dropna().shape)              # row-wise deletion — think before using!
+print(dmg["age"].fillna(dmg["age"].median()))
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** From the cohort `df` above: build a summary table with one row per group showing mean age, mean marker, and patient count, then add a column `is_old` (age > 50) and recompute the table splitting on both `group` and `is_old`.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import pandas as pd, numpy as np
+# (requires df from above)
+dfx = df.assign(is_old=df["age"] > 50)
+
+summary = dfx.groupby("group").agg(
+    mean_age=("age", "mean"),
+    mean_marker=("marker", "mean"),
+    n=("patient", "count"),
+)
+print(summary)
+
+print(dfx.groupby(["group", "is_old"])["marker"].agg(["mean", "count"]))
+```
+
+The `agg(col=("source", "func"))` *named aggregation* syntax produces clean column names in one pass — no renaming afterwards.
+</details>
+
+**Exercise 2.** Merge a measurements table with a demographic table (left join), count missing matches, and fill missing `site` values with `"unknown"`.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import pandas as pd
+meas = pd.DataFrame({"patient": ["P01", "P02", "P03"], "marker": [9.1, 12.3, 10.8]})
+demo = pd.DataFrame({"patient": ["P01", "P02", "P04"], "site": ["A", "B", "A"]})
+
+m = meas.merge(demo, on="patient", how="left")
+print(m)
+print("unmatched:", m["site"].isna().sum())
+m["site"] = m["site"].fillna("unknown")
+print(m)
+```
+
+P03 exists in measurements but not demographics → left join keeps it, `site` becomes NaN. This exact pattern (merge → count NaN → decide policy) is 90% of real data integration.
+</details>
+
+**Exercise 3.** Given the wide expression table below (rows = genes, columns = samples), compute each gene's mean and variance, keep genes with variance above 2.0, and **melt** the survivors into long format (`gene, sample, value`).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import pandas as pd, numpy as np
+rng = np.random.default_rng(11)
+E = pd.DataFrame(
+    rng.normal(10, 3, size=(5, 4)),
+    index=["GENE1", "GENE2", "GENE3", "GENE4", "GENE5"],
+    columns=["S1", "S2", "S3", "S4"],
+)
+
+stats = E.assign(mean=E.mean(axis=1), var=E.var(axis=1))
+keep = stats[stats["var"] > 2.0].index
+print("kept:", list(keep))
+
+long = E.loc[keep].reset_index(names="gene").melt(id_vars="gene", var_name="sample", value_name="expr")
+print(long.head())
+```
+
+Wide ↔ long reshaping (`melt` / `pivot`) is the pandas equivalent of tidyverse's `pivot_longer` / `pivot_wider`. Most plotting and modeling tools want **long** format.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Chained assignment is the #1 pandas bug.** `df[df.a > 0]["b"] = 1` may write to a temporary copy. Always: single `loc` call → `df.loc[mask, "b"] = 1`. (pandas 3.0's copy-on-write makes chained assignment fail *loudly*; the pyodide pandas here is 2.x, where it can still silently no-op.)
+- **`inplace=True` is deprecated style.** It mutates the object you may not own and prevents method chaining. Prefer `df = df.dropna()` or `df.dropna(subset=["marker"], inplace=False)`.
+- **Index is not "row number".** After filtering, `.iloc[0]` and `.index[0]` diverge. Reset with `reset_index(drop=True)` when position and label must agree again.
+- **`merge` can silently multiply rows** if the key is duplicated on either side — always check `len(result)` vs `len(left)` and `result["key"].value_counts()`.
+- **`==` on a column with NaN gives False**, never NaN: `df[df["x"] == np.nan]` matches nothing. Use `df["x"].isna()`.
+- **Object dtype columns are slow** (Python objects, not arrays). Convert strings to `category` when few distinct values; parse dates with `pd.to_datetime` immediately.
+- **`groupby` drops groups containing NaN keys by default** (`dropna=True`) — a silent row-loss channel in reports.
+
+### Read & Refactor AI Code
+
+This AI-generated analysis has **three bugs**. Run it, observe, fix.
+
+```{pyodide}
+import pandas as pd, numpy as np
+
+rng = np.random.default_rng(5)
+df = pd.DataFrame({
+    "site":  rng.choice(["A", "B"], 20),
+    "value": rng.normal(10, 2, 20).round(2),
+})
+df.loc[[3, 7], "value"] = np.nan
+
+# BUG 1: filter + chained assignment
+high = df[df["value"] > 10]
+high["site"] = "HIGH"                    # intent: mark high rows in df
+
+# BUG 2: NaN comparison
+n_missing = df[df["value"] == np.nan].shape[0]
+
+# BUG 3: per-group loop instead of groupby, plus an index trap
+result = {}
+for site in ["A", "B"]:
+    sub = df[df["site"] == site]
+    result[site] = sub["value"].mean()
+
+print(df.head())
+print("marked rows in df:", (df["site"] == "HIGH").sum())
+print("missing:", n_missing)
+print(result)
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **Chained assignment**: `high` may be a copy, so the mark never lands in `df` (see the printed 0). Fix with `df.loc[df["value"] > 10, "site"] = "HIGH"`.
+2. **NaN never equals NaN**: count is 0 despite two NaNs. Fix: `df["value"].isna().sum()`.
+3. **Loop + manual dict** is slower, noisier, and easier to get wrong than `groupby`; also the loop's `.mean()` results are fine here but the pattern invites index bugs. Fix: `df.groupby("site")["value"].mean()`.
+
+```{pyodide}
+#| edit: false
+import pandas as pd, numpy as np
+rng = np.random.default_rng(5)
+df = pd.DataFrame({
+    "site":  rng.choice(["A", "B"], 20),
+    "value": rng.normal(10, 2, 20).round(2),
+})
+df.loc[[3, 7], "value"] = np.nan
+
+df.loc[df["value"] > 10, "site"] = "HIGH"     # single loc call
+n_missing = df["value"].isna().sum()          # isna, not == nan
+means = df.groupby("site")["value"].mean()    # vectorized split-apply-combine
+
+print("marked rows:", (df["site"] == "HIGH").sum())
+print("missing:", n_missing)
+print(means)
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** A colleague merges a 20,000-row measurements table with a 200-row annotation table and the result has 23,117 rows. Diagnose the likely causes and give a defensive merge recipe.
+
+<details>
+<summary>Hint</summary>
+
+What does `validate=` in `merge` do? What does a duplicated key do to row counts?
+</details>
+
+<details>
+<summary>Solution</summary>
+
+The key is duplicated: an m-to-many join multiplies rows (each left row matches *every* right row with the same key). Diagnosis: `anno["gene"].value_counts().head()`, compare `len(left)`, `len(right)`, `len(merged)`; check `merged["gene"].is_unique`. Defensive recipe: `merged = meas.merge(anno, on="gene", how="left", validate="m:1")` — raises instead of fanning out; or deduplicate `anno.drop_duplicates("gene")` first; assert `len(merged) == len(meas)` afterwards. Choosing `validate` is documentation *and* a runtime guard.
+</details>
+
+**Q2.** Explain the difference between `apply`, `transform`, and `agg` on a `groupby` object, and why `apply` is the dangerous one. Give a task where `apply` is genuinely required.
+
+<details>
+<summary>Solution</summary>
+
+`agg` collapses each group to **one value** (len = n groups). `transform` returns **one value per input row** (len = n rows, group statistic broadcast back). `apply` returns whatever your function returns — a scalar, a Series, or a DataFrame — so pandas has to guess how to assemble results, which is slower and produces surprising shapes/indexes. Use agg/transform whenever possible; reach for `apply` when you need genuinely per-group multi-row computation, e.g. fitting a per-group linear model and returning its coefficients as a Series: `df.groupby("site").apply(lambda g: pd.Series(np.polyfit(g["x"], g["y"], 1), index=["slope", "intercept"]))`. In modern pandas, prefer `groupby(...).filter(...)` for row selection and named `agg` for summaries to keep types predictable.
+</details>
+
+## 6. Complex Questions
+
+**C1 (pandas × [0.4 Visualisation](00-4-visualization-eda.qmd)).** Take the cohort `df` and produce, in long format, everything needed to plot marker distributions per group: which table shape does matplotlib's `ax.boxplot` want (list of arrays) and which does a pandas `.boxplot(by=...)` want? Convert between wide and long to produce the same figure both ways — internalize why "tidy/long" is the interchange format and "wide" is a display choice.
+
+**C2 (pandas × [1.2 Relationships](../part-01-statistics-bridge/01-2-relationships.qmd)).** For the cohort data, compute the correlation matrix of the numeric columns (`df.corr(numeric_only=True)`), then compute it **within groups** (`df.groupby("group").corr(numeric_only=True)`). Under what real-world condition can the pooled correlation have the *opposite sign* from every within-group correlation (Simpson's paradox)? Construct a 3-line synthetic example demonstrating it.
+
+## 7. Summary
+
+- A DataFrame is labeled columns of Series sharing an index; `dtypes` tells you what you actually have.
+- `loc` = labels, `iloc` = positions; filtering is `df.loc[mask, cols]` — one call, no chaining.
+- `groupby` + `agg`/`transform` covers split–apply–combine; `transform` broadcasts back to row shape.
+- `merge(how="left", validate="m:1")` with NaN-counting afterwards is the safe join recipe.
+- NaN: use `.isna()`, `skipna` defaults, and decide drop-vs-fill deliberately.
+- Wide is for humans, long is for machines; `melt`/`pivot` convert between them.
+- Numbers on a page lie less than pictures — next page turns these tables into plots that reveal structure before you model it: [0.4 Visualisation & EDA](00-4-visualization-eda.qmd).

@@ -1,0 +1,335 @@
+---
+title: "1.5 Resampling Intuition"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scipy
+    - pandas
+    - matplotlib
+---
+
+When the formula for an uncertainty is messy or unknown — a median, a difference of AUCs, a ratio — **resampling** replaces the mathematics with computation: shuffle or resample the data you have, recompute the statistic many times, and look at the spread. It is the bridge between classical inference and the cross-validation you will use for every model.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+**The bootstrap** treats your sample as a stand-in for the population: draw new samples **with replacement**, same size as the original, recompute the statistic, repeat. The variability across bootstrap replicates mimics the sampling variability of the statistic.
+
+```{pyodide}
+#| autorun: true
+import numpy as np
+from scipy import stats
+
+rng = np.random.default_rng(0)
+x = stats.lognorm.rvs(s=1.0, scale=5, size=60, random_state=7)   # skewed data
+
+boot_means = rng.choice(x, size=(10_000, len(x)), replace=True).mean(axis=1)
+lo, hi = np.percentile(boot_means, [2.5, 97.5])
+print(f"mean of data: {x.mean():.2f}, bootstrap 95% CI = ({lo:.2f}, {hi:.2f})")
+```
+
+Let's do that cleanly for the *median* — the statistic where formulas hurt:
+
+```{pyodide}
+#| autorun: true
+import numpy as np
+from scipy import stats
+
+rng = np.random.default_rng(0)
+x = stats.lognorm.rvs(s=1.0, scale=5, size=60, random_state=7)
+
+boot_meds = np.median(rng.choice(x, size=(10_000, len(x)), replace=True), axis=1)
+lo, hi = np.percentile(boot_meds, [2.5, 97.5])
+print(f"median = {np.median(x):.2f}, bootstrap 95% CI = ({lo:.2f}, {hi:.2f})")
+```
+
+**The permutation test** answers a different question — "is this association real?" — by **shuffling labels** to simulate a world where the null is exactly true, and asking how extreme the real statistic is among the shuffled ones:
+
+```{pyodide}
+#| autorun: true
+import numpy as np
+
+rng = np.random.default_rng(1)
+group_a = np.array([8.2, 9.1, 7.9, 8.8, 9.3, 8.5, 9.0, 8.1])
+group_b = np.array([9.8, 10.4, 9.6, 10.9, 10.2, 9.9, 11.0])
+
+observed = group_b.mean() - group_a.mean()
+pooled = np.concatenate([group_a, group_b])
+
+count = 0
+for _ in range(10_000):
+    perm = rng.permutation(pooled)
+    diff = perm[:8].mean() - perm[8:].mean()      # 8 in group A, 7 in B
+    count += abs(diff) >= abs(observed)
+print(f"observed diff = {observed:.2f}, permutation p = {(count + 1) / (10_000 + 1):.4f}")
+```
+
+**The jackknife** — leave one out, recompute, look at the spread — estimates bias and SE from n recomputations (cheap, deterministic, less flexible):
+
+```{pyodide}
+#| autorun: true
+import numpy as np
+
+x = np.array([2.0, 3.5, 3.9, 4.1, 5.0, 8.0])
+jack = np.array([np.delete(x, i).mean() for i in range(len(x))])
+n = len(x)
+jack_se = np.sqrt((n - 1) / n * np.sum((jack - jack.mean())**2))
+print(f"mean = {x.mean():.3f}, jackknife SE = {jack_se:.3f}")
+```
+
+## 2. Concept Questions
+
+1. Why must bootstrap resampling be **with replacement**, and what would happen without it?
+2. What null does a permutation test simulate, and why don't we need to know any distribution's shape?
+3. When does the bootstrap fail even with lots of data? Give one statistic and one data structure.
+4. How does a bootstrap CI for a mean compare to the t-formula CI for near-normal data — and for skewed data?
+5. Conceptually, how is K-fold cross-validation ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd)) a resampling method, and what statistic does it resample *for*?
+
+<details>
+<summary>Answers</summary>
+
+1. With replacement generates **variability** — each replicate is a new pseudo-sample whose composition differs (some points twice, some never). Without replacement every replicate is the original sample in a different order — zero variability, zero information.
+2. The null of **exchangeability**: group labels carry no information, so any shuffling of labels is as probable as the observed one. The p-value counts how often shuffled data produces a statistic at least as extreme as observed — no distributional formula required, only the labels being exchangeable under H₀.
+3. (a) **Extreme order statistics** — the min/max (bootstrap resamples contain ≤ n distinct values; the max can never exceed the observed max, so its distribution is degenerate). (b) **Dependent data** — time series or spatial data: i.i.d. resampling destroys the dependence structure that the statistic is about (fixes exist: block bootstrap).
+4. Near-normal: nearly identical (bootstrap ≈ t-interval, slightly wider with percentile method). Skewed: the bootstrap CI inherits the skew of the statistic's sampling distribution — often more honest than the symmetric t-CI ([1.4 Exercise 3](01-4-statistical-inference.qmd)).
+5. CV repeatedly partitions the sample, recomputes *model performance* on held-out parts, and reads stability from the spread — resampling the *rows* rather than resampling *within* a statistic's input. Bootstrap estimates the variability of a statistic; CV estimates the variability of an *estimation procedure's performance*.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(0)
+x = np.arange(1, 6)
+b = rng.choice(x, size=(5, 5), replace=True)
+print(b)                                   # each row: 5 draws from {1..5}, repeats allowed
+print(np.mean(b, axis=1))                  # 5 bootstrap means — all slightly different
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(1)
+x = rng.normal(50, 10, 40)
+boots = rng.choice(x, size=(5000, 40), replace=True).mean(axis=1)
+print(boots.mean().round(2), boots.std().round(2))        # ≈ x̄, ≈ SE
+print(round(np.std(x, ddof=1) / np.sqrt(40), 3))          # formula SE — compare!
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(2)
+# bootstrap the MAX — watch it fail (degenerate, see Q in section 2)
+x = rng.uniform(0, 10, 30)
+boots_max = rng.choice(x, size=(3000, 30), replace=True).max(axis=1)
+print("observed max:", x.max().round(3))
+print("fraction of bootstrap maxima EQUAL to observed max:",
+      (boots_max == x.max()).mean().round(3))       # big — degenerate distribution
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(3)
+# permutation test on a correlation (independent by construction)
+x = rng.normal(size=30)
+y = 0.5 * rng.normal(size=30)
+r_obs = np.corrcoef(x, y)[0, 1]
+perm_r = [np.corrcoef(x, rng.permutation(y))[0, 1] for _ in range(2000)]
+p = (np.sum(np.abs(perm_r) >= abs(r_obs)) + 1) / 2001
+print(f"r = {r_obs:.3f}, permutation p = {p:.3f}")   # ≈ uniform-ish p: null is true
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Bootstrap the **difference in medians** between two skewed groups (5000 replicates), report the 95% percentile CI, and compare with the CI you'd get from a difference-in-means t-interval. Which pair of estimates is the better summary for skewed data and why?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy import stats
+
+rng = np.random.default_rng(4)
+a = stats.lognorm.rvs(s=0.8, scale=8, size=40, random_state=1)
+b = stats.lognorm.rvs(s=0.8, scale=10, size=45, random_state=2)
+
+obs = np.median(b) - np.median(a)
+boot = []
+for _ in range(5000):
+    ra = rng.choice(a, len(a), replace=True)
+    rb = rng.choice(b, len(b), replace=True)
+    boot.append(np.median(rb) - np.median(ra))
+lo, hi = np.percentile(boot, [2.5, 97.5])
+print(f"diff in medians = {obs:.2f}, boot 95% CI ({lo:.2f}, {hi:.2f})")
+
+# naive t-interval on means for comparison
+se = np.sqrt(a.var(ddof=1)/len(a) + b.var(ddof=1)/len(b))
+t_lo, t_hi = stats.t.interval(0.95, loc=b.mean()-a.mean(), scale=se,
+                              df=np.round(se**2 / (a.var(ddof=1)/len(a)**2 + b.var(ddof=1)/len(b)**2)))
+print(f"diff in means  = {b.mean()-a.mean():.2f}, t 95% CI ({t_lo:.2f}, {t_hi:.2f})")
+```
+
+For skewed data the **medians + bootstrap CI** pair is the defensible summary: medians resist the tail, and the bootstrap CI carries the actual (asymmetric) uncertainty. The t-CI on means is dominated by a handful of large values and its symmetric shape misrepresents the uncertainty.
+</details>
+
+**Exercise 2.** Implement the permutation test for a **difference in means** as a reusable function `perm_test(a, b, n_perm=10_000, seed=0)`, then apply it to (a) clearly separated groups, (b) identical distributions. Verify in case (b) that p-values are approximately uniform on (0,1) over 500 repeats — the defining calibration property of a valid test.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+def perm_test(a, b, n_perm=10_000, seed=0):
+    rng = np.random.default_rng(seed)
+    pooled = np.concatenate([a, b])
+    obs = abs(a.mean() - b.mean())
+    extreme = 0
+    for _ in range(n_perm):
+        perm = rng.permutation(pooled)
+        diff = abs(perm[:len(a)].mean() - perm[len(a):].mean())
+        extreme += diff >= obs
+    return (extreme + 1) / (n_perm + 1)          # +1 add-one correction
+
+rng = np.random.default_rng(9)
+a = rng.normal(0, 1, 20); b = rng.normal(1.0, 1, 25)      # (a) real shift
+print("(a) p =", perm_test(a, b))
+
+ps = [perm_test(rng.normal(0, 1, 20), rng.normal(0, 1, 25), seed=s)
+      for s in range(500)]
+ps = np.array(ps)
+print("(b) P(p<0.05) =", (ps < 0.05).mean().round(3), " P(p<0.10) =", (ps < 0.10).mean().round(3))
+```
+
+The uniformity check in (b) is the gold-standard self-test of any test implementation: under a true null, p-values must be ~Uniform(0,1), so P(p < α) = α. If your p-values pile up near 0 under the null, your permutation scheme is broken (usually: statistic computed on non-pooled data, or shuffling within groups).
+</details>
+
+**Exercise 3.** **Bootstrap vs formula SE shootout.** For n = 8, 30, 200 samples from a lognormal, compute (a) the t-formula SE of the mean, (b) the bootstrap SE of the mean, (c) the bootstrap SE of the **median**. Plot/inspect how the three quantities and their stability change with n. Write the two-sentence takeaway.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy import stats
+
+rng = np.random.default_rng(11)
+for n in [8, 30, 200]:
+    x = stats.lognorm.rvs(s=1.0, scale=5, size=n, random_state=0)
+    se_formula = x.std(ddof=1) / np.sqrt(n)
+    boots_mean = rng.choice(x, size=(5000, n), replace=True).mean(axis=1)
+    boots_med  = np.median(rng.choice(x, size=(5000, n), replace=True), axis=1)
+    print(f"n={n:>3}:  SE(mean) formula={se_formula:.2f}  "
+          f"boot={boots_mean.std():.2f}  |  boot SE(median)={boots_med.std():.2f}")
+```
+
+Takeaways: (1) formula and bootstrap SE of the mean agree closely — the bootstrap recovers textbook results, validating the machinery; (2) for skewed data the **median's** bootstrap SE is smaller and *its own sampling distribution* is more stable — another argument for robust summaries on skewed biological measurements.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **The bootstrap resamples *observations*, not noise**: each replicate should reproduce the original sample size and structure (paired rows stay paired; per-group sizes preserved by stratified bootstrapping).
+- **Percentile CIs under-cover for small n and skewed statistics** — improvements (BCa) exist; know that "bootstrap CI" is a family, not one object. Report the method.
+- **Permutation tests require exchangeability under H₀** — with confounded group assignments (e.g. all treated samples run on batch 2), shuffling labels tests the wrong null. Design before inference.
+- **Number of replicates**: 1,000–10,000 for CIs; more for tail quantiles. Monte Carlo error of a percentile ≈ $\sqrt{p(1-p)/B}$ — at B = 1,000 the 2.5% quantile itself wobbles.
+- **Bootstrap cannot see beyond the sample**: it inherits *your* outliers and *your* range (the max degeneracy drill). If the sample missed the tails, the bootstrap is confidently wrong about them.
+- **`rng.choice` vs `rng.integers` indexing**: `rng.choice(x, size=(B, n), replace=True)` in one call is far faster than a Python loop of resamples — vectorize your resampling like everything else.
+
+### Read & Refactor AI Code
+
+This AI-generated bootstrap has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+
+rng = np.random.default_rng(5)
+data = np.array([12.1, 11.8, 12.3, 12.0, 11.9, 12.2, 11.7, 25.0])   # note the outlier
+
+def bootstrap_ci_wrong(data):
+    boots = []
+    for _ in range(1000):
+        sample = rng.choice(data, size=len(data) - 1, replace=False)  # BUG 1 + 2
+        boots.append(sample.mean())
+    lo, hi = np.percentile(boots, [5, 95])                            # BUG 3
+    return lo, hi
+
+print(bootstrap_ci_wrong(data))
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **`replace=False`** — every "replicate" is just the original data minus one point (a jackknife in disguise); no bootstrap variability.
+2. **`size=len(data)-1`** — replicates must match the original n; smaller samples underestimate the statistic's variance.
+3. **`[5, 95]` percentiles** — that's a 90% interval labeled as a CI; 95% needs the 2.5/97.5 percentiles. (Minor: a Python loop of 1,000 resamples is fine here but the vectorized form is idiomatic and 100× faster.)
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(5)
+data = np.array([12.1, 11.8, 12.3, 12.0, 11.9, 12.2, 11.7, 25.0])
+
+def bootstrap_ci(data, stat=np.mean, n_boot=10_000, level=0.95, seed=0):
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, len(data), size=(n_boot, len(data)))   # with replacement
+    boots = stat(data[idx], axis=1)
+    alpha = (1 - level) / 2
+    return tuple(np.percentile(boots, [100*alpha, 100*(1-alpha)]))
+
+lo, hi = bootstrap_ci(data)
+print(f"mean = {data.mean():.2f}, 95% bootstrap CI = ({lo:.2f}, {hi:.2f})")
+```
+
+Note the outlier: watch how the bootstrap CI for the mean is stretched rightward while `stat=np.median` would give a tight, stable interval — run both and compare.
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Explain precisely why the bootstrap estimate of a statistic's SE converges to the true SE as n → ∞, and why the approximation is *double* (empirical distribution → population, plug-in resampling → true sampling distribution). Where does small n hurt first?
+
+<details>
+<summary>Hint</summary>
+
+The bootstrap replaces F (unknown population CDF) with F̂ (empirical CDF). Two questions: how well does F̂ approximate F, and how well does the bootstrap world mimic the real one for your statistic?
+</details>
+
+<details>
+<summary>Solution</summary>
+
+The bootstrap is a **plug-in**: it pretends F̂ (the empirical distribution — the sample itself) is the truth, then simulates sampling *from F̂*. By the Glivenko–Cantelli theorem, F̂ → F uniformly as n grows, so for statistics that depend smoothly on the distribution (means, moments, regression coefficients), the bootstrap SE → true SE. The error is two-layered: (1) F̂ ≠ F (sampling error of the original study — unavoidable, shrinks as n grows), and (2) the statistic's behavior in the bootstrap world ≠ its behavior in the real world (mild for smooth statistics, severe for extremes/discontinuous ones like the max). Small n hurts first through layer (2) for *non-smooth* statistics and through percentile-CI undercoverage — with n = 10, the empirical distribution has only 10 distinct values and every resample is a sparse remix of them.
+</details>
+
+**Q2.** Your permutation test compares a treated group (n = 6) to controls (n = 40). (a) How many distinct label assignments exist, and what is the smallest nonzero p-value the test can ever return? (b) What practical consequences does this have for small-n study design and for reporting "p < 0.001" from a permutation test with 6+40 samples?
+
+<details>
+<summary>Solution</summary>
+
+(a) $\binom{46}{6} = 9{,}366{,}819$ distinct assignments (treated labels are indistinguishable among themselves). The smallest nonzero p is $1/\binom{46}{6} \approx 1.07 \times 10^{-7}$ — so in *principle* tiny p-values are attainable. (b) The real constraint is resolution vs replicates: with B = 10,000 random permutations, the add-one p-value has resolution ≈ 10⁻⁴ and Monte Carlo error ~$\sqrt{p(1-p)/B}$; reporting "p < 0.001" from 10⁴ permutations is not supportable — report "p < 10⁻⁴" or increase B. Design lesson: permutation tests inherit the exact-conditional guarantee but their *resolution* is bounded by combinatorics and B — small treated groups are fine for moderate p-values, hopeless for "highly significant" claims without huge B (or full enumeration).
+</details>
+
+## 6. Complex Questions
+
+**C1 (resampling × [0.5 Data splitting](../part-00-python-foundations/00-5-data-splitting.qmd)).** Implement a **bootstrap comparison of two models' test accuracies**: fit both models on each of 200 bootstrap resamples *of the training set*, evaluate both on the same fixed test set, and build the CI of the accuracy difference. Then explain why this underestimates the uncertainty from *training-set* variation compared to refitting on fresh splits, and how the ".632 bootstrap" style corrections ([4.5](../part-04-validation-model-selection/04-5-bootstrap.qmd)) address the overlap problem.
+
+**C2 (resampling × [4.6 Hyperparameter tuning](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd) preview).** You tune a hyperparameter by picking the K-fold CV optimum, then report that optimum's CV score as the performance estimate. Simulate this procedure under a null (no signal: y random) with 20 candidate values and show the optimistic bias (selected score vs true score on fresh data). Which resampling discipline (nested CV) fixes it, and what does this have in common with the optional-stopping bug of [1.4](01-4-statistical-inference.qmd)?
+
+## 7. Summary
+
+- Bootstrap: resample rows **with replacement**, same n, recompute — the spread across replicates estimates uncertainty for almost any statistic.
+- Permutation test: shuffle labels under exchangeability; the p-value is the rank of the observed statistic among shuffled ones; distribution-free by construction.
+- Jackknife: leave-one-out; cheap deterministic bias/SE estimates.
+- Percentile bootstrap CIs match t-CIs for tame data and outperform them for skewed statistics.
+- Failure modes: order statistics (max), dependent data, non-exchangeable labels, tiny n, and reading more precision out of B replicates than B provides.
+- Vectorize resampling: one `rng.integers`/`choice` call for all replicates.
+- Uncertainty about a *statistic* is solved; uncertainty about a *model's predictions* is the subject of Part 4 — starting from why held-out data is the only honest judge: [Part 2 builds the first models](../part-02-linear-regression/02-1-regression-setup.qmd), and Part 4 formalizes their evaluation.
