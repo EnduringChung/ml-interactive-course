@@ -1,9 +1,430 @@
 ---
-title: "Coming soon"
+title: "9.2 Principal Component Analysis"
 tier: 1
 engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - scikit-learn
+    - matplotlib
 ---
 
-This page has not been published yet. It is scheduled in the [build order](/index.qmd) and will follow the same seven-section template as every other page.
+PCA finds the orthogonal directions along which the data varies most, and re-expresses it in those directions. It is simultaneously a dimension-reduction tool, a decorrelation machine, a visualization device, and the algebraic backbone of ridge ([5.2](../part-05-regularization-high-dimensions/05-2-ridge-regression.qmd)) and PCR ([5.5](../part-05-regularization-high-dimensions/05-5-pcr-pls.qmd)) — the most reused object in applied statistics.
 
-Check back soon — progress is tracked in the [course home](/index.qmd).
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+PC1 = the unit vector w maximizing Var(Xw) = wᵀΣw subject to ‖w‖ = 1 — the solution is the **top eigenvector of the covariance matrix**; subsequent PCs are the next eigenvectors, orthogonal to the rest. Equivalent view: PCA is the SVD of the (centered) data matrix.
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+rng = np.random.default_rng(0)
+n = 150
+X = np.c_[rng.normal(0, 2, n), rng.normal(0, 1, n)]
+X[:, 1] += 0.8 * X[:, 0]                          # correlated cloud
+
+Xs = StandardScaler().fit_transform(X)
+pca = PCA().fit(Xs)
+
+fig, ax = plt.subplots(figsize=(6.5, 3.6))
+ax.scatter(Xs[:, 0], Xs[:, 1], s=12, alpha=0.5)
+for length, vector in zip(pca.explained_variance_, pca.components_):
+    v = vector * 2.5 * np.sqrt(length)
+    ax.annotate("", pca.mean_ + v, pca.mean_,
+                arrowprops=dict(arrowstyle="->", lw=2, color="red"))
+ax.set(aspect="equal", xlabel="z1", ylabel="z2",
+       title="Principal axes of the data ellipse")
+plt.show()
+print("explained variance ratio:", pca.explained_variance_ratio_.round(3))
+```
+
+Scores, loadings, and the reconstruction — the three objects to keep straight:
+
+```{pyodide}
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+rng = np.random.default_rng(1)
+X = rng.normal(0, 1, (100, 4))
+X[:, 1] = X[:, 0] + rng.normal(0, .1, 100)        # near-duplicate
+Xs = StandardScaler().fit_transform(X)
+pca = PCA(n_components=2).fit(Xs)
+
+scores = pca.transform(Xs)                        # (n, 2): data in PC coordinates
+loadings = pca.components_                        # (2, 4): how features mix
+recon = pca.inverse_transform(scores)             # back to 4-D, rank 2
+
+print("loadings PC1:", loadings[0].round(3), "(twins share it)")
+print("reconstruction error vs PCA(4):",
+      round(float(np.mean((Xs - recon)**2)), 4), "vs",
+      round(float(np.mean((Xs - PCA(n_components=4).fit_transform(Xs))**2)), 6))
+```
+
+## 2. Concept Questions
+
+1. PCA is unsupervised — state precisely what it does *not* look at, and recall the page where that blindness cost it ([5.5](../part-05-regularization-high-dimensions/05-5-pcr-pls.qmd)).
+2. Why must features be centered before PCA? Scaled? When is scaling the *wrong* choice?
+3. Your PC1 has loadings (−0.7, +0.7, 0.05, 0.1). Interpret it — and state the two sign/scale caveats.
+4. What does "PCA loses information" mean numerically, and which quantity measures exactly what's lost per component?
+5. PCA on raw counts (skewed, huge-variance features) found "PC1 = one gene." Diagnose, and name the two standard fixes.
+
+<details>
+<summary>Answers</summary>
+
+1. It never sees y. Consequence: PCs rank by X-variance, which may be irrelevant to the response — the low-variance-signal pathology ([5.5](../part-05-regularization-high-dimensions/05-5-pcr-pls.qmd) Exercise 2), and the supervised alternative (PLS) exists for exactly this.
+2. Center: PCA finds directions through the *origin of the data cloud* — uncentered, PC1 points at the mean (garbage directions). Scale: PCA's criterion is variance — without scaling, big-unit features own the components; scale whenever features have arbitrary units. Wrong to scale: when features share a natural unit and their variances ARE the signal (e.g., same-assay measurements) — then raw-covariance PCA respects the physics.
+3. "A contrast: feature 1 loads negative, feature 2 positive, equally; features 3–4 uninvolved" — PC1 is roughly feature2 − feature1. Caveats: (a) sign is arbitrary (−w is the same component — sklearn flips signs by its own convention); (b) loadings are unit-scaled — interpret the *pattern* (ratios, signs), not absolute numbers.
+4. Reconstruction error: ‖X − X_M‖² = Σ_{j>M} λⱼ (sum of discarded eigenvalues) — PCA drops exactly the orthogonal variance along dropped directions, and `explained_variance_ratio_` is the kept fraction. Loss is *orthogonal-projection* loss: the best rank-M summary possible (Eckart–Young: PCA is optimal in Frobenius norm).
+5. Diagnosis: unscaled, skewed data — the huge-variance gene dominates PC1 by units, not biology. Fixes: log-transform skewed features ([0.4](../part-00-python-foundations/00-4-visualization-eda.qmd)), then standardize. Then PC1 becomes a *pattern*, not a unit artifact.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.decomposition import PCA
+rng = np.random.default_rng(2)
+X = rng.normal(0, 1, (300, 3))
+pca = PCA().fit(X)
+print("total variance preserved:", round(pca.explained_variance_ratio_.sum(), 12))
+print("all 3 components of 3 features -> zero loss")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.decomposition import PCA
+rng = np.random.default_rng(3)
+X = rng.normal(0, 1, (200, 4))
+X[:, 2] = X[:, 0] - X[:, 1]                       # exact linear dependency!
+pca = PCA().fit(X)
+print("eigenvalues:", pca.explained_variance_.round(4))
+print("last ~0: rank deficiency detected -> effective dimension = 3")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+rng = np.random.default_rng(4)
+X = np.c_[rng.normal(0, 1, 200), rng.normal(0, 100, 200)]
+pca_raw = PCA().fit(X)
+pca_std = PCA().fit(StandardScaler().fit_transform(X))
+print("PC1 share, raw:   ", round(pca_raw.explained_variance_ratio_[0], 3),
+      "(owns everything: units)")
+print("PC1 share, scaled:", round(pca_std.explained_variance_ratio_[0], 3))
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+rng = np.random.default_rng(5)
+X = rng.normal(0, 1, (200, 3))
+Xs = StandardScaler().fit_transform(X)
+pca = PCA().fit(Xs)
+C = np.corrcoef(pca.transform(Xs), rowvar=False)
+print("correlation of PC scores:", np.round(C, 10)[0, 1],
+      "(scores are exactly uncorrelated)")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** PCA by hand, via covariance eigendecomposition and via SVD: center a dataset, compute Σ = XᶜᵀXᶜ/(n−1), take `np.linalg.eigh`, and compare its eigenpairs to sklearn's `PCA` output (match signs, compare explained ratios). Then do it via `np.linalg.svd` and verify the identity λⱼ = sⱼ²/(n−1). Owning this equivalence demystifies every PCA discussion in the course.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+rng = np.random.default_rng(6)
+X = rng.normal(0, 1, (150, 4))
+X[:, 2] = 0.7 * X[:, 0] + rng.normal(0, .3, 150)
+Xs = StandardScaler().fit_transform(X)
+Xc = Xs - Xs.mean(axis=0)
+
+# route 1: covariance eigen
+Sigma = Xc.T @ Xc / (len(Xc) - 1)
+eigvals, eigvecs = np.linalg.eigh(Sigma)            # ascending order
+eigvals = eigvals[::-1]; eigvecs = eigvecs[:, ::-1]
+
+# route 2: SVD
+U, S, Vt = np.linalg.svd(Xc, full_matrices=False)
+sv_vals = S**2 / (len(Xc) - 1)
+
+# route 3: sklearn
+pca = PCA().fit(Xc)
+
+print("eigen route:  ", eigvals.round(4))
+print("SVD route:    ", sv_vals.round(4))
+print("sklearn:      ", pca.explained_variance_.round(4))
+print("PC1 |dot| (eig vs sklearn):",
+      abs(eigvecs[:, 0] @ pca.components_[0]).round(6), "(sign-free match)")
+```
+
+Three roads, one decomposition. Eigen-route exposes "eigenvectors of covariance"; SVD-route exposes "best rank-M projection" (Eckart–Young); sklearn emits the latter. Any PCA claim you'll ever read reduces to objects you just computed.
+</details>
+
+**Exercise 2.** The scree decision, done with eyes: on a dataset with a planted structure (3 latent factors + noise, p = 12), plot (a) explained-variance ratios, (b) cumulative variance, (c) the *reconstruction error* as M grows. Mark where the scree "elbows" and where reconstruction error flattens. Then verify against the truth: M = 3 captures the planted structure. Finally, state when the elbow is ambiguous and which tool arbitrates ([6.5](../part-06-nonlinear-regression/06-5-smoothing-splines.qmd)'s dial logic, transplanted).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+rng = np.random.default_rng(7)
+n = 200
+latent = rng.normal(0, 1, (n, 3))
+L = rng.normal(0, 1, (3, 12))
+X = latent @ L + rng.normal(0, .5, (n, 12))
+Xs = StandardScaler().fit_transform(X)
+
+pca = PCA().fit(Xs)
+evr = pca.explained_variance_ratio_
+cum = np.cumsum(evr)
+recon_err = [np.mean((Xs - PCA(n_components=m).fit(Xs).inverse_transform(
+    PCA(n_components=m).fit(Xs).transform(Xs)))**2) for m in range(1, 13)]
+
+fig, axes = plt.subplots(1, 3, figsize=(8, 2.8))
+axes[0].plot(range(1, 13), evr, marker="o", ms=3); axes[0].set_title("scree")
+axes[1].plot(range(1, 13), cum, marker="o", ms=3); axes[1].set_title("cumulative")
+axes[2].plot(range(1, 13), recon_err, marker="o", ms=3); axes[2].set_title("recon error")
+fig.tight_layout()
+plt.show()
+print("elbow at M=3; recon error flattens there — matches planted rank")
+```
+
+Planted rank shows as the scree's cliff (huge λ₁₋₃, noise-floor λ₄₊). Ambiguous elbows (gradual decay) happen when signal and noise variances blend — then the choice is a bias–variance trade like any M-selection ([5.5](../part-05-regularization-high-dimensions/05-5-pcr-pls.qmd) CV-tunes M; [9.6](09-6-practical-clustering.qmd) stability-checks it), and visualization is a legitimate "M = 2 by fiat" use.
+</details>
+
+**Exercise 3.** Biplot discipline: on the 4-feature cohort-style data below, produce (a) PC1/PC2 score scatter, (b) loading vectors overlaid, (c) each feature's correlation with PC1/PC2 as a table. Interpret PC1 in a sentence a domain reader could accept, and identify which feature the biplot says is *redundant* (nearly collinear with another) — verify by direct correlation. Note explicitly what a biplot cannot tell you (name the supervised question it ignores).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+rng = np.random.default_rng(8)
+n = 250
+age = rng.uniform(30, 80, n)
+marker = 0.06 * age + rng.normal(0, 1, n)          # correlated with age
+expr1 = rng.normal(0, 1, n)
+expr2 = 0.9 * expr1 + rng.normal(0, .2, n)         # near-duplicate of expr1
+X = np.c_[age, marker, expr1, expr2]
+names = ["age", "marker", "expr1", "expr2"]
+
+Xs = StandardScaler().fit_transform(X)
+pca = PCA(n_components=2).fit(Xs)
+load = pca.components_
+scores = pca.transform(Xs)
+
+corr = np.corrcoef(np.vstack([scores.T, Xs.T]))[:2, 2:]
+import pandas as pd
+print("feature correlations with PCs:")
+print(pd.DataFrame(corr.T, index=names, columns=["PC1", "PC2"]).round(3))
+print("expr1 vs expr2 correlation:",
+      round(float(np.corrcoef(expr1, expr2)[0, 1]), 3), "<- the redundant pair")
+print("PC1 interpretation: an age/marker axis (demographic),")
+print("with the two expressions riding PC2 (independent biology).")
+```
+
+The biplot's geometry: features pointing the same direction are correlated (expr1/expr2 nearly overlap — redundancy visible before any correlation call); features opposing are anti-correlated; scores near a loading tip have high values of that feature. What it can't say: anything about y — PCA is blind to outcomes by construction ([5.5](../part-05-regularization-high-dimensions/05-5-pcr-pls.qmd)), and "PC1 = severity" needs external validation ([9.1](09-1-unsupervised-mindset.qmd)'s reification trap).
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **PCA on the covariance vs correlation matrix**: scaling = correlation-PCA; raw = covariance-PCA — a modeling choice with the [9.1](09-1-unsupervised-mindset.qmd) assumption weight (Exercise units; Q2b).
+- **PCA is *not* feature selection**: components are combinations of all features — sparse variants (sparse PCA) exist if you need actual feature drops ([5.1](../part-05-regularization-high-dimensions/05-1-feature-selection.qmd)'s selection, rotated).
+- **Outliers own variance**: one extreme point can be PC1; robust PCA (or inspection before fitting) for dirty data ([2.10](../part-02-linear-regression/02-10-regression-assumptions.qmd) leverage, unsupervised edition).
+- **PCA inside pipelines**: fit on training folds only — the leakage law ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd)); `Pipeline(StandardScaler(), PCA(), model)` is the mechanical guarantee ([5.5 Exercise 3](../part-05-regularization-high-dimensions/05-5-pcr-pls.qmd)).
+- **Interpretation limits**: loadings are basis vectors of a rotated coordinate system — components can mix causally unrelated features; correlations between scores and external variables are the *validation*, not the discovery ([9.1](09-1-unsupervised-mindset.qmd) Q3).
+- **Sign and rotation freedom**: eigenvectors are sign-arbitrary; with near-equal eigenvalues, subspaces rotate freely — small data perturbations can "swap" PCs (stability diagnostics again, [9.6](09-6-practical-clustering.qmd)).
+
+### Read & Refactor AI Code
+
+This AI-generated PCA pipeline has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.decomposition import PCA
+
+rng = np.random.default_rng(9)
+n = 200
+X = rng.normal(0, 1, (n, 8))
+X[:, 0] = rng.normal(1000, 5, n)                 # big-unit feature
+y = (X[:, 1] > 0).astype(int)                    # a label PCA shouldn't see
+
+# BUG 1: PCA on unscaled, uncentered-variance data
+pca = PCA(n_components=2).fit(X)
+print("PC1 ratio:", round(pca.explained_variance_ratio_[0], 3))
+
+# BUG 2: component picked by correlation with y ('the label component')
+scores = pca.transform(X)
+import numpy as np
+corrs = [abs(np.corrcoef(scores[:, j], y)[0, 1]) for j in range(2)]
+best = int(np.argmax(corrs))
+print(f"PC{best + 1} correlates with y -> 'the label component'")
+
+# BUG 3: refit PCA separately for every fold's test transform
+from sklearn.model_selection import KFold
+kf = KFold(5, shuffle=True, random_state=0)
+for tr, te in kf.split(X):
+    p_tr = PCA(n_components=2).fit(X[tr])
+    p_te = PCA(n_components=2).fit(X[te])        # separate fit on test!
+    print("fold done (mismatched bases)")
+    break
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Unscaled PCA**: the 1000-mean feature's variance dominates — PC1 is a units artifact. Standardize (or justify raw-covariance PCA by shared units).
+2. **Choosing the component by correlation with y**: (a) that's supervised selection wearing PCA clothes — the honest tool is PLS/PCR-with-CV ([5.5](../part-05-regularization-high-dimensions/05-5-pcr-pls.qmd)); (b) with 2 components the "choice" is trivial anyway. Keep PCA unsupervised and use *all* M components downstream, or justify M by variance/CV.
+3. **Two different PCAs for train/test**: bases must match — fit the transformer on training data, `transform` test (the Pipeline law, [0.5](../part-00-python-foundations/00-5-data-splitting.qmd)).
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import KFold
+
+rng = np.random.default_rng(9)
+n = 200
+X = rng.normal(0, 1, (n, 8))
+X[:, 0] = rng.normal(1000, 5, n)
+
+pipe = make_pipeline(StandardScaler(), PCA(n_components=2))
+kf = KFold(5, shuffle=True, random_state=0)
+for tr, te in kf.split(X):
+    p = pipe.fit(X[tr])
+    Xt = pipe.transform(X[te])                   # one fitted basis, transform test
+    print("fold OK — scores shape:", Xt.shape)
+    break
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Prove PCA's optimality (Eckart–Young): among all rank-M approximations C of centered X, PCA's reconstruction X·V_M·V_Mᵀ (V_M = top-M right singular vectors) minimizes ‖X − C‖_F. Verify numerically that no other rank-2 orthogonal projection of a fixed dataset achieves lower reconstruction error, and connect the result to the SVD identity λⱼ = sⱼ²/(n−1) from [Exercise 1](#).
+
+<details>
+<summary>Hint</summary>
+
+Eckart–Young: truncating the SVD at rank M minimizes Frobenius error; PCA's subspace IS the top-M right singular subspace.
+</details>
+
+<details>
+<summary>Solution</summary»
+
+By the SVD X = USVᵀ, the best rank-M approximation in Frobenius norm is U_M S_M V_Mᵀ (Eckart–Young theorem) — keeping the M largest singular values. PCA's projection X V_M V_Mᵀ is exactly this object; the discarded error is Σ_{j>M} sⱼ² = (n−1)Σ_{j>M} λⱼ.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+rng = np.random.default_rng(18)
+X = StandardScaler().fit_transform(rng.normal(0, 1, (120, 6)))
+Xc = X - X.mean(axis=0)
+pca2 = PCA(n_components=2).fit(Xc)
+pca_recon = pca2.inverse_transform(pca2.transform(Xc))
+
+U, S, Vt = np.linalg.svd(Xc, full_matrices=False)
+svd_recon = (U[:, :2] * S[:2]) @ Vt[:2]
+
+# random rank-2 projection for contrast
+rng2 = np.random.default_rng(0)
+Q, _ = np.linalg.qr(rng2.normal(0, 1, (6, 2)))
+rand_recon = (Xc @ Q) @ Q.T
+
+print("PCA recon error:      ", round(float(np.sum((Xc - pca_recon)**2)), 4))
+print("SVD recon error:      ", round(float(np.sum((Xc - svd_recon)**2)), 4))
+print("random projection:    ", round(float(np.sum((Xc - rand_recon)**2)), 4))
+```
+
+PCA and truncated SVD coincide to float precision; any other rank-2 projection loses strictly more — PCA is the *unique* best low-rank linear summary (up to rotation within the subspace). This optimality is in X's own geometry — nothing about y ([5.5](../part-05-regularization-high-dimensions/05-5-pcr-pls.qmd)'s recurring caveat).
+</details>
+
+**Q2.** PCA stability under correlated noise: generate data with a *planted* PC1 and increasing noise correlation among the noise features; measure (a) the angle between refit PC1 across bootstrap resamples and (b) the explained-variance-ratio stability, as noise correlation grows. Show PC *subspace* stability degrading before the variance ratio does — then write the reporting rule: which PCA claims need stability analysis (subspace interpretation) and which are robust (aggregate variance summaries)?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+def pc1_angle(a, b):
+    return float(np.degrees(np.arccos(abs(a @ b) /
+             (np.linalg.norm(a) * np.linalg.norm(b)))))
+
+rng = np.random.default_rng(19)
+for noise_rho in [0.0, 0.4, 0.8]:
+    angles = []
+    evrs = []
+    for b in range(60):
+        n = 150
+        latent = rng.normal(0, 1, n)
+        noise = rng.multivariate_normal(np.zeros(7),
+                                        (1 + noise_rho * (np.ones((7, 7)) - np.eye(7))),
+                                        size=n)
+        X = np.c_[3 * latent + rng.normal(0, .3, n), noise]
+        Xs = StandardScaler().fit_transform(X)
+        p = PCA(n_components=2).fit(Xs)
+        if b == 0:
+            ref = p.components_[0].copy()
+            ref_evrs = p.explained_variance_ratio_[:2].copy()
+        angles.append(pc1_angle(p.components_[0], ref))
+        evrs.append(p.explained_variance_ratio_[:2])
+    print(f"noise rho={noise_rho}: mean PC1 angle {np.mean(angles):.1f} deg, "
+          f"EVR SD {np.std(evrs, axis=0).round(3)}")
+```
+
+As noise features correlate, their collective variance competes with the planted direction: the top eigenvector's *identity* wobbles (angles grow) even while the explained-variance summary barely moves. Reporting rule: interpreting "what PC1 means" requires subspace stability (bootstrap angles, [9.1](09-1-unsupervised-mindset.qmd) Exercise 2's logic); quoting "PC1 captures X% variance" is comparatively robust. Two claims, two evidentiary standards.
+</details>
+
+## 6. Complex Questions
+
+**C1 (PCA × [7.4 forests](../part-07-trees-ensembles/07-4-random-forests.qmd) × [3.6 GLM](../part-03-classification-glm/03-6-generalized-linear-models.qmd)).** Representation learning bake-off: on wide data (n = 150, p = 100, mixed linear/nonlinear signals), compare downstream classifiers trained on (a) raw features, (b) PCA-20 scores, (c) PCA-5 scores — nested CV. When does compression help (noise dilution) and when hurt (nonlinear signal spread across PCs)? Connect to [5.5](../part-05-regularization-high-dimensions/05-5-pcr-pls.qmd)'s PCR findings and write the dimension-reduction routing rule: raw vs compressed, by signal type and n/p ratio.
+
+**C2 (PCA × [9.4 K-means](09-4-k-means.qmd) × [12.x batch](../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.qmd) stub).** The cluster-on-PCs pipeline: cluster (K-means, k = 3) on (a) raw scaled features and (b) the top-3 PC scores of wide data with planted clusters *and* a planted batch direction. Measure agreement with true biological clusters vs with batches, both pipelines. Does PCA-to-3 dims remove the batch artifact or preserve it (hint: batch is a variance direction)? Write the caution about "we clustered in PC space, so it's denoised" — and the correct order of operations (batch audit before, not after, compression).
+
+## 7. Summary
+
+- PCA = eigendecomposition of covariance = SVD of centered data: directions of maximal variance, orthogonally.
+- Three objects: scores (data in PC space), loadings (the rotation), explained-variance ratios (the budget).
+- Center always; scale unless units are meaningful; fit inside pipelines; the outcome-blindness is structural.
+- Reconstruction loss = dropped eigenvalues; PCA is the optimal rank-M summary (Eckart–Young) in X's geometry.
+- Scree picks M when the cliff is real; CV picks it when it's a bias–variance trade.
+- Interpretation claims need subspace stability; variance claims are sturdier.
+- PCA compresses; the next problem is what to do when the data is *incomplete* — [9.3 Missing values and matrix completion](09-3-missing-values.qmd).

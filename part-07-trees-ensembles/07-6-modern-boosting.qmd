@@ -1,0 +1,407 @@
+---
+title: "7.6 Modern Boosting Libraries"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - lightgbm
+    - xgboost
+    - matplotlib
+---
+
+XGBoost and LightGBM industrialized gradient boosting: second-order (Newton) objectives, histogram-based split finding, built-in regularization, native missing-value handling, and engineering that made 10⁶-row datasets routine. sklearn's `HistGradientBoosting*` implements the same core ideas natively — so this page teaches the *concepts* on a guaranteed-available implementation, then translates to the two libraries' idioms.
+
+> **Tier 1 — every cell below runs live.** (lightgbm/xgboost wheels are wasm-available in Pyodide; if a runtime can't fetch them, the HistGradientBoosting cells carry the lesson.)
+
+## 1. Basic Concept
+
+What modern boosters add to [7.5](07-5-gradient-boosting.qmd)'s recipe:
+
+1. **Second-order fitting**: splits and leaf values use gradient *and* Hessian (Newton-style), not just gradients.
+2. **Histogram binning**: features are binned (~255 bins) — split finding becomes histogram counting instead of sorting: orders of magnitude faster.
+3. **Leaf-wise vs level-wise growth**: LightGBM grows the leaf with the largest loss reduction (asymmetric trees); classic boosting grows level-by-level.
+4. **Native NaN handling**: missing values learn which branch to take — no imputation.
+5. **Penalized objectives**: explicit L1/L2 on leaf values, min_child_weight — regularization built into the split criterion.
+
+sklearn's histogram booster — the always-available baseline:
+
+```{pyodide}
+import numpy as np
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
+from sklearn.datasets import make_classification
+
+X, y = make_classification(n_samples=1000, n_features=12, n_informative=6,
+                           weights=[0.8, 0.2], random_state=0)
+X[:50, 3] = np.nan                                   # real data has holes
+
+clf = HistGradientBoostingClassifier(max_iter=300, learning_rate=0.1,
+                                     max_depth=None, random_state=0)
+cv = StratifiedKFold(5, shuffle=True, random_state=1)
+auc = cross_val_score(clf, X, y, cv=cv, scoring="roc_auc").mean()
+print("HistGB AUC (with NaNs in feature 3):", round(auc, 4), "— no imputation needed")
+```
+
+The same fit in LightGBM and XGBoost idioms:
+
+```{pyodide}
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score
+
+X, y = make_classification(n_samples=1000, n_features=12, n_informative=6,
+                           weights=[0.8, 0.2], random_state=0)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=1)
+
+import lightgbm as lgb
+lgbm = lgb.LGBMClassifier(n_estimators=300, learning_rate=0.05,
+                          num_leaves=31, verbose=-1, random_state=0)
+lgbm.fit(X_tr, y_tr)
+print("LightGBM AUC:", round(roc_auc_score(y_te, lgbm.predict_proba(X_te)[:, 1]), 4))
+
+import xgboost as xgb
+xgbc = xgb.XGBClassifier(n_estimators=300, learning_rate=0.05, max_depth=4,
+                         random_state=0)
+xgbc.fit(X_tr, y_tr)
+print("XGBoost  AUC:", round(roc_auc_score(y_te, xgbc.predict_proba(X_te)[:, 1]), 4))
+```
+
+## 2. Concept Questions
+
+1. What does second-order (Hessian-using) splitting buy over [7.5](07-5-gradient-boosting.qmd)'s first-order version — and where does the Hessian come from for log-loss?
+2. Why is histogram binning *approximately* lossless for split finding, and what does it cost?
+3. LightGBM's leaf-wise growth can produce deeper, asymmetric trees. What risk does that add, and which hyperparameter (num_leaves) tames it?
+4. Native NaN handling: why is "learn the best branch for missing" better than mean-imputation for *predictive* purposes — and what caveat does it carry for deployment?
+5. `num_leaves` vs `max_depth`: which is the honest complexity knob for leaf-wise trees, and why?
+
+<details>
+<summary>Answers</summary>
+
+1. Newton steps use curvature: leaf values become Σgᵢ/(Σhᵢ + λ) — the optimal value for the local quadratic approximation, so each tree fits more per step and convergence needs fewer trees. For log-loss, per-point Hessian is p(1−p) (the Bernoulli variance) — the same quantity GLM IRLS used ([3.3](../part-03-classification-glm/03-3-logistic-regression.qmd)).
+2. Split *rankings* rarely change under fine binning: the best threshold within a bin matters less than choosing the right bin boundary — 255 quantile-ish bins capture essentially all real split structure. Cost: splits snap to bin edges (harmless in practice) plus one preprocessing pass.
+3. Leaf-wise growth keeps splitting the highest-loss leaf, producing deep lopsided branches that can overfit isolated pockets — num_leaves caps the total leaf count directly (LightGBM's complexity knob; typical 15–255).
+4. Learned NaN routing lets each split use the best empirical guess *per node* (often better than any global imputation), and requires no imputation model to maintain. Caveat: the routing is fitted to training-time missingness patterns — if deployment missingness differs (new reasons for NaN), routing generalizes no better than imputation would ([12.x](../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.qmd)-style shift caution).
+5. `num_leaves`. In leaf-wise growth, depth is a poor complexity proxy (one deep branch ≠ many leaves); the leaf count bounds the model's degrees of freedom directly — `max_depth` remains only as a safety rail.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.ensemble import HistGradientBoostingRegressor
+rng = np.random.default_rng(2)
+X = rng.normal(0, 1, (200, 3))
+y = X[:, 0] * X[:, 1] + rng.normal(0, .2, 200)
+X[:30, 1] = np.nan
+m = HistGradientBoostingRegressor(max_iter=200, random_state=0).fit(X, y)
+print("NaNs handled natively; train R2:", round(m.score(X, y), 3))
+```
+
+```{pyodide}
+import numpy as np
+import lightgbm as lgb
+rng = np.random.default_rng(3)
+X = rng.normal(0, 1, (300, 4))
+y = (X[:, 0] > 0).astype(int)
+m = lgb.LGBMClassifier(n_estimators=50, verbose=-1, random_state=0).fit(X, y)
+print("n trees:", m.n_estimators, "| classes:", m.classes_)
+print("importance (split counts):", m.booster_.feature_importance().tolist())
+```
+
+```{pyodide}
+import numpy as np
+import xgboost as xgb
+from sklearn.metrics import accuracy_score
+rng = np.random.default_rng(4)
+X = rng.normal(0, 1, (300, 4))
+y = (X[:, 0] * X[:, 1] > 0).astype(int)          # XOR: interactions needed
+m = xgb.XGBClassifier(n_estimators=80, max_depth=3, random_state=0)
+m.fit(X, y)
+print("XGB XOR accuracy:", round(accuracy_score(y, m.predict(X)), 3),
+      "(depth 3 trees reach the interaction)")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.ensemble import HistGradientBoostingRegressor
+rng = np.random.default_rng(5)
+x = np.linspace(0, 1, 300).reshape(-1, 1)
+y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, .3, 300)
+m = HistGradientBoostingRegressor(max_iter=300, learning_rate=0.06,
+                                  random_state=0).fit(x, y)
+x_new = np.array([[1.3]])
+print("extrapolation at x=1.3 (flat by construction):",
+      round(float(m.predict(x_new)[0]), 3), "vs last train y mean ≈",
+      round(float(y[-20:].mean()), 3))
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Three implementations, one protocol: fit sklearn-GBM ([7.5](07-5-gradient-boosting.qmd)'s GradientBoostingRegressor), HistGradientBoostingRegressor, and LightGBM on the same 20k-row regression problem, each tuned lightly (early stopping where supported) inside a 5-fold CV. Report the CV MSE table and fit times. Write the selection paragraph: when do the industrial implementations earn their dependency?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import time
+from sklearn.ensemble import (GradientBoostingRegressor,
+                              HistGradientBoostingRegressor)
+from sklearn.model_selection import cross_val_score, KFold
+from sklearn.datasets import make_regression
+
+X, y = make_regression(n_samples=20000, n_features=25, n_informative=12,
+                       noise=30, random_state=6)
+cv = KFold(5, shuffle=True, random_state=7)
+
+models = {
+    "sklearn GBM": GradientBoostingRegressor(n_estimators=200, max_depth=3,
+                                             random_state=0),
+    "HistGB": HistGradientBoostingRegressor(max_iter=300, random_state=0),
+}
+import lightgbm as lgb
+models["LightGBM"] = lgb.LGBMRegressor(n_estimators=300, learning_rate=0.06,
+                                       verbose=-1, random_state=0)
+
+for name, m in models.items():
+    t0 = time.perf_counter()
+    scores = -cross_val_score(m, X, y, cv=cv,
+                              scoring="neg_mean_squared_error")
+    dt = time.perf_counter() - t0
+    print(f"{name:12s} CV MSE {scores.mean():.1f} ± {scores.std():.1f}  ({dt:.1f}s)")
+```
+
+Accuracy is a wash (all implement the same algorithm family at sane settings); *time* separates them — histogram methods are one to two orders faster at 20k rows, and the gap widens with n. The paragraph: "We use HistGradientBoosting/LightGBM for any dataset beyond a few thousand rows, reserving exact GradientBoosting for small problems where its simplicity aids teaching or debugging."
+</details>
+
+**Exercise 2.** Native-NaN vs imputation, honestly: inject 20% missing completely-at-random into one feature (MCAR) and 20% missing *depending on y* (MNAR-ish: mask feature where y = 1) on a classification task. Compare HistGB-native-NaN vs mean-imputation pipelines by CV AUC in each scenario. Where does native handling shine, where does it *not* save you (what does the MNAR case teach about missingness mechanisms, connecting to [9.3](../part-09-unsupervised-learning/09-3-missing-values.qmd))?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+from sklearn.datasets import make_classification
+
+cv = StratifiedKFold(5, shuffle=True, random_state=0)
+for scenario in ["MCAR", "y-dependent"]:
+    rng = np.random.default_rng(8)
+    X, y = make_classification(n_samples=800, n_features=6, n_informative=4,
+                               random_state=9)
+    X[:, 2] = 3 * X[:, 2]                        # make feature 2 matter
+    if scenario == "MCAR":
+        mask = rng.uniform(0, 1, len(y)) < 0.2
+    else:
+        mask = y == 1                            # missingness depends on y!
+    Xm = X.copy()
+    Xm[mask, 2] = np.nan
+
+    native = cross_val_score(HistGradientBoostingClassifier(max_iter=200,
+                             random_state=0), Xm, y, cv=cv, scoring="roc_auc").mean()
+    imp = cross_val_score(make_pipeline(SimpleImputer(strategy="mean"),
+                          HistGradientBoostingClassifier(max_iter=200, random_state=0)),
+                          Xm, y, cv=cv, scoring="roc_auc").mean()
+    print(f"{scenario:12s}: native-NaN AUC {native:.3f} | mean-impute AUC {imp:.3f}")
+```
+
+Under MCAR, native NaN routing and imputation tie (both recover the feature's info). Under y-dependent missingness, the *missingness itself is signal* — native NaN handling captures it (missingness-pattern splits), while blind mean-imputation erases the pattern and can *bias* the feature. The deep lesson (Part 9.3's territory): imputation is a modeling decision about *why values are missing*, not a preprocessing reflex.
+</details>
+
+**Exercise 3.** The complexity-knob audit: for LightGBM, sweep num_leaves ∈ {7, 15, 31, 63, 127} (with min_child_samples fixed) and separately max_depth ∈ {3, 5, 8, −1} at fixed num_leaves, reporting CV AUC and tree statistics (average depth via the booster). Which knob's sweep moves performance, and how do the two interact? Write the tuning-order recipe you'd follow on a new tabular problem.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import lightgbm as lgb
+from sklearn.datasets import make_classification
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+
+X, y = make_classification(n_samples=1500, n_features=10, n_informative=6,
+                           random_state=10)
+cv = StratifiedKFold(5, shuffle=True, random_state=11)
+
+print("num_leaves sweep (max_depth=-1):")
+for nl in [7, 15, 31, 63, 127]:
+    m = lgb.LGBMClassifier(n_estimators=200, num_leaves=nl, verbose=-1,
+                           random_state=0)
+    auc = cross_val_score(m, X, y, cv=cv, scoring="roc_auc").mean()
+    print(f"  num_leaves={nl:>3}: AUC {auc:.4f}")
+
+print("max_depth sweep (num_leaves=63):")
+for md in [3, 5, 8, -1]:
+    m = lgb.LGBMClassifier(n_estimators=200, num_leaves=63, max_depth=md,
+                           verbose=-1, random_state=0)
+    auc = cross_val_score(m, X, y, cv=cv, scoring="roc_auc").mean()
+    print(f"  max_depth={md:>3}: AUC {auc:.4f}")
+```
+
+num_leaves moves the needle (it caps the model's true complexity); max_depth only bites when it *clips* num_leaves (tiny depths) — otherwise it's a safety rail. Recipe: fix learning_rate modestly (0.05), tune num_leaves + min_child_samples by CV, set max_depth as a guardrail, scale n_estimators with early stopping, and only then consider feature_fraction/bagging dials ([7.5](07-5-gradient-boosting.qmd)'s subsample, renamed).
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **The dial dictionary translates**: sklearn-GBM max_depth ↔ LightGBM num_leaves (complexity), subsample ↔ bagging_fraction, colsample ↔ feature_fraction, min_samples_leaf ↔ min_child_weight/samples — carrying names across libraries without remapping semantics is the #1 tuning bug.
+- **Early stopping APIs differ per version**: LightGBM/XGBoost have changed callback/eval-set conventions repeatedly — pin versions and read *your* installed signature (`help(model.fit)`), not blog posts.
+- **NaN routing + `feature_fraction` interplay**: features with NaNs get "free" informative splits — check whether missingness itself is predictive before crediting the feature ([Exercise 2](#)).
+- **Histogram binning + tiny data**: on n < ~1000 the exact (sklearn-GBM) splitter can match or beat histogram methods — industrial speed matters when data is big.
+- **Determinism**: identical seeds give identical forests, but GPU/histogram orderings can vary across hardware — document versions for reproducibility ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)'s protocol hygiene).
+- **Interpretability exports**: all three expose importances (split/gain) with the same [7.4](07-4-random-forests.qmd) caveats; prefer permutation/SHAP-style attributions on held-out data for anything you publish.
+
+### Read & Refactor AI Code
+
+This AI-generated LightGBM pipeline has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+import lightgbm as lgb
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+from sklearn.datasets import make_classification
+
+X, y = make_classification(n_samples=1200, n_features=10, weights=[0.9, 0.1],
+                           random_state=20)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=21)
+
+# BUG 1: accuracy headline on 90/10 imbalance
+m = lgb.LGBMClassifier(n_estimators=300, num_leaves=127, verbose=-1,
+                       random_state=0).fit(X_tr, y_tr)
+print("accuracy:", round(accuracy_score(y_te, m.predict(X_te)), 3))
+
+# BUG 2: num_leaves=127 as 'just more capacity' with no cost check
+print("leaf-wise depth unchecked -> pocket overfitting")
+
+# BUG 3: early stopping via test set
+m2 = lgb.LGBMClassifier(n_estimators=2000, verbose=-1, random_state=0)
+m2.fit(X_tr, y_tr, eval_set=[(X_te, y_te)], callbacks=[
+    lgb.early_stopping(stopping_rounds=20)])
+print("best iteration (test-peeked):", m2.best_iteration_)
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Accuracy as headline at 10% prevalence**: ~0.90 achievable by predicting the majority — use AUC/AP ([3.1](../part-03-classification-glm/03-1-classification-fundamentals.qmd)).
+2. **num_leaves = 127 unchecked**: leaf-wise growth will grow deep pockets on minority-class noise; cap by CV (typical 15–63 at this n) and watch `min_child_samples`.
+3. **Test-set early stopping**: the eval_set must be a *validation* split carved from training — the test set is spent once, at the end.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import lightgbm as lgb
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score, average_precision_score
+from sklearn.datasets import make_classification
+
+X, y = make_classification(n_samples=1200, n_features=10, weights=[0.9, 0.1],
+                           random_state=20)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, stratify=y, random_state=21)
+X_cal, X_va, y_cal, y_va = train_test_split(X_tr, y_tr, stratify=y_tr,
+                                            random_state=22)
+
+m = lgb.LGBMClassifier(n_estimators=1500, num_leaves=31, verbose=-1,
+                       random_state=0)
+m.fit(X_cal, y_cal, eval_set=[(X_va, y_va)],
+      callbacks=[lgb.early_stopping(stopping_rounds=30, verbose=False)])
+p = m.predict_proba(X_te)[:, 1]
+print(f"held-out AUC {roc_auc_score(y_te, p):.3f}, AP {average_precision_score(y_te, p):.3f}")
+print("stopped at iteration", m.best_iteration_, "(validation-based)")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Newton leaf values: for a leaf with examples {gᵢ, hᵢ} (gradients, Hessians) and L2 penalty λ, derive the optimal leaf value w* = −Σgᵢ/(Σhᵢ + λ) and the resulting split-gain formula used by XGBoost. Verify numerically for a log-loss leaf (compute gᵢ, hᵢ from pᵢ) that w* equals the *local log-odds correction* — connecting to the Newton/IRLS machinery of logistic regression ([3.3 Q1](../part-03-classification-glm/03-3-logistic-regression.qmd)).
+
+<details>
+<summary>Hint</summary>
+
+Minimize Σ[gᵢw + ½hᵢw²] + ½λw² in w; the gain formula is ½·(GL²/(GR+λ) + GR²/(GR+λ) − G²/(G+λ)) minus γ per leaf.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Quadratic-in-w leaf objective: Σgᵢw + ½Σhᵢw² + ½λw² minimized at w* = −Σgᵢ/(Σhᵢ + λ). For log-loss, gᵢ = pᵢ − yᵢ and hᵢ = pᵢ(1−pᵢ) — the IRLS weights. Verification:
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+p = np.array([0.8, 0.3, 0.6]); y = np.array([1, 0, 1])
+g = p - y
+h = p * (1 - p)
+lam = 1.0
+w_star = -g.sum() / (h.sum() + lam)
+print(f"Newton leaf value: {w_star:.4f}")
+
+# compare: exact 1-step log-odds correction for these 3 points
+# logit += w*  -> recompute p; Newton-in-logit space matches the leaf update
+z = np.log(p / (1 - p)) + w_star
+p_new = 1 / (1 + np.exp(-z))
+print("updated p:", p_new.round(3), "(each pulled toward its label)")
+```
+
+The leaf update is one IRLS step on the leaf's members — modern boosting is Newton boosting, which is why it converges in fewer, better-fitted trees than the first-order original.
+</details>
+
+**Q2.** Histogram approximation audit: on one dataset, compare exact-split boosting (sklearn GradientBoostingRegressor) against histogram boosting (HistGB) at increasing max_bins (31, 127, 255), tracking CV MSE. Verify that MSE decreases toward the exact method's and stabilizes well before 255 on a smooth feature, then construct a feature where binning *bites* (extremely spiky/multi-modal with narrow gaps) and show 31 bins lose to 255. What's the practical bin-count policy?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.ensemble import GradientBoostingRegressor, HistGradientBoostingRegressor
+from sklearn.model_selection import cross_val_score, KFold
+
+rng = np.random.default_rng(23)
+x = rng.uniform(0, 1, 1500).reshape(-1, 1)
+y = np.sin(50 * x).ravel() * 0.3 + rng.normal(0, .1, 1500)   # 50-ridge spikes
+cv = KFold(5, shuffle=True, random_state=24)
+
+exact = -cross_val_score(GradientBoostingRegressor(n_estimators=200, max_depth=2,
+                                                     random_state=0), x, y, cv=cv,
+                         scoring="neg_mean_squared_error").mean()
+for bins in [31, 127, 255]:
+    m = -cross_val_score(HistGradientBoostingRegressor(max_iter=200, max_bins=bins,
+                          random_state=0), x, y, cv=cv,
+                         scoring="neg_mean_squared_error").mean()
+    print(f"max_bins={bins:>3}: CV MSE {m:.4f}")
+print(f"exact splits:  CV MSE {exact:.4f}")
+```
+
+Smooth features: 127 bins ≈ 255 ≈ exact (split *choices* are coarse-grain stable). The spiky truth exposes binning: narrow ridges fall between coarse bin edges, and 31 bins measurably lose. Policy: default 255 (the library default) is nearly free; drop bins only for speed on huge n — and check exact-vs-histogram once on your data before trusting a leaderboard delta.
+</details>
+
+## 6. Complex Questions
+
+**C1 (libraries × [7.3–7.5](07-3-bagging.qmd) family tournament).** The full Part 7 bake-off on one honest protocol: single tree, random forest, sklearn-GBM, HistGB, LightGBM, XGBoost — same dataset (10k rows, 20 features, mixed signal types), identical outer 5-fold nested CV, light inner tuning. Produce the accuracy-vs-fit-time scatter and write the deployment recommendation for (a) a laptop-scale research problem and (b) a 100M-row scoring pipeline — justifying each choice by the measured frontier, not reputation.
+
+**C2 (libraries × [5.6 p ≫ n](../part-05-regularization-high-dimensions/05-6-high-dimensional.qmd) × [12.4 FDR](../part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.qmd) stub).** Boosters in the wide regime: n = 150, p = 2,000 with 10 signals. Compare LightGBM (with feature_fraction < 1) against lasso and the random forest — nested CV MSE plus each method's top-20 recovery overlap with truth. In p ≫ n, which inductive bias (sparsity-linear, decorrelated trees, sequential trees) wins, and does the answer change when the signal becomes interaction-heavy? Write the pre-registered analysis plan you'd commit to before seeing the response.
+
+## 7. Summary
+
+- Modern boosters = [7.5](07-5-gradient-boosting.qmd)'s algorithm + Newton leaf values + histogram splits + native NaN routing + leaf-wise growth.
+- HistGradientBoosting (sklearn) implements the core with zero extra dependencies; LightGBM/XGBoost add ecosystem and raw speed.
+- num_leaves is the complexity knob (leaf-wise trees); max_depth is a guardrail; early stopping must use a validation split, never the test set.
+- Learned NaN branches are a predictive feature — and a missingness-mechanism assumption ([9.3](../part-09-unsupervised-learning/09-3-missing-values.qmd)).
+- Hyperparameter names don't translate across libraries; translate *semantics*, then tune on your data.
+- Accuracy at sane settings is a tie between implementations; speed, data volume, and deployment constraints decide.
+- Part 7's sequence — trees → bagging → forests → boosting → libraries — is one idea (adaptive step functions) refined four ways. Next, margins meet kernels: [Part 8, SVMs](../part-08-svm/08-1-geometry.qmd), starting with [8.1 Geometry essentials](../part-08-svm/08-1-geometry.qmd).

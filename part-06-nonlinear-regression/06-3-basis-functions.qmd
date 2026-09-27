@@ -1,0 +1,406 @@
+---
+title: "6.3 Basis Functions — The General Recipe"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - scikit-learn
+    - statsmodels
+    - matplotlib
+---
+
+Polynomials, steps, splines, sines — all are the same trick: expand $x$ (or many x's) into a dictionary of derived columns and run linear regression on the result. This page makes the recipe explicit, shows how the *choice of dictionary* is the choice of inductive bias, and builds the machinery the rest of Part 6 specializes.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+A basis is any set of transformations $\phi_1(x), \ldots, \phi_K(x)$; the model is
+
+$$\hat y = \sum_{k=1}^K \beta_k\, \phi_k(x)$$
+
+— linear in β, arbitrarily rich in x. The whole game ([2.8](../part-02-linear-regression/02-8-nonlinear-transformations.qmd)): **the basis encodes what shapes are easy**. Compare three dictionaries on one truth:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.6
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import PolynomialFeatures
+
+rng = np.random.default_rng(0)
+n = 120
+x = np.sort(rng.uniform(0, 2 * np.pi, n))
+y = np.sin(x) + 0.3 * np.sin(3 * x) + rng.normal(0, 0.3, n)
+
+def basis_poly(X, k=9):
+    return PolynomialFeatures(k, include_bias=False).fit_transform(X)
+def basis_fourier2(X, k=4):
+    t = X
+    cols = [np.sin(kk * t) for kk in range(1, k + 1)]
+    cols += [np.cos(kk * t) for kk in range(1, k + 1)]
+    return np.column_stack(cols)
+def basis_step(X, k=12):
+    edges = np.linspace(0, 2 * np.pi, k + 1)
+    return np.column_stack([np.ones_like(X[:, 0])] +
+                           [(X[:, 0] > e).astype(float) for e in edges[1:-1]])
+
+xg = np.linspace(0, 2 * np.pi, 400).reshape(-1, 1)
+fig, ax = plt.subplots(figsize=(7, 3.6))
+ax.scatter(x, y, s=12, alpha=0.4, color="gray", label="data")
+ax.plot(xg, np.sin(xg) + 0.3 * np.sin(3 * xg), "k--", label="truth")
+for name, B in [("poly d=9", basis_poly), ("fourier K=4", basis_fourier2),
+                ("12 steps", basis_step)]:
+    m = LinearRegression().fit(B(x.reshape(-1, 1)), y)
+    ax.plot(xg, m.predict(B(xg)), lw=2, label=name)
+ax.set(xlabel="x", ylabel="y", title="Same machine, three dictionaries")
+ax.legend(fontsize=8)
+plt.show()
+```
+
+The Fourier basis nails this truth because **sines are in its dictionary** — the prior matches the world:
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(1)
+n = 120
+x = np.sort(rng.uniform(0, 2 * np.pi, n))
+y = np.sin(x) + 0.3 * np.sin(3 * x) + rng.normal(0, 0.3, n)
+
+def fourier(X, k):
+    t = X[:, 0]
+    return np.column_stack([f(kk * t) for kk in range(1, k + 1)
+                            for f in (np.sin, np.cos)])
+
+for k in [1, 2, 3, 4]:
+    B = fourier(x.reshape(-1, 1), k)
+    m = LinearRegression().fit(B, y)
+    print(f"K={k}: train MSE = {np.mean((y - m.predict(B))**2):.4f}  "
+          f"({2*k} params; truth uses sin x and sin 3x)")
+```
+
+## 2. Concept Questions
+
+1. In what sense is a basis a "prior" — and what does the polynomial dictionary believe about functions that Fourier does not?
+2. Your basis has K = 500 columns, n = 200. Which two tools from Part 5 make this survivable, and which basis property do they exploit?
+3. What distinguishes a *good* basis for a problem from a merely large one? Give one property of Fourier that makes it ideal for periodic data.
+4. Why is basis expansion the standard gateway to kernel methods ([8.4](../part-08-svm/08-4-kernel-svm.qmd))?
+5. Two bases span the same function space. What differs between fits on them — and what never differs?
+
+<details>
+<summary>Answers</summary>
+
+1. The dictionary defines which functions are *cheap* (few active columns, low effective complexity) vs *expensive*. Polynomials believe functions are smooth globally and polynomial-ish; Fourier believes in periodicity and frequency sparsity — a truth that is "3 dictionary entries" in one basis is "30 parameters" in another ([6.1](06-1-polynomial-regression.qmd)'s Chebyshev moral at the space level).
+2. Regularization (ridge/lasso on the basis — [5.2](../part-05-regularization-high-dimensions/05-2-ridge-regression.qmd), [5.3](../part-05-regularization-high-dimensions/05-3-lasso-regression.qmd)) and CV to tune it; both exploit that only a few directions typically carry signal (sparsity/low effective rank).
+3. Good = (i) truths of interest are *sparse* in it, (ii) columns are numerically well-behaved, (iii) evaluation is stable in the region you predict. Fourier is ideal for periodic data because a k-frequency function is exactly 2k columns — perfect sparsity — and the basis is orthogonal on uniform grids.
+4. Kernel methods compute inner products $\langle\phi(x), \phi(x')\rangle$ without materializing φ: predictions depend on the basis only through these inner products, so infinite dictionaries (RBF) become computable — the basis view is literally the derivation.
+5. Different fits (coefficients, conditioning, penalty behavior — [6.1 Exercise 2](06-1-polynomial-regression.qmd)); identical *fitted values* whenever both bases span the same space and the fit is unpenalized full-rank OLS. Penalties break the equivalence (they're basis-dependent) — that's a feature, not a bug.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.preprocessing import SplineTransformer
+X = np.linspace(0, 1, 6).reshape(-1, 1)
+st = SplineTransformer(n_knots=4, degree=3)
+B = st.fit_transform(X)
+print("shape (n x columns):", B.shape)          # knots-2+degree extra columns
+print("row sums:", B.sum(axis=1).round(6))       # partition of unity
+```
+
+```{pyodide}
+import numpy as np
+# RFF: random Fourier features approximate an RBF kernel basis
+rng = np.random.default_rng(2)
+X = rng.normal(0, 1, (5, 1))
+n_feat = 6
+w = rng.normal(0, 1.0, (1, n_feat))
+b = rng.uniform(0, 2 * np.pi, n_feat)
+Z = np.sqrt(2 / n_feat) * np.cos(X @ w + b)
+print(Z.round(3))
+print("-> infinite dictionaries made finite by random sampling")
+```
+
+```{pyodide}
+import numpy as np
+# orthogonality of the Fourier basis on a uniform grid
+t = np.linspace(0, 2 * np.pi, 200, endpoint=False)
+B = np.column_stack([np.sin(k * t) for k in range(1, 5)] +
+                    [np.cos(k * t) for k in range(1, 5)])
+G = B.T @ B / 200
+print("max off-diagonal of Gram/200:", np.abs(G - np.diag(np.diag(G))).max().round(4))
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import LinearRegression
+rng = np.random.default_rng(3)
+x = np.sort(rng.uniform(0, 1, 100))
+y = np.abs(x - 0.5) + rng.normal(0, 0.05, 100)      # kink at 0.5
+def hinge_basis(t, knots):
+    return np.column_stack([np.maximum(t - k, 0) for k in knots])
+B = hinge_basis(x, [0.25, 0.5, 0.75])
+m = LinearRegression().fit(B, y)
+print("coefs:", m.coef_.round(3), "(last entry ≈ the kink's severity)")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Build a `BasisPipeline` comparison harness: for bases {poly-9, hinge at quantile knots, Fourier-K, 12 steps}, compute 5-fold CV MSE on (a) the periodic truth of Section 1, (b) a kinked truth ($y = |x − 1| + \varepsilon$ on [0, 2]). Report the 4×2 table. State the matching rule between truth geometry and dictionary that the table reveals.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import cross_val_score, KFold
+
+def basis_poly(t, k=9):
+    return np.column_stack([t**j for j in range(1, k + 1)])
+def basis_fourier(t, k=4):
+    return np.column_stack([f(kk * t) for kk in range(1, k + 1)
+                            for f in (np.sin, np.cos)])
+def basis_hinge(t, k=6):
+    knots = np.quantile(t, np.linspace(0.1, 0.9, k))
+    return np.column_stack([np.maximum(t - kk, 0) for kk in knots])
+def basis_step(t, k=12):
+    edges = np.linspace(t.min(), t.max(), k + 1)
+    return np.column_stack([(t > e).astype(float) for e in edges[1:-1]])
+
+bases = {"poly9": basis_poly, "hinge6": basis_hinge,
+         "fourier4": basis_fourier, "step12": basis_step}
+cv = KFold(5, shuffle=True, random_state=1)
+
+rng = np.random.default_rng(4)
+x = np.sort(rng.uniform(0, 2, 150))
+truths = {
+    "periodic": np.sin(2 * np.pi * x / 2) + rng.normal(0, 0.3, x.size),
+    "kinked": np.abs(x - 1) + rng.normal(0, 0.15, x.size),
+}
+print(f"{'basis':10s}" + "".join(f"{k:>12s}" for k in truths))
+for bname, B in bases.items():
+    row = f"{bname:10s}"
+    for tname, y in truths.items():
+        mse = -cross_val_score(LinearRegression(), B(x), y, cv=cv,
+                               scoring="neg_mean_squared_error").mean()
+        row += f"{mse:12.3f}"
+    print(row)
+```
+
+The table's diagonal shines: Fourier dominates the periodic truth, hinge/step families dominate the kink (their dictionary *contains* the kink exactly; polynomials must approximate it globally). The rule: pick dictionaries whose cheap functions look like the phenomena you expect — and verify by CV, since priors can be wrong.
+</details>
+
+**Exercise 2.** Random Fourier features, scaled up: generate the RBF-like truth $y = \exp(-(x-1)^2) + \varepsilon$ on [−2, 2]. Approximate it with RFF bases of size J ∈ {5, 20, 100, 500} (shared rng across sizes), reporting CV MSE for each. Show the MSE falling and stabilizing, then explain (a) what J controls, (b) why the same J would need to grow with input dimension (the connection to [2.9](../part-02-linear-regression/02-9-knn-regression.qmd)'s curse).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import Ridge
+from sklearn.model_selection import cross_val_score, KFold
+
+rng = np.random.default_rng(5)
+x = np.sort(rng.uniform(-2, 2, 200))
+y = np.exp(-(x - 1)**2) + rng.normal(0, 0.1, x.size)
+cv = KFold(5, shuffle=True, random_state=6)
+
+W = rng.normal(0, 1, (1, 500))
+B0 = rng.uniform(0, 2 * np.pi, 500)
+
+def rff(t, J):
+    Z = np.sqrt(2 / J) * np.cos(t.reshape(-1, 1) * W[:, :J] + B0[:J])
+    return Z
+
+for J in [5, 20, 100, 500]:
+    mse = -cross_val_score(Ridge(alpha=1e-6), rff(x, J), y, cv=cv,
+                           scoring="neg_mean_squared_error").mean()
+    print(f"J={J:>4}: CV MSE = {mse:.4f}")
+```
+
+J is the resolution of the random frequency grid — bigger J covers finer structure (bias ↓) at more parameters (variance ↑), with the knee set by signal smoothness. In d dimensions, covering the frequency space requires J growing roughly exponentially in d — random features inherit the curse; their virtue is making *any fixed* J cheap for kernels, not escaping dimensionality.
+</details>
+
+**Exercise 3.** Basis diagnostics: for the hinge basis at 6 quantile knots on n = 150 uniform x, compute (a) the Gram matrix's condition number, (b) column norms, (c) pairwise column correlations. Then recompute after standardizing columns. Which diagnostic predicts the OLS coefficient instability, and which predicts ridge's unequal shrinkage? State the pre-flight checklist for any custom basis.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(7)
+x = np.sort(rng.uniform(0, 1, 150))
+knots = np.quantile(x, np.linspace(0.1, 0.9, 6))
+B = np.column_stack([np.maximum(x - k, 0) for k in knots])
+
+print("column norms:", np.linalg.norm(B, axis=0).round(2))
+C = np.corrcoef(B, rowvar=False)
+off = C - np.eye(6)
+print("max |off-diagonal correlation|:", np.abs(off).max().round(3))
+print("cond(Gram):", f"{np.linalg.cond(B.T @ B):.3e}")
+
+Bz = (B - B.mean(axis=0)) / B.std(axis=0)
+print("cond(Gram, standardized):", f"{np.linalg.cond(Bz.T @ Bz):.3e}")
+```
+
+Hinge columns are *cumulative* — each contains the previous plus more — so pairwise correlations near 1 and a huge Gram condition number are inherent to the basis. That predicts (a) unstable raw OLS coefficients and (b) ridge shrinking later columns most (they carry the smallest marginal new information). Checklist: column norms comparable (else standardize), condition number sane (else orthogonalize/regularize), no near-duplicate columns (else lasso coin-flips — [5.3](../part-05-regularization-high-dimensions/05-3-lasso-regression.qmd)).
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **The dictionary IS the model**: two practitioners with the same estimator but different bases built different inductive biases — document your basis like you'd document your features.
+- **Unstandardized, unregularized custom bases** are where numerical demons live: check norms, condition numbers, and column correlations before trusting coefficients ([Exercise 3](#)'s checklist).
+- **Basis leakage**: quantile knots, cutpoints, standardization constants — anything fitted to X must be fit per-fold ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd)); a transformer class (or `SplineTransformer`/`KBinsDiscretizer` in a pipeline) is the enforcement.
+- **Penalties are basis-relative**: ridge-on-Fourier is frequency-shrinkage; ridge-on-steps is neighbor-averaging. Same α, different prior — never port tuning across bases.
+- **Interactions multiply**: basis-expanding several features jointly explodes columns combinatorially ([2.7](../part-02-linear-regression/02-7-interaction-terms.qmd), [5.6](../part-05-regularization-high-dimensions/05-6-high-dimensional.qmd)); additive-by-feature expansion (GAM-style, [6.7](06-7-gam.qmd)) is the controlled alternative.
+- **Extrapolation behavior is basis-inherited**: Fourier extrapolates periodically, steps flatline, polynomials explode, RFF oscillates. Choose the failure mode you can live with.
+
+### Read & Refactor AI Code
+
+This AI-generated "feature engineering" has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import Ridge
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(8)
+x = np.sort(rng.uniform(0, 10, 200))
+y = np.sin(0.8 * x) + 0.2 * x + rng.normal(0, 0.3, 200)
+X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y, random_state=9)
+
+# BUG 1: knots from FULL data quantiles (train+test)
+all_knots = np.quantile(x, np.linspace(0.1, 0.9, 5))
+def hinge(t, knots):
+    return np.column_stack([np.maximum(t - k, 0) for k in knots])
+m = Ridge(alpha=1.0).fit(hinge(X_tr, all_knots), y_tr)
+print("test MSE:", round(float(np.mean((y_te - m.predict(hinge(X_te, all_knots)))**2)), 4))
+
+# BUG 2: mixing bases without alignment (polynomial of the hinge output!)
+B_tr = np.c_[hinge(X_tr, all_knots), X_tr**2, X_tr**3]
+m2 = Ridge(alpha=1.0).fit(B_tr, y_tr)
+print("support of lasso would flip here — correlated stacked bases")
+
+# BUG 3: evaluating periodic extrapolation with a step basis
+def steps(t, k=12):
+    edges = np.linspace(0, 10, k + 1)
+    return np.column_stack([(t > e).astype(float) for e in edges[1:-1]])
+m3 = Ridge(alpha=1.0).fit(steps(X_tr), y_tr)
+print("prediction at x=12 (outside!):", m3.predict(steps(np.array([[12.0]]))).round(2))
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Knots from full data** — quantile knots fitted on test rows leak ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd)). Fit the basis transformer on training folds only.
+2. **Stacked correlated bases** — hinge + powers triple-count the same smoothness; coefficients become uninterpretable mixtures and penalties arbitrary. Choose one dictionary (or pre-declare the composite basis as *the* model).
+3. **Step basis extrapolation**: all cumulative dummies saturate at 1 → the fit extrapolates as the *last bin's constant plus penalty residue*; also indexing trickery in the print. Either clip to range or pick a basis whose extrapolation mode is intended.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import RidgeCV
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(8)
+x = np.sort(rng.uniform(0, 10, 200))
+y = np.sin(0.8 * x) + 0.2 * x + rng.normal(0, 0.3, 200)
+X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y, random_state=9)
+
+knots = np.quantile(X_tr, np.linspace(0.1, 0.9, 5))       # training rows only
+def hinge(t):
+    return np.column_stack([np.maximum(t - k, 0) for k in knots])
+m = RidgeCV(alphas=10.0 ** np.arange(-2, 3, 0.5)).fit(hinge(X_tr), y_tr)
+print("test MSE:", round(float(np.mean((y_te - m.predict(hinge(X_te)))**2)), 4))
+
+x_new = 12.0
+if x_new > X_tr.max():
+    print(f"x={x_new} outside training range [{X_tr.min():.1f}, {X_tr.max():.1f}] — refused.")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Show that any linear smoother with hat matrix H = B(BᵀB)⁻¹Bᵀ satisfies tr(H) = K when B has full column rank K, and use it to compare the *effective complexity* of the Section 1 three fits at their CV-chosen sizes. Then explain why two different bases with equal tr(H) can still produce different test errors — what does tr(H) not capture?
+
+<details>
+<summary>Hint</summary>
+
+Rank–trace identity for idempotent matrices; then think about *which* K directions each basis spends its budget on relative to the truth.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+H = B(BᵀB)⁻¹Bᵀ is the orthogonal projector onto span(B): idempotent with rank = K, so tr(H) = K — every full-rank basis with K columns spends exactly K effective parameters, regardless of dictionary. Two K-column bases differ in *where* their K directions point: Fourier's are frequency-localized, steps' are space-localized; test error equals the truth's energy outside the spanned subspace plus σ²·K/n-style variance — and the energy mismatch term is basis-dependent even at equal tr(H). Complexity is bookkeeping; *alignment with the truth* is the physics.
+</details>
+
+**Q2.** The null-space trick: construct a basis for x ∈ [0, 1] whose first two columns have (near-)zero variance across the data but capture all of y's signal — e.g., $\phi_1 = \sin(40\pi x)$ evaluated only... no; instead use a *two-point* signal: y depends on $\mathbb{1}(x > 0.5)$ while your candidate basis is {x, x²} (polynomials). Quantify by simulation how many polynomial degrees are needed before CV MSE approaches the 1-column hinge-at-0.5 fit. What does this gap measure about basis mismatch, and how would you detect it in practice (you don't know the truth)?
+
+<details>
+<summary>Hint</summary>
+
+The kink at 0.5 is invisible to low-degree polynomials; watch the CV curve as d grows and compare against any local/step basis's flat performance.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import cross_val_score, KFold
+
+rng = np.random.default_rng(11)
+x = np.sort(rng.uniform(0, 1, 200))
+y = 2.0 * (x > 0.5) + rng.normal(0, 0.4, x.size)
+cv = KFold(5, shuffle=True, random_state=12)
+
+for d in [1, 3, 5, 9, 15, 25]:
+    B = np.column_stack([x**j for j in range(1, d + 1)])
+    mse = -cross_val_score(LinearRegression(), B, y, cv=cv,
+                           scoring="neg_mean_squared_error").mean()
+    print(f"poly d={d:>2}: CV MSE = {mse:.4f}")
+
+Bh = np.column_stack([np.ones_like(x), (x > 0.5).astype(float)])
+mse = -cross_val_score(LinearRegression(), Bh, y, cv=cv,
+                       scoring="neg_mean_squared_error").mean()
+print(f"1-cut hinge at 0.5: CV MSE = {mse:.4f}")
+```
+
+Polynomials only approach the hinge's error around d ≈ 15–25 — they must synthesize a step from smooth monomials, spending dozens of parameters on what the hinge does with one. The gap between a flexible generic basis and a small aligned one is a *basis-mismatch tax*. In practice (truth unknown): fit several dictionary families at matched complexity, and treat a large CV gap between them as a discovery about the truth's geometry (sharp jumps favor local dictionaries; periodicity favors Fourier; smoothness favors everything).
+</details>
+
+## 6. Complex Questions
+
+**C1 (bases × [5.3 lasso](../part-05-regularization-high-dimensions/05-3-lasso-regression.qmd)).** Sparse dictionaries meet sparse penalties: on the Section 1 periodic truth, expand with a large Fourier dictionary (K = 20 frequencies) and fit LassoCV. Report the selected frequencies against the truth's {1, 3} — does L1 recover frequency sparsity? Then repeat with 20 *random* frequencies (mismatched dictionary) and compare both CV MSE and selection interpretability. Write the sentence linking dictionary alignment to lasso's recovery guarantees ([5.3](../part-05-regularization-high-dimensions/05-3-lasso-regression.qmd)'s irrepresentable intuition).
+
+**C2 (bases × [7.1 trees](../part-07-trees-ensembles/07-1-decision-trees.qmd) preview × [9.2 PCA](../part-09-unsupervised-learning/09-2-principal-component-analysis.qmd)).** Adaptive vs fixed vs rotated bases: fit (a) a depth-5 tree, (b) a 12-cutpoint step basis + OLS, (c) PCA-on-features + linear model, to a truth with diagonal structure (y depends on x₁ + x₂, both noisy). Compare CV MSE and interpret each fit's structure. Trees find the diagonal split greedily; the step basis (axis-aligned) cannot; PCA rotates toward it — write the three-way trade-off (adaptivity vs stability vs interpretability) your table implies, as a preview of Parts 7 and 9.
+
+## 7. Summary
+
+- Basis expansion is the universal recipe: pick a dictionary, regress linearly — the dictionary is the inductive bias.
+- Matched dictionaries (Fourier↔periodic, hinge↔kinks, steps↔regimes) buy order-of-magnitude efficiency; CV is the check.
+- Effective complexity is tr(H) = K — but alignment with the truth determines test error at equal K.
+- Diagnose any custom basis: column norms, Gram condition number, duplicate columns — then standardize/regularize.
+- RFF randomizes infinite dictionaries into finite ones; J trades bias for variance, dimension-for-dimension cursed.
+- Penalties and bases interact — ridge-on-Fourier is frequency shrinkage; document both.
+- The most useful local dictionary gets continuity constraints next: [6.4 Regression splines](06-4-regression-splines.qmd).

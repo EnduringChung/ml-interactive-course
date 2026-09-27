@@ -1,0 +1,392 @@
+---
+title: "9.5 Hierarchical Clustering"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - scipy
+    - scikit-learn
+    - matplotlib
+---
+
+Hierarchical clustering builds a *tree* of clusterings instead of one partition: start with every point as its own cluster and repeatedly merge the closest pair (agglomerative), or split recursively (divisive). The output — a dendrogram — shows structure at *every* scale simultaneously, letting you choose k by cutting the tree rather than committing upfront.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+**Agglomerative nesting** (AGNES): repeatedly merge the two closest clusters, where "cluster distance" is defined by the **linkage**:
+
+- **single**: min pairwise distance (chains; finds long straggly shapes)
+- **complete**: max pairwise distance (compact, tight balls)
+- **average**: mean pairwise distance (compromise)
+- **ward**: merge minimizing total within-cluster variance increase (the K-means-flavored default)
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+from scipy.cluster.hierarchy import linkage, dendrogram
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+X = np.vstack([rng.normal([0, 0], .5, (30, 2)),
+               rng.normal([4, 0], .5, (30, 2)),
+               rng.normal([2, 3.5], .5, (30, 2))])
+
+Z = linkage(X, method="ward")
+fig, ax = plt.subplots(figsize=(7, 3.4))
+dendrogram(Z, no_labels=True, ax=ax, color_threshold=Z[-2, 2])
+ax.set(ylabel="merge distance", title="Dendrogram: structure at every scale")
+plt.show()
+print("Z shape:", Z.shape, "— one merge per row (n-1 merges)")
+```
+
+Cutting the tree at different heights = different clusterings:
+
+```{pyodide}
+import numpy as np
+from scipy.cluster.hierarchy import linkage, fcluster
+from sklearn.metrics import adjusted_rand_score
+
+rng = np.random.default_rng(1)
+X = np.vstack([rng.normal([0, 0], .5, (30, 2)),
+               rng.normal([4, 0], .5, (30, 2)),
+               rng.normal([2, 3.5], .5, (30, 2))])
+truth = np.repeat([0, 1, 2], 30)
+
+Z = linkage(X, method="ward")
+for k in [2, 3, 4]:
+    labels = fcluster(Z, t=k, criterion="maxclust")
+    print(f"cut to k={k}: ARI vs truth = {adjusted_rand_score(truth, labels):.3f}")
+```
+
+## 2. Concept Questions
+
+1. What does a dendrogram's *height* encode, and why is "cut at height h" equivalent to "keep the k merges below h"?
+2. Single linkage's chaining failure: describe the mechanism, draw it mentally on two crescents, and name the truth-shape it's *designed* for.
+3. Ward linkage vs K-means: state the precise relationship (what Ward merges minimize) and when their outputs can differ.
+4. Inversion (a later merge at *smaller* height than an earlier one): which linkage can produce it, and what does it break (both interpretationally and computationally)?
+5. The dendrogram is n−1 merges tall. What does that structure *guarantee* about hierarchy — and what real data property violates it (making the tree partly fiction)?
+
+<details>
+<summary>Answers</summary>
+
+1. Height = the distance between the two merged clusters (linkage-defined). Cutting at h keeps only merges with height ≤ h; the remaining connected components are exactly the k clusters — height-cuts and k-cuts are two views of one tree.
+2. Single linkage merges by the closest pair — a chain of close steps connects two genuinely distinct groups through intermediate points ("chaining"). It's *designed* for elongated/straggly truths (its home game), and it's robust to scale-ordering.
+3. Ward merges the pair whose union minimizes the increase in Σ within-cluster squared deviation — exactly K-means' criterion applied hierarchically. Outputs differ: greedy hierarchical order ≠ K-means' global refinement; a final K-means pass on Ward's clusters often improves them ([7.1](../part-07-trees-ensembles/07-1-decision-trees.qmd) greedy-vs-refit echo).
+4. Inversions occur with centroid/median linkage (distances of merged clusters can shrink) — they break the monotone dendrogram (heights must be non-decreasing upward) and the fcluster-style cutting (no clean level cut exists). Ward/single/complete/average are inversion-free.
+5. The tree guarantees a *strictly nested* hierarchy: every pair of clusters is disjoint or nested. Real structure violates it — overlapping groups (cells share states), multi-scale co-existing structures — so forcing data into a tree loses cross-cutting structure (the same nesting assumption [6.2](../part-06-nonlinear-regression/06-2-step-functions.qmd)'s trees and [7.1](../part-07-trees-ensembles/07-1-decision-trees.qmd) decision trees make, here about clusters).
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from scipy.cluster.hierarchy import linkage
+rng = np.random.default_rng(2)
+X = rng.normal(0, 1, (12, 3))
+for method in ["single", "complete", "average", "ward"]:
+    Z = linkage(X, method=method)
+    print(f"{method:8s}: first merge height {Z[0, 2]:.3f}, last {Z[-1, 2]:.3f}")
+```
+
+```{pyodide}
+import numpy as np
+from scipy.cluster.hierarchy import linkage, fcluster
+# chaining, witnessed: two blobs bridged by a thin line of points
+rng = np.random.default_rng(3)
+blob = np.vstack([rng.normal([0, 0], .3, (20, 2)),
+                  rng.normal([4, 0], .3, (20, 2))])
+bridge = np.c_[np.linspace(0, 4, 10), rng.normal(0, .03, 10)]
+X = np.vstack([blob, bridge])
+Z = linkage(X, method="single")
+labels2 = fcluster(Z, t=2, criterion="maxclust")
+import collections
+print("single-linkage k=2 sizes:", collections.Counter(labels2.tolist()))
+print("(the bridge chains the blobs together)")
+Zc = linkage(X, method="complete")
+labels2c = fcluster(Zc, t=2, criterion="maxclust")
+print("complete-linkage k=2 sizes:", collections.Counter(labels2c.tolist()))
+```
+
+```{pyodide}
+import numpy as np
+from scipy.cluster.hierarchy import linkage
+rng = np.random.default_rng(4)
+X = rng.normal(0, 1, (40, 3))
+for method in ["ward", "centroid"]:
+    Z = linkage(X, method=method)
+    heights = Z[:, 2]
+    print(f"{method:9s}: inversions? {bool(np.any(np.diff(heights) < -1e-9))}")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.datasets import make_blobs
+X, y = make_blobs(n_samples=200, centers=4, random_state=5)
+cl = AgglomerativeClustering(n_clusters=4, linkage="ward").fit(X)
+from sklearn.metrics import adjusted_rand_score
+print("sklearn agg. clustering ARI:", round(adjusted_rand_score(y, cl.labels_), 3))
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Implement single and complete linkage from scratch (the merge loop with a live distance matrix), verify against `scipy.linkage` on a 12-point dataset, and demonstrate the chaining/compactness contrast on the bridge dataset from drill 2. Which lines of your implementation encode the *definition* of each linkage?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy.cluster.hierarchy import linkage
+
+rng = np.random.default_rng(11)
+X = rng.normal(0, 1, (12, 3))
+D = np.sqrt(((X[:, None, :] - X[None, :, :]) ** 2).sum(axis=2))
+np.fill_diagonal(D, np.inf)
+
+def hier(D, how):
+    D = D.copy(); np.fill_diagonal(D, np.inf)
+    clusters = [[i] for i in range(len(D))]
+    merges = []
+    for _ in range(len(D) - 1):
+        sub = D[np.ix_(sum(clusters, []), sum(clusters, []))]  # placeholder
+        # cluster-level distances:
+        best, bi, bj = np.inf, None, None
+        for i in range(len(clusters)):
+            for j in range(i + 1, len(clusters)):
+                block = D[np.ix_(clusters[i], clusters[j])]
+                d = block.min() if how == "single" else block.max()
+                if d < best:
+                    best, bi, bj = d, i, j
+        merges.append(best)
+        clusters[bi] = clusters[bi] + clusters[bj]
+        del clusters[bj]
+    return merges
+
+for how in ["single", "complete"]:
+    mine = hier(D, how)
+    ref = linkage(X, method=how)[:, 2]
+    print(f"{how:9s} max |mine - scipy| = {np.abs(np.array(mine) - ref).max():.2e}")
+```
+
+The two lines selecting `block.min()` vs `block.max()` ARE the linkage definitions — everything else is bookkeeping. scipy computes them with optimized updates (Lance–Williams), but the semantics you've now written by hand are identical.
+</details>
+
+**Exercise 2.** Linkage zoology on structured truths: build four truths — (a) blobs, (b) two crescents (non-convex), (c) long straggly chains, (d) tight balls of unequal size — and run all four linkages (single/complete/average/ward), scoring ARI at the true k. Report the 4×4 table. Verify: single wins crescents/chains, ward wins balls/blobs, complete resists chaining. Write the linkage-selection sentence.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy.cluster.hierarchy import linkage, fcluster
+from sklearn.metrics import adjusted_rand_score
+
+rng = np.random.default_rng(12)
+def datasets():
+    blobs = np.vstack([rng.normal(c, .5, (80, 2)) for c in [(0, 0), (4, 0), (0, 4)]])
+    tb = np.repeat([0, 1, 2], 80)
+    t = rng.uniform(0, np.pi, 120)
+    cres = np.vstack([np.c_[np.cos(t), np.sin(t)],
+                      np.c_[1 - np.cos(t), .4 - np.sin(t)]]) + rng.normal(0, .05, (240, 2))
+    tc = np.repeat([0, 1], 120)
+    chain_pts = []
+    for seg in range(3):
+        chain_pts.append(rng.normal([seg * 3, seg % 2 * 3], .25, (60, 2)))
+    chains = np.vstack(chain_pts)
+    tch = np.repeat([0, 1, 2], 60)
+    balls = np.vstack([rng.normal(c, s, (30, 2))
+                       for c, s in [((0, 0), (0.2, 0.2)), ((6, 0), (1.5, 1.5))]])
+    tball = np.repeat([0, 1], 30)
+    return [("blobs", blobs, tb), ("crescents", cres, tc),
+            ("chains", chains, tch), ("uneq-balls", balls, tball)]
+
+methods = ["single", "complete", "average", "ward"]
+print(f"{'':12s}" + "".join(f"{m:>10s}" for m in methods))
+for name, X, truth in datasets():
+    row = f"{name:12s}"
+    for m in methods:
+        Z = linkage(X, method=m)
+        labels = fcluster(Z, t=len(np.unique(truth)), criterion="maxclust")
+        row += f"{adjusted_rand_score(truth, labels):10.3f}"
+    print(row)
+```
+
+The table's diagonal is the lesson: single linkage owns chains/crescents (chaining is a feature there); ward owns blobs and unequal balls (variance criterion matches); complete guards compactness against bridges; average splits the difference. Selection sentence: "choose the linkage whose *merge semantics* match the cluster shape your domain expects — then verify with the dendrogram and stability ([9.6](09-6-practical-clustering.qmd))."
+</details>
+
+**Exercise 3.** Dendrogram forensics: for the bridge dataset, produce dendrograms under single and complete linkage side by side. Read from each: at what height do the two blobs separate, and what does the single-linkage tree claim about the bridge points (which merge last/never at low height)? Then cut both trees at k = 2 and draw the partitions. Write the two-sentence guidance for reading a dendrogram *before* trusting its cuts.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(13)
+blob = np.vstack([rng.normal([0, 0], .3, (20, 2)),
+                  rng.normal([4, 0], .3, (20, 2))])
+bridge = np.c_[np.linspace(0, 4, 10), rng.normal(0, .03, 10)]
+X = np.vstack([blob, bridge])
+
+fig, axes = plt.subplots(1, 2, figsize=(8, 3.2))
+for ax, method in zip(axes, ["single", "complete"]):
+    Z = linkage(X, method=method)
+    dendrogram(Z, no_labels=True, ax=ax)
+    ax.set_title(f"{method} linkage")
+fig.tight_layout()
+plt.show()
+
+for method in ["single", "complete"]:
+    Z = linkage(X, method=method)
+    lab = fcluster(Z, t=2, criterion="maxclust")
+    import collections
+    print(method, "k=2 sizes:", collections.Counter(lab.tolist()))
+```
+
+Reading discipline: (1) scan the *top* merges first — the last few merge heights encode the strongest separations (a tiny final height = weak global structure); (2) check for chaining (single linkage with long mid-height ladders means bridges are being absorbed). Only then do cuts mean what you hope. The single-linkage tree here absorbs the bridge into one cluster at low heights; complete linkage's top merge separates the blobs cleanly — same data, opposite stories, chosen by linkage semantics.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Complexity**: naive agglomerative is O(n³) (or O(n² log n) with heaps) and O(n²) memory — the practical ceiling is ~10–20k points; for larger n, use K-means ([9.4](09-4-k-means.qmd)) first, then hierarchically cluster the centroids, or sample.
+- **Ward on non-Euclidean inputs**: ward assumes Euclidean distances (it's a variance criterion); with correlation or custom distances, use average/complete — or accept that ward's "variance" is undefined on your metric.
+- **`fcluster` criteria**: "maxclust" (k clusters) vs "distance" (height cut) answer different questions — height cuts transfer across datasets (a meaningful similarity scale), k-cuts don't.
+- **Dendrogram orientation illusion**: reordering leaves changes nothing about the tree — don't read neighborliness into leaf adjacency across branches (only within the last merges).
+- **Stability still applies**: bootstrap the rows, re-cluster, compare trees (cophenetic correlation / ARI at the cut) — hierarchical trees are as resample-sensitive as K-means labels ([9.1 Exercise 2](09-1-unsupervised-mindset.qmd)).
+- **No reallocation**: once merged, never split/switch — early greedy mistakes are frozen into the tree (agglomerative's original sin; divisive or refined approaches pay to escape it).
+
+### Read & Refactor AI Code
+
+This AI-generated hierarchical pipeline has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from scipy.cluster.hierarchy import linkage, fcluster, dendrogram
+
+rng = np.random.default_rng(14)
+X = np.vstack([rng.normal([0, 0], .6, (60, 2)),
+               rng.normal([4, 0], .6, (60, 2)),
+               rng.normal([2, 4], .6, (60, 2))])
+
+# BUG 1: ward on a correlation distance matrix
+D = 1 - np.corrcoef(X)                        # not Euclidean-space distances
+Z = linkage(D, method="ward")                 # undefined 'variance' on this metric
+
+# BUG 2: cutting by distance threshold picked from ANOTHER dataset
+labels = fcluster(Z, t=7.5, criterion="distance")
+import collections
+print("cluster sizes:", collections.Counter(labels.tolist()))
+
+# BUG 3: reading leaf adjacency as similarity order
+dendrogram(Z, no_labels=True)
+print("left-to-right leaf order = similarity ranking (FALSE)")
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Ward needs Euclidean geometry** — its merge criterion is a variance increase, undefined on correlation distances. Use average/complete linkage on non-Euclidean metrics (or embed the metric first).
+2. **Threshold imported from elsewhere**: distance cuts are meaningful in *this dataset's* similarity scale — read the target height off this dendrogram (or cut by k with justification).
+3. **Leaf adjacency isn't similarity**: dendrogram leaves are ordered for drawing; only tree *structure* (nested merges, heights) carries information.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy.cluster.hierarchy import linkage, fcluster, dendrogram
+import collections
+
+rng = np.random.default_rng(14)
+X = np.vstack([rng.normal([0, 0], .6, (60, 2)),
+               rng.normal([4, 0], .6, (60, 2)),
+               rng.normal([2, 4], .6, (60, 2))])
+
+Z = linkage(X, method="ward")                 # Euclidean: ward is defined
+k = 3
+labels = fcluster(Z, t=k, criterion="maxclust")
+print("sizes:", collections.Counter(labels.tolist()))
+print("last merge height:", round(Z[-1, 2], 2),
+      "— read top heights for the strong separations")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Derive Ward's merge criterion: show that for two clusters A, B, the increase in total within-cluster Σ‖x − μ‖² from merging them equals $\frac{n_A n_B}{n_A + n_B}\|\mu_A - \mu_B\|^2$. Use this to prove ward linkage merges the pair whose centroids are closest *weighted by harmonic-mean-ish sizes* — and explain why this makes ward prefer merging small clusters early (the unequal-size behavior of [7.2](../part-07-trees-ensembles/07-2-advantages-limitations.qmd)'s ledger).
+
+<details>
+<summary>Hint</summary»
+
+Total within-cluster SSE change = SSE(A∪B) − SSE(A) − SSE(B); expand each SSE around the *union* mean via the parallel-axis identity.
+</details>
+
+<details>
+<summary>Solution</summary»
+
+With the identity SSE(A∪B) = SSE(A) + SSE(B) + (n_A n_B/(n_A + n_B))‖μ_A − μ_B‖², the merge cost is exactly the size-weighted centroid distance. The weight n_A n_B/(n_A+n_B) is maximized at balanced sizes: merging two *small* clusters costs little (small weight), merging two *large* ones costs plenty — so ward grows big clusters late and prefers consolidating small ones early. Consequence: on unequal-size truths, ward's trees can consolidate the minority cluster with noise fragments before facing the big cluster — the hierarchical face of K-means' equal-size tendency.
+</details>
+
+**Q2.** Cophenetic correlation as a tree-quality summary: define the cophenetic distance between two points as the height of the merge where they first join; the cophenetic correlation is the correlation between these heights and the original distances. Implement it (`scipy.cluster.hierarchy.cophenet`), compute it for all four linkages on one dataset, and interpret: what does a *high* cophenetic correlation certify (and not certify)? Then show a dataset where cophenetic correlation is high but the clustering at true k is wrong — separating "faithful tree" from "correct partition."
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy.cluster.hierarchy import linkage, cophenet, fcluster
+from sklearn.metrics import adjusted_rand_score
+
+rng = np.random.default_rng(21)
+# faithful-tree dataset: clean nested blobs
+X_nested = np.vstack([rng.normal(0, .3, (50, 2)),
+                      rng.normal(4, .3, (50, 2))])
+# wrong-at-true-k dataset: two concentric rings (hierarchy plausible, partition wrong)
+t = rng.uniform(0, 2 * np.pi, 60)
+X_rings = np.vstack([np.c_[np.cos(t), np.sin(t)],
+                     2.5 * np.c_[np.cos(t), np.sin(t)]])
+truth_rings = np.repeat([0, 1], 60)
+
+for name, X, truth in [("nested blobs", X_nested, None),
+                       ("concentric rings", X_rings, truth_rings)]:
+    from scipy.spatial.distance import pdist
+    Z = linkage(X, method="average")
+    c, _ = cophenet(Z, pdist(X))
+    labels = fcluster(Z, t=2, criterion="maxclust")
+    ari = adjusted_rand_score(truth, labels) if truth is not None else None
+    print(f"{name:16s}: cophenetic corr = {c:.3f}",
+          f"| ARI at k=2 = {ari:.3f}" if ari is not None else "")
+```
+
+High cophenetic correlation certifies the *tree faithfully represents the pairwise distances* — the embedding into tree-heights lost little. It does not certify that the tree's clusters match the true groups: concentric rings give a faithful tree whose k = 2 cut slices by radius, not ring — tree fidelity and partition correctness are different virtues, exactly the internal-vs-external validation split of [9.1](09-1-unsupervised-mindset.qmd) Q1.
+</details>
+
+## 6. Complex Questions
+
+**C1 (hierarchical × [9.2 PCA](09-2-principal-component-analysis.qmd) × [7.4](../part-07-trees-ensembles/07-4-random-forests.qmd)).** Wide-data hierarchy: n = 150, p = 200 (5 planted clusters + noise directions). Compare ward-hierarchies built on (a) raw scaled distances, (b) PCA-5 scores, (c) forest-proximity-derived distances (1 − P(same leaf) from a random forest) — ARI at true k plus dendrogram stability under bootstrap. Which distance matrix produces the most faithful tree, and what does the proximity-distance result say about learning metrics from models ([7.4](../part-07-trees-ensembles/07-4-random-forests.qmd))?
+
+**C2 (hierarchical × [6.2 steps](../part-06-nonlinear-regression/06-2-step-functions.qmd) × [4.6 tuning](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)).** Cut selection as hyperparameter tuning: treat the dendrogram cut height as a hyperparameter and select it by a downstream supervised proxy (e.g., cluster-label agreement with a known covariate split, or downstream regression R² using cluster dummies). Implement cut-selection by downstream-CV on data where the true k is known; compare against silhouette-chosen cuts. When does downstream-supervised cut selection find the truth better — and what selection-inflation guard ([4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd)) must accompany it?
+
+## 7. Summary
+
+- Hierarchical clustering = a tree of nested partitions: merges by linkage (single/complete/average/ward), read at any scale.
+- Dendrogram heights are merge distances; cuts at height h or into k clusters are two views of one object.
+- Linkage semantics are shape hypotheses: single→chains, ward→compact variance balls, complete→tight anti-bridge, average→compromise.
+- Ward = K-means' criterion hierarchically (size-weighted centroid distance); their outputs relate but greedy order ≠ global refinement.
+- Faithful trees (cophenetic correlation) can still cut wrong — tree fidelity ≠ partition correctness.
+- No reallocation, nesting assumption, O(n²) memory: know the ceiling; hybridize for scale.
+- All structure-finding needs the practical layer — stability, k-selection discipline, mixed data, validation: [9.6 Practical clustering issues](09-6-practical-clustering.qmd).

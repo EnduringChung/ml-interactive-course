@@ -1,0 +1,447 @@
+---
+title: "7.3 Bagging"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - matplotlib
+---
+
+Bagging (bootstrap aggregation) fits many models on bootstrap resamples and averages them. Its entire logic is the variance decomposition of [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd): averaging B unstable fits divides variance by ~B — and *trees are the perfect fuel*, unstable enough to benefit, cheap enough to grow hundreds.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+Given B bootstrap samples, fit $\hat f^{(b)}$ on each and predict by the average (regression) or majority vote (classification):
+
+$$\hat f_{\text{bag}}(x) = \frac{1}{B}\sum_{b=1}^B \hat f^{(b)}(x)$$
+
+Why it works — for (approximately) uncorrelated, identically-distributed estimators:
+
+$$\text{Var}(\hat f_{\text{bag}}) = \rho\sigma^2 + \frac{1 - \rho}{B}\sigma^2$$
+
+where ρ is the pairwise correlation between trees. Averaging kills the second term; ρ (shared signal structure) sets the floor.
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.tree import DecisionTreeRegressor
+
+rng = np.random.default_rng(0)
+x = np.sort(rng.uniform(0, 1, 60))
+y = np.sin(2 * np.pi * x) + rng.normal(0, 0.4, x.size)
+xg = np.linspace(0, 1, 300).reshape(-1, 1)
+
+fits = []
+for b in range(9):
+    idx = rng.integers(0, 60, 60)
+    t = DecisionTreeRegressor(max_depth=None).fit(x[idx].reshape(-1, 1), y[idx])
+    fits.append(t.predict(xg))
+
+fig, ax = plt.subplots(figsize=(7, 3.4))
+ax.plot(xg, np.array(fits).mean(axis=0), color="black", lw=3, label="bagged (B=9)")
+for f in fits:
+    ax.plot(xg, f, color="gray", lw=0.5, alpha=0.6)
+ax.scatter(x, y, s=12, alpha=0.5)
+ax.set(xlabel="x", ylabel="y", title="Nine wild trees; their average is tame")
+ax.legend()
+plt.show()
+```
+
+The B-curve: test error falling with ensemble size, then plateauing:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.tree import DecisionTreeRegressor
+
+rng = np.random.default_rng(1)
+n = 60
+x = np.sort(rng.uniform(0, 1, n)).reshape(-1, 1)
+y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, 0.4, n)
+xte = np.linspace(0, 1, 3000).reshape(-1, 1)
+yte = np.sin(2 * np.pi * xte).ravel() + rng.normal(0, 0.4, 3000)
+
+Bs = [1, 3, 10, 25, 50, 100, 200]
+mses = []
+for B in Bs:
+    preds = np.zeros(len(xte))
+    for b in range(B):
+        idx = rng.integers(0, n, n)
+        t = DecisionTreeRegressor(random_state=b).fit(x[idx], y[idx])
+        preds += t.predict(xte)
+    preds /= B
+    mses.append(np.mean((yte - preds)**2))
+
+fig, ax = plt.subplots(figsize=(7, 3.2))
+ax.plot(Bs, mses, marker="o", ms=4)
+ax.set(xlabel="B (ensemble size)", ylabel="test MSE",
+       title="Averaging pays fast, then plateaus")
+plt.show()
+print("single-tree MSE:", round(mses[0], 3), "→ B=100:", round(mses[-2], 3))
+```
+
+## 2. Concept Questions
+
+1. Why must bagging use *bootstrap* resamples rather than k fresh splits of the data — what does each replicate lose, and what does it gain?
+2. In Var = ρσ² + (1−ρ)σ²/B, what sets ρ, and which later method attacks ρ directly?
+3. Bagging is said to "reduce variance while leaving bias roughly unchanged." Why *roughly* — when does bagging actually change bias?
+4. What is the out-of-bag (OOB) estimate, and which CV concept is it a bootstrap-flavored cousin of ([4.3](../part-04-validation-model-selection/04-3-cross-validation.qmd))?
+5. Your bagged tree ensemble extrapolates flat outside training x — same as one tree. Which property survived averaging (per [7.2](07-2-advantages-limitations.qmd))?
+
+<details>
+<summary>Answers</summary>
+
+1. Bootstrap resamples share rows (≈ 63% distinct) — each replicate is *worse* (trained on a sample of a sample) but available in quantity from one dataset. Fresh splits would give better individual models but you'd need a k× bigger dataset. Bagging trades per-model quality for ensemble quantity — a bargain only because averaging punishes independent noise, not individual skill.
+2. ρ = pairwise correlation between trees' predictions — set by how strongly the *same* signal structure dominates every bootstrap fit. Random forests ([7.4](07-4-random-forests.qmd)) attack ρ by forcing trees to consider random feature subsets, decorrelating them at the cost of slightly worse individual trees.
+3. The bagged average lives in the convex hull of the base fits — for squared loss, averaging can't add bias *outside* the single-model bias pattern, but it *can* smooth the staircase into something closer to the truth (jaggedness was partly bias-like misfit of the piecewise-constant approximator), so effective bias often *drops* slightly — most visibly for unstable approximators of smooth truths.
+4. Each bootstrap fit never saw ≈ 36.8% of rows; predicting those OOB rows and aggregating gives a test-error estimate without a separate holdout — the bootstrap cousin of CV, free with the fit ([4.5](../part-04-validation-model-selection/04-5-bootstrap.qmd)).
+5. Averaging preserves each base model's *support* — predictions remain convex combinations of leaf means, so outside training x the ensemble is as flat as its members. Ensembles fix variance, not bias; the axis-parallel and no-extrapolation biases are inherited ([7.2](07-2-advantages-limitations.qmd)'s ledger).
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(2)
+n = 50
+idx = rng.integers(0, n, n)
+oob = np.setdiff1d(np.arange(n), idx)
+print(f"in-bag unique: {len(set(idx))}/{n}, OOB: {len(oob)} (≈ 37%)")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.ensemble import BaggingRegressor
+from sklearn.tree import DecisionTreeRegressor
+rng = np.random.default_rng(3)
+x = rng.uniform(0, 1, (100, 1))
+y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, .3, 100)
+bag = BaggingRegressor(DecisionTreeRegressor(), n_estimators=100,
+                       oob_score=True, random_state=0).fit(x, y)
+print("OOB R2:", round(bag.oob_score_, 3))
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+rng = np.random.default_rng(4)
+# correlation rho between two trees' predictions
+x = rng.uniform(0, 1, (60, 1))
+y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, .3, 60)
+p = []
+for b in range(2):
+    idx = rng.integers(0, 60, 60)
+    p.append(DecisionTreeRegressor().fit(x[idx], y[idx]).predict(
+        np.linspace(0, 1, 500).reshape(-1, 1)))
+print("pairwise tree correlation rho:", round(float(np.corrcoef(p[0], p[1])[0, 1]), 3),
+      " <- the variance floor bagging alone can't beat")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.ensemble import BaggingRegressor
+from sklearn.linear_model import LinearRegression
+rng = np.random.default_rng(5)
+x = rng.normal(0, 1, (100, 3))
+y = x @ [1, -1, .5] + rng.normal(0, .1, 100)
+lin = LinearRegression().fit(x, y)
+bag = BaggingRegressor(LinearRegression(), n_estimators=100, random_state=0).fit(x, y)
+print("linear vs bagged-linear predictions:", np.abs(lin.predict(x[:3]) - bag.predict(x[:3])).max().round(6),
+      " <- averaging a STABLE learner buys nothing")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Implement bagging from scratch (no sklearn ensemble classes) and verify it matches `BaggingRegressor` behavior: same B, same bootstrap draws (same rng pipeline), compare test MSEs within tolerance. Then decompose: report the average single-tree test MSE, the bagged test MSE, and the mean pairwise tree correlation ρ — check the variance formula ρσ² + (1−ρ)σ²/B approximately holds using σ² = mean single-tree squared-deviation.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import BaggingRegressor
+
+rng = np.random.default_rng(6)
+n = 60
+x = np.sort(rng.uniform(0, 1, n)).reshape(-1, 1)
+y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, 0.4, n)
+xte = np.linspace(0, 1, 2000).reshape(-1, 1)
+yte = np.sin(2 * np.pi * xte).ravel() + rng.normal(0, 0.4, 2000)
+
+B = 50
+preds = np.zeros((B, len(xte)))
+for b in range(B):
+    idx = rng.integers(0, n, n)
+    preds[b] = DecisionTreeRegressor(random_state=b).fit(x[idx], y[idx]).predict(xte)
+mine = preds.mean(axis=0)
+
+official = BaggingRegressor(DecisionTreeRegressor(random_state=1), n_estimators=B,
+                            random_state=99).fit(x, y).predict(xte)
+
+print(f"scratch bagged MSE:  {np.mean((yte - mine)**2):.4f}")
+print(f"sklearn bagged MSE:  {np.mean((yte - official)**2):.4f}")
+
+single = np.mean([np.mean((yte - preds[b])**2) for b in range(B)])
+sigma2 = preds.var(axis=0, ddof=1).mean()      # spread across trees at each x
+R = np.corrcoef(preds)
+rho = R[np.triu_indices(B, 1)].mean()
+print(f"mean single-tree MSE: {single:.4f}")
+print(f"rho = {rho:.3f}; rho*s2 + (1-rho)/B*s2 = {rho*sigma2 + (1-rho)/B*sigma2:.4f}"
+      f" vs bagged-ish {np.var(mine):.4f} (variance part)")
+```
+
+The scratch version lands beside sklearn's (differences: rng streams and sklearn's internal bootstrap details). The variance story checks out to first order: bagged variance ≈ ρσ² + (1−ρ)σ²/B — and since ρ ≈ 0.6–0.9 for full trees, the floor ρσ² dominates — the number random forests exist to crush.
+</details>
+
+**Exercise 2.** Instability → benefit mapping: for stability-ranked learners (linear regression, depth-3 tree, full tree), bag each with B = 100 and measure the *relative* test-MSE improvement (single vs bagged). Report the 3-row table. Then state the bagging selection rule: which base learners deserve bagging, and what does the linear row predict about "bagging everything" as a workflow?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import BaggingRegressor
+
+rng = np.random.default_rng(7)
+x = rng.uniform(0, 1, (80, 3))
+y = np.sin(2 * np.pi * x[:, 0]) + 0.5 * x[:, 1] + rng.normal(0, .3, 80)
+xte = rng.uniform(0, 1, (5000, 3))
+yte = np.sin(2 * np.pi * xte[:, 0]) + 0.5 * xte[:, 1] + rng.normal(0, .3, 5000)
+
+for name, ctor in [("linear", LinearRegression),
+                   ("depth-3 tree", lambda: DecisionTreeRegressor(max_depth=3)),
+                   ("full tree", DecisionTreeRegressor)]:
+    single = ctor().fit(x, y)
+    bagged = BaggingRegressor(ctor(), n_estimators=100, random_state=0).fit(x, y)
+    e1 = np.mean((yte - single.predict(xte))**2)
+    e2 = np.mean((yte - bagged.predict(xte))**2)
+    print(f"{name:12s}: single {e1:.4f} | bagged {e2:.4f} | "
+          f"improvement {(1 - e2/e1)*100:+.0f}%")
+```
+
+Improvement ordering is exactly the instability ordering: full tree gains hugely, depth-3 moderately, linear ~zero (sometimes slightly negative — averaging stable learners adds nothing and the bootstrap samples' mild quality loss can dominate). Rule: bag *unstable, low-bias* learners; don't bag a stable model for accuracy (do it only for uncertainty quantification via OOB, or to parallelize).
+</details>
+
+**Exercise 3.** OOB as an honest validator: for one dataset, compare (a) the ensemble's OOB score, (b) 5-fold CV of the same *bagging procedure*, and (c) true test error on fresh data. Repeat over 100 dataset draws; report mean and SD of each estimator's error-in-estimating-the-truth. How does OOB's accuracy as an estimator compare with 5-fold CV, and at what compute price?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.ensemble import BaggingRegressor
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.model_selection import cross_val_score, KFold
+
+rng = np.random.default_rng(8)
+def draw(seed):
+    r = np.random.default_rng(seed)
+    x = r.uniform(0, 1, (80, 1))
+    y = np.sin(2 * np.pi * x).ravel() + r.normal(0, .4, 80)
+    xte = r.uniform(0, 1, (4000, 1))
+    yte = np.sin(2 * np.pi * xte).ravel() + r.normal(0, .4, 4000)
+    return x, y, xte, yte
+
+oob_errs, cv_errs, truth_errs = [], [], []
+for d in range(100):
+    x, y, xte, yte = draw(d)
+    bag = BaggingRegressor(DecisionTreeRegressor(), n_estimators=50,
+                           oob_score=True, random_state=d).fit(x, y)
+    oob_errs.append(1 - bag.oob_score_)            # OOB estimate (R2-based here)
+    cvs = cross_val_score(
+        BaggingRegressor(DecisionTreeRegressor(), n_estimators=50, random_state=d),
+        x, y, cv=KFold(5, shuffle=True, random_state=d))
+    cv_errs.append(1 - cvs.mean())
+    truth_errs.append(1 - bag.score(xte, yte))
+
+print(f"OOB  estimate: {np.mean(oob_errs):.4f} ± {np.std(oob_errs):.4f}")
+print(f"5CV  estimate: {np.mean(cv_errs):.4f} ± {np.std(cv_errs):.4f}")
+print(f"true test R2:  {np.mean(truth_errs):.4f}")
+```
+
+OOB tracks the truth nearly as well as 5-fold CV while costing *zero extra fits* — the bootstrap samples are already there. (Details differ: OOB is R²-based by default and uses ≈63%-sized training sets like [4.5](../part-04-validation-model-selection/04-5-bootstrap.qmd)'s .632 discussion.) For ensembles specifically, OOB is the default internal referee — with nested CV still required when the *procedure itself* is tuned ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)).
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **More trees never hurt (accuracy-wise)**: bagged test error decreases monotonically in B and plateaus — B is a compute dial, not a tuning dial ([7.5](07-5-gradient-boosting.qmd) breaks this rule: boosting *can* overfit with B).
+- **ρ is the enemy**: bagging full-grown trees on wide data yields highly correlated trees (the strong feature wins every bootstrap) — the variance floor stays high. `max_features` < 1 decorrelates and becomes... a random forest ([7.4](07-4-random-forests.qmd)).
+- **OOB subtleties**: OOB estimates each row's prediction from ≈ B·0.368 trees (not all B) — slightly noisier and more pessimistic than the full ensemble; fine for monitoring, tuned-claim rules still apply.
+- **Averaging kills calibrated-by-construction class fractions**: bagged classification votes are fractions of *trees*, not of data — probability calibration still needs checking ([3.7](../part-03-classification-glm/03-7-model-comparison.qmd)).
+- **Bagging linear models ≈ feature subspace ensembling** — occasionally useful for stability selection vibes, useless for accuracy (drill 4/Exercise 2's law).
+- **Bias interactions**: because bootstrap trees are trained on ≈63% distinct rows, each is weaker; for *stable-but-high-bias* learners, bagging can even hurt — measure, don't assume.
+
+### Read & Refactor AI Code
+
+This AI-generated bagging pipeline has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.ensemble import BaggingRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(9)
+n = 200
+x = rng.uniform(0, 1, (n, 6))
+y = np.sin(2 * np.pi * x[:, 0]) + 0.5 * x[:, 1] + rng.normal(0, .3, n)
+X_tr, X_te, y_tr, y_te = train_test_split(x, y, random_state=10)
+
+# BUG 1: bag a STABLE base learner for accuracy
+bag = BaggingRegressor(LinearRegression(), n_estimators=200).fit(X_tr, y_tr)
+print("bagged-linear test R2:", round(bag.score(X_te, y_te), 4))
+
+# BUG 2: tiny B compared against a fair single tree
+bag2 = BaggingRegressor(DecisionTreeRegressor(), n_estimators=2).fit(X_tr, y_tr)
+t1 = DecisionTreeRegressor().fit(X_tr, y_tr)
+print("B=2 bag:", round(bag2.score(X_te, y_te), 4),
+      "vs single tree:", round(t1.score(X_te, y_te), 4), "-> 'bagging hurts!'")
+
+# BUG 3: pruned trees bagged to mush with no measurement
+bag3 = BaggingRegressor(DecisionTreeRegressor(max_depth=1),
+                        n_estimators=100).fit(X_tr, y_tr)
+print("stump-bag test R2:", round(bag3.score(X_te, y_te), 4))
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Bagging stable learners**: the improvement is ~0 (Exercise 2's law) — the base learner must be *unstable* (trees) for averaging to pay.
+2. **B = 2 is not bagging**: two trees average to two trees; the comparison "bagging hurts" is an artifact of B too small to average anything. Use B ≥ 50–100 and watch the B-curve ([Section 1](#)).
+3. **Stumps bagged silently**: depth-1 trees have high bias; bagging can't fix bias — the mush is bias, measured by nothing in the snippet. Report single vs bagged with the *same* base learner, across B, with an honest test set.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.ensemble import BaggingRegressor
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(9)
+n = 200
+x = rng.uniform(0, 1, (n, 6))
+y = np.sin(2 * np.pi * x[:, 0]) + 0.5 * x[:, 1] + rng.normal(0, .3, n)
+X_tr, X_te, y_tr, y_te = train_test_split(x, y, random_state=10)
+
+single = DecisionTreeRegressor(random_state=0).fit(X_tr, y_tr)
+bag = BaggingRegressor(DecisionTreeRegressor(), n_estimators=100,
+                       oob_score=True, random_state=0).fit(X_tr, y_tr)
+print("single tree test R2:", round(single.score(X_te, y_te), 4))
+print("bagged (B=100) test R2:", round(bag.score(X_te, y_te), 4))
+print("OOB R2 (free internal estimate):", round(bag.oob_score_, 4))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Derive the bagged-variance formula: for B i.i.d. estimators with variance σ² and pairwise correlation ρ, show Var(mean) = ρσ² + (1−ρ)σ²/B, and hence the plateau as B → ∞ is ρσ². Then verify by simulation for bagged trees: estimate ρ and σ² from an ensemble's prediction matrix, predict the B → ∞ plateau, and compare against the empirical B = 500 error. What does this decomposition predict about the *relative* value of adding trees to a forest with B = 10 vs B = 1000?
+
+<details>
+<summary>Hint</summary>
+
+Var(mean) = (1/B²)[Bσ² + B(B−1)ρσ²]; divide and split into diagonal + off-diagonal terms.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Var(mean) = (1/B²)(Bσ² + B(B−1)ρσ²) = σ²/B + ρσ²(1 − 1/B) = ρσ² + (1−ρ)σ²/B — diagonal variance dies as 1/B; the correlated floor ρσ² never does. Simulation:
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+
+rng = np.random.default_rng(11)
+n = 60
+x = np.sort(rng.uniform(0, 1, n)).reshape(-1, 1)
+y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, .4, n)
+xte = np.linspace(0, 1, 1000).reshape(-1, 1)
+
+B = 300
+P = np.zeros((B, 1000))
+for b in range(B):
+    idx = rng.integers(0, n, n)
+    P[b] = DecisionTreeRegressor(random_state=b).fit(x[idx], y[idx]).predict(xte)
+
+s2 = P.var(axis=0, ddof=1).mean()
+R = np.corrcoef(P)
+rho = R[np.triu_indices(B, 1)].mean()
+plateau = rho * s2
+print(f"estimated sigma2 = {s2:.4f}, rho = {rho:.3f}, predicted plateau var = {plateau:.4f}")
+print(f"empirical variance at B=500: {P[:500].mean(axis=0).var():.4f}" if B >= 500 else "")
+print("marginal gain B=10→11 vs 1000→1001:",
+      f"{(1-rho)*s2/10:.5f} vs {(1-rho)*s2/1000:.6f}")
+```
+
+The marginal value of a tree decays like (1−ρ)σ²/B: at B = 10 each addition still matters; past a few hundred, more trees buy smoothness of the OOB aggregate, not accuracy — spend compute on ρ (random forests) or on sequential bias-fitting (boosting, [7.5](07-5-gradient-boosting.qmd)) instead.
+</details>
+
+**Q2.** Bagging and bias for *smooth functions*: theory says averaging convex combinations can't increase squared bias, but for trees it often *decreases* it. Verify: measure bias² of a single depth-unlimited tree vs a B = 200 bag of them (multi-training-set protocol of [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd)) on the sinusoid, and explain the mechanism — averaging piecewise constants with *different* cutpoint locations approximates a smoother function whose expected value lands nearer f. Then state when bagging would leave bias untouched.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+
+rng = np.random.default_rng(12)
+xg = np.linspace(0, 1, 200)
+f = np.sin(2 * np.pi * xg)
+P_single, P_bag = [], []
+for s in range(150):
+    x = np.sort(rng.uniform(0, 1, 50))
+    y = np.sin(2 * np.pi * x) + rng.normal(0, .3, x.size)
+    t = DecisionTreeRegressor(random_state=s).fit(x.reshape(-1, 1), y)
+    P_single.append(t.predict(xg.reshape(-1, 1)))
+    bag = np.mean([DecisionTreeRegressor(random_state=100*s+k)
+                   .fit(x[rng.integers(0, 50, 50)].reshape(-1, 1),
+                        y[rng.integers(0, 50, 50)]).predict(xg.reshape(-1, 1))
+                   for k in range(20)], axis=0)
+    P_bag.append(bag)
+
+b_single = np.mean((np.mean(P_single, axis=0) - f)**2)
+b_bag = np.mean((np.mean(P_bag, axis=0) - f)**2)
+print(f"bias² single tree: {b_single:.5f}")
+print(f"bias² bagged:      {b_bag:.5f}")
+```
+
+Different bootstrap trees cut at slightly different x's; their average has cutpoints *spread* — an effective finer partition whose mean function tracks the smooth truth better. Bagging leaves bias untouched when the base model is stable (linear models: the bootstrap fits barely differ, so the average equals one fit) or when the truth is itself piecewise-constant aligned with typical cuts. The headline: bagging changes the bias/variance mix in practice — "variance-only" is the textbook simplification, not the measurement.
+</details>
+
+## 6. Complex Questions
+
+**C1 (bagging × [4.4 bias–variance](../part-04-validation-model-selection/04-4-bias-variance.qmd)).** Decompose bagging across B: with the multi-training-set protocol, estimate bias²/variance for B ∈ {1, 5, 25, 200} bagged full trees. Confirm variance falls ~ (ρ + (1−ρ)/B) while bias² drifts slightly down; overlay the total. Then answer: at which B does adding trees stop mattering *for your data*, and how does that B scale with the base tree's instability?
+
+**C2 (bagging × [3.7 comparison](../part-03-classification-glm/03-7-model-comparison.qmd) × [9.x](../part-09-unsupervised-learning/09-1-unsupervised-mindset.qmd)).** Bagged classifiers and calibration: fit a bagged tree classifier (B = 200 vote fractions) on an imbalanced problem; evaluate AUC, Brier, and a reliability diagram against a single tree and a logistic model. Explain mechanistically why vote-averaging improves the Brier score (votes average out leaf-fraction noise) yet still trails logistic calibration — and design the calibration step you'd add before deployment.
+
+## 7. Summary
+
+- Bagging = bootstrap + average: variance ÷ B for the independent part, ρσ² floor for the correlated part.
+- Works exactly as well as the base learner is unstable — trees are the canonical fuel; linear models don't benefit.
+- B is compute, not tuning; the plateau is set by ρ, which random forests ([7.4](07-4-random-forests.qmd)) attack directly.
+- OOB gives a free internal validation estimate — the bootstrap's gift to ensembles ([4.5](../part-04-validation-model-selection/04-5-bootstrap.qmd)).
+- Bias is *roughly* preserved — and measurably slightly improved for unstable approximators of smooth truths.
+- Inherited unchanged: axis-parallel bias, flat extrapolation, vote-fraction calibration caveats.
+- The floor ρσ² is the target now: force trees to disagree — [7.4 Random forests](07-4-random-forests.qmd).

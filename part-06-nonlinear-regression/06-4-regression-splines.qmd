@@ -1,0 +1,458 @@
+---
+title: "6.4 Regression Splines"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - statsmodels
+    - patsy
+    - scikit-learn
+    - matplotlib
+---
+
+Splines are piecewise polynomials **stitched together smoothly** at knots — local flexibility like step functions, global smoothness like polynomials. They are the workhorse of flexible curve-fitting in statistics: interpretable knots, controllable smoothness, and no extrapolation blow-ups.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+A degree-d spline with knots $c_1 < \cdots < c_K$ is a piecewise polynomial of degree d that is **continuous with d−1 matching derivatives** at each knot. The trick is the truncated-power basis: $\phi_k(x) = (x - c_k)_+^d$ plus a degree-d polynomial — each hinge term adds exactly one "bend" at its knot:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+
+def trunc_power(t, knot, degree=3):
+    return np.maximum(t - knot, 0) ** degree
+
+rng = np.random.default_rng(0)
+n = 120
+x = np.sort(rng.uniform(0, 10, n))
+y = np.sin(x) + rng.normal(0, 0.4, x.size)
+knots = [2.5, 5, 7.5]
+
+def spline_basis(t, knots, degree=3):
+    cols = [t**j for j in range(degree + 1)]
+    cols += [trunc_power(t, k, degree) for k in knots]
+    return np.column_stack(cols)
+
+X = spline_basis(x, knots)
+beta = np.linalg.lstsq(X, y, rcond=None)[0]
+xg = np.linspace(0, 10, 400)
+yg = spline_basis(xg, knots) @ beta
+
+fig, ax = plt.subplots(figsize=(7, 3.4))
+ax.scatter(x, y, s=12, alpha=0.5)
+ax.plot(xg, yg, "r-", lw=2, label="cubic spline, 3 knots")
+for k in knots:
+    ax.axvline(k, color="gray", ls=":", lw=1)
+ax.set(xlabel="x", ylabel="y", title="Smooth bends at the knots, straight-ish between")
+ax.legend()
+plt.show()
+```
+
+Don't hand-build it in production — two standard tools, same idea:
+
+```{pyodide}
+import numpy as np
+import statsmodels.formula.api as smf
+import pandas as pd
+from sklearn.preprocessing import SplineTransformer
+from sklearn.linear_model import Ridge
+from sklearn.pipeline import make_pipeline
+
+rng = np.random.default_rng(1)
+df = pd.DataFrame({"x": np.sort(rng.uniform(0, 10, 150)),
+                   "y": 0.0})
+df["y"] = np.sin(df["x"]) + rng.normal(0, 0.4, len(df))
+
+# patsy natural cubic spline (boundary-constrained)
+fit = smf.ols("y ~ cr(x, df=6)", data=df).fit()
+print("patsy cr(x, df=6): R2 =", round(fit.rsquared, 3))
+
+# sklearn SplineTransformer + linear model
+pipe = make_pipeline(SplineTransformer(n_knots=6, degree=3, include_bias=False),
+                     Ridge(alpha=0.0))
+pipe.fit(df[["x"]], df["y"])
+print("SplineTransformer: R2 =", round(pipe.score(df[["x"]], df["y"]), 3))
+```
+
+## 2. Concept Questions
+
+1. What exactly does the truncated-power term $(x − c)_+^3$ contribute at $x = c$, and why does the full spline stay smooth there?
+2. Knots vs degree vs number of knots: which do you usually fix, and which do you tune?
+3. Why do *natural* splines constrain the curve to be linear beyond the boundary knots — and what do they buy with that constraint?
+4. Your spline fit wiggles violently between knots. Name the two knobs that tame it, in order of preference.
+5. Where are spline fits most variable (in resampling), and what does that predict about the coefficient interpreta­tion of the truncated-power terms?
+
+<details>
+<summary>Answers</summary>
+
+1. It "switches on" at c and grows cubically after — adding one higher-derivative bend. Because ALL lower-order pieces and the polynomial are shared globally, the function and its first d−1 derivatives match across the knot; only the d-th derivative jumps.
+2. Degree: conventionally fix at 3 (cubic — smooth-looking, C² continuity). Tune the *number and placement* of knots (or the smoothness penalty in [6.5](06-5-smoothing-splines.qmd)) by CV.
+3. Unconstrained cubics flail in the data-free tails (the polynomial explosion of [6.1](06-1-polynomial-regression.qmd)); forcing linearity beyond boundary knots is a mild, variance-reducing assumption that costs little where there's no data to contradict it.
+4. (1) Fewer knots (or coarser placement); (2) a smoothness penalty — ridge on the basis, which is precisely [6.5](06-5-smoothing-splines.qmd)'s smoothing splines.
+5. Variance concentrates *at the knots* (the basis's bending degrees of freedom live there) and in the boundary regions. Truncated-power coefficients are stable-mixture-unstable — like all correlated bases, interpret differences/derivatives, not individual terms.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+def trunc_power(t, knot, degree=3):
+    return np.maximum(t - knot, 0) ** degree
+t = np.array([1.0, 3.0, 5.0, 7.0])
+print(trunc_power(t, 4.0))            # zero before the knot, (t-c)^3 after
+print(trunc_power(t, 4.0, degree=1))  # linear hinge: the [6.3] basis member
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.preprocessing import SplineTransformer
+X = np.linspace(0, 1, 50).reshape(-1, 1)
+st = SplineTransformer(n_knots=5, degree=3, include_bias=False)
+B = st.fit_transform(X)
+print("columns:", B.shape[1], "= n_knots + degree - 2")
+print("row sums (partition of unity):", np.unique(B.sum(axis=1).round(9)))
+```
+
+```{pyodide}
+import numpy as np
+# continuity check: value and first two derivatives match across a knot
+def spline_eval(t, beta, knots, degree=3):
+    cols = [t**j for j in range(degree + 1)] + [np.maximum(t - k, 0)**degree for k in knots]
+    return np.column_stack(cols) @ beta
+knots = [5.0]
+beta = np.array([1, -0.5, 0.1, 0.02, 0.5])
+eps = 1e-6
+f_minus = spline_eval(np.array([5 - eps]), beta, knots)[0]
+f_plus = spline_eval(np.array([5 + eps]), beta, knots)[0]
+print(f"value gap: {float(abs(f_plus - f_minus)):.2e}  (smooth across the knot)")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.preprocessing import SplineTransformer
+from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import cross_val_score, KFold
+rng = np.random.default_rng(2)
+x = rng.uniform(0, 10, 150)
+y = np.sin(x) + rng.normal(0, 0.4, 150)
+cv = KFold(5, shuffle=True, random_state=3)
+for n_knots in [3, 5, 8, 15, 30]:
+    pipe = make_pipeline(SplineTransformer(n_knots=n_knots, degree=3,
+                                           include_bias=False), LinearRegression())
+    mse = -cross_val_score(pipe, x.reshape(-1, 1), y, cv=cv,
+                           scoring="neg_mean_squared_error").mean()
+    print(f"n_knots={n_knots:>2}: CV MSE = {mse:.4f}")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Build `compare_spline_models`: for the sinusoid data, evaluate (a) natural spline via patsy `cr(x, df)` for df ∈ {3, 5, 8, 12}, (b) `SplineTransformer` with n_knots ∈ {3, 6, 10, 20}, (c) global cubic. Report a CV table. Which flexible option *fails* (and how — check its boundary behavior on a plot), and why does the natural spline's boundary constraint rescue it?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.formula.api as smf
+import pandas as pd
+from sklearn.preprocessing import SplineTransformer
+from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import cross_val_score, KFold
+
+rng = np.random.default_rng(4)
+df = pd.DataFrame({"x": np.sort(rng.uniform(0, 10, 150))})
+df["y"] = np.sin(df["x"]) + rng.normal(0, 0.4, len(df))
+cv = KFold(5, shuffle=True, random_state=5)
+
+rows = []
+for dfree in [3, 5, 8, 12]:
+    mses = []
+    for tr, va in cv.split(df):
+        f = smf.ols("y ~ cr(x, df=%d)" % dfree, data=df.iloc[tr]).fit()
+        pred = f.predict(df.iloc[va])
+        mses.append(np.mean((df.iloc[va]["y"] - pred)**2))
+    rows.append((f"natural spline df={dfree}", np.mean(mses)))
+for nk in [3, 6, 10, 20]:
+    pipe = make_pipeline(SplineTransformer(n_knots=nk, degree=3, include_bias=False),
+                         LinearRegression())
+    mse = -cross_val_score(pipe, df[["x"]], df["y"], cv=cv,
+                           scoring="neg_mean_squared_error").mean()
+    rows.append((f"SplineTransformer knots={nk}", mse))
+
+cubic = np.polyfit(df["x"], df["y"], 3)
+rows.append(("global cubic", np.mean((df["y"] - np.polyval(cubic, df["x"]))**2)))
+
+for name, mse in sorted(rows, key=lambda r: r[1]):
+    print(f"{name:32s} CV MSE = {mse:.4f}")
+```
+
+The unconstrained `SplineTransformer` at many knots starts flexing in the data-free tails (its basis isn't boundary-linear), inflating CV error versus the natural spline at matched df. The natural spline's linearity beyond boundary knots is free variance insurance — the same physics as [6.1](06-1-polynomial-regression.qmd)'s extrapolation, cured by construction.
+</details>
+
+**Exercise 2.** Knot placement matters: put 5 knots (a) uniformly on [0, 10], (b) at quantiles of x, (c) all bunched in [4, 6] — on data whose curvature is concentrated in [4, 6] (y = a steep transition there, flat elsewhere: y = 2·sigmoid(4(x−5)) + noise). Compare CV MSE and plot fits. Where should knots go, in general, and how would you *automate* that decision honestly?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import KFold, cross_val_score
+
+def spline_basis(t, knots, degree=3):
+    cols = [t**j for j in range(degree + 1)]
+    cols += [np.maximum(t - k, 0) ** degree for k in knots]
+    return np.column_stack(cols)
+
+rng = np.random.default_rng(6)
+x = np.sort(rng.uniform(0, 10, 200))
+y = 2 / (1 + np.exp(-4 * (x - 5))) + rng.normal(0, 0.3, x.size)
+cv = KFold(5, shuffle=True, random_state=7)
+
+placements = {
+    "uniform": [2, 4, 6, 8, 9.5],
+    "quantile": list(np.quantile(x, [1/6, 2/6, 3/6, 4/6, 5/6])),
+    "bunched [4,6]": [4.0, 4.5, 5.0, 5.5, 6.0],
+}
+for name, knots in placements.items():
+    mse = -cross_val_score(LinearRegression(), spline_basis(x, knots), y, cv=cv,
+                           scoring="neg_mean_squared_error").mean()
+    print(f"{name:14s}: CV MSE = {mse:.4f}")
+```
+
+Bunched knots win — curvature lives in [4, 6], and knots are the basis's bending budget. General rule: *place knots where the function bends* (steepness/curvature heuristics, or quantiles of the *residual-driving* region), not merely where data sits. Automation: adaptive knot selection is a hyperparameter search — CV over candidate placements ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)), or skip the problem entirely with [6.5](06-5-smoothing-splines.qmd)'s penalty, which spends flexibility continuously instead of at fixed sites.
+</details>
+
+**Exercise 3.** Spline diagnosis under the microscope: fit a cubic spline with 8 knots to data whose true f is smooth, then examine (a) the fit's second derivative (numerically) across the domain — where do the "kinks" land? (b) the fit's SD across 300 bootstrap resamples as a function of x. Verify variance concentrates near knots and boundaries; then compare against the same diagnostics for the smoothing spline of [6.5](06-5-smoothing-splines.qmd) (teaser).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.preprocessing import SplineTransformer
+from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import make_pipeline
+
+rng = np.random.default_rng(8)
+def fit_curve(x, y):
+    return make_pipeline(SplineTransformer(n_knots=8, degree=3, include_bias=False),
+                         LinearRegression()).fit(x.reshape(-1, 1), y)
+
+xg = np.linspace(0, 10, 300)
+boot_curves = []
+for b in range(300):
+    idx = rng.integers(0, 150, 150)
+    xb = xg[idx % 150]  # reuse grid rows as pseudo-data positions
+    yb = np.sin(xb) + rng.normal(0, 0.4, xb.size)
+    boot_curves.append(fit_curve(xb, yb).predict(xg.reshape(-1, 1)))
+boot_curves = np.array(boot_curves)
+
+knot_x = np.linspace(0, 10, 9)[1:-1]
+sd = boot_curves.std(axis=0)
+near_knot = [sd[np.argmin(np.abs(xg - k))] for k in knot_x]
+mid = [sd[np.argmin(np.abs(xg - m))] for m in [1.25, 3.75, 6.25, 8.75]]
+print("SD near knots:  ", np.round(near_knot, 4))
+print("SD mid-segment: ", np.round(mid, 4))
+print("boundary SD:    ", round(float(sd[:10].mean()), 4))
+```
+
+The bend degrees of freedom are the knot terms, so resampling wiggles the fit *at the knots* — visible as SD spikes there and elevated SD at the boundaries (least data, most leverage). This is the spline's version of [2.3](../part-02-linear-regression/02-3-accuracy-of-coefficients.qmd)'s coefficient-variance geography: uncertainty lives where the basis can bend.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Knot count is the dial, degree is the convention**: cubic (d = 3) is near-universal — smooth to the eye, C² continuous; degree 1 is piecewise-linear ([6.2 Exercise 1](06-2-step-functions.qmd)); degree 0 is steps.
+- **Two parameterizations, one space**: truncated powers (human-readable) vs B-splines (numerically superb, what `SplineTransformer` emits). Never interpret B-spline coefficients directly — use the truncated-power view or rotate back.
+- **df accounting**: a cubic spline with K interior knots has K + 4 parameters; *natural* splines drop 4 (2 per boundary) — budget accordingly when comparing with Cp/AIC ([5.1](../part-05-regularization-high-dimensions/05-1-feature-selection.qmd)).
+- **Spline terms in formulas**: `cr(x, df)` (patsy) is natural cubic; `bs(x, df, degree)` is the B-spline flavor. Mixing them across models without noting df semantics produces apples-to-oranges Cp comparisons.
+- **Multidimensional splines**: tensor products of univariate splines explode combinatorially — the additive alternative is [6.7](06-7-gam.qmd)'s whole point.
+- **Boundary extrapolation**: splines extend as their boundary polynomial (or linearly, if natural) — vastly saner than polynomials, still not data. Police the range ([2.1](../part-02-linear-regression/02-1-regression-setup.qmd)).
+
+### Read & Refactor AI Code
+
+This AI-generated spline pipeline has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.preprocessing import SplineTransformer
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(9)
+x = np.sort(rng.uniform(0, 10, 200))
+y = np.sin(x) + rng.normal(0, 0.4, 200)
+X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y, random_state=10)
+
+# BUG 1: spline transformer fit on train, but n_knots=100 on n_train=150
+st = SplineTransformer(n_knots=100, degree=3, include_bias=False)
+B_tr = st.fit_transform(X_tr)
+m = LinearRegression().fit(B_tr, y_tr)
+print("train R2:", round(m.score(B_tr, y_tr), 4))
+
+# BUG 2: transform test with a DIFFERENTLY-FITTED transformer
+st_te = SplineTransformer(n_knots=100, degree=3, include_bias=False)
+B_te = st_te.fit_transform(X_te)
+print("test R2:", round(m.score(B_te, y_te), 4))
+
+# BUG 3: raw B-spline coefficients quoted as 'effects of x ranges'
+print("first three coefficients:", m.coef_[:3].round(3), "-> 'effects'")
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **100 knots on 150 training points**: ≈102 columns for 150 rows — near-interpolation; any noise gets three knots of its own. Knot counts must be modest/CV-chosen.
+2. **Refitting the transformer on test**: `st_te.fit_transform` builds a *different* basis (different knot positions) — predictions are from a different model. Transform once, transform everywhere: one fitted transformer (or a Pipeline).
+3. **B-spline coefficients ≠ effects**: B-splines are a numerically-chosen basis; their coefficients are basis-local mixing weights. Interpret via predictions/plots, or the truncated-power view, or rotated-back coefficients ([5.5](../part-05-regularization-high-dimensions/05-5-pcr-pls.qmd)'s loading caution, again).
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.preprocessing import SplineTransformer
+from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import train_test_split, GridSearchCV
+
+rng = np.random.default_rng(9)
+x = np.sort(rng.uniform(0, 10, 200))
+y = np.sin(x) + rng.normal(0, 0.4, 200)
+X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y, random_state=10)
+
+pipe = make_pipeline(SplineTransformer(degree=3, include_bias=False),
+                     LinearRegression())
+grid = GridSearchCV(pipe, {"splinetransformer__n_knots": [3, 5, 8, 12]}, cv=5).fit(X_tr, y_tr)
+print("CV-chosen knots:", grid.best_params_["splinetransformer__n_knots"])
+print("honest test MSE:", round(-grid.score(X_te, y_te), 4))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Show that the truncated-power basis and any B-spline basis for the same knots/degree span the same space: argue by counting (both have K + d + 1 dimensions for K knots) and by the derivative-matching characterization of splines. Then verify numerically that the OLS fits on both bases agree to machine precision on a small dataset — and explain why their *coefficients* differ wildly (relate to [6.3 Q2](06-3-basis-functions.qmd)'s conditioning discussion).
+
+<details>
+<summary>Hint</summary>
+
+A piecewise polynomial with d−1 matching derivatives at K knots is determined by (K + d + 1) free numbers — a dimension count both bases meet; same space follows.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Dimension: on each of K + 1 intervals a cubic has 4 coefficients (4(K+1)); each knot imposes 3 matching conditions (−3K) → 4K + 4 − 3K = K + 4 free parameters — matched by both bases (truncated power: d + 1 polynomial terms + K hinges; B-splines: K + d + 1 columns). Same dimension + both ⊆ spline space (each satisfies the smoothness conditions by construction) ⇒ same space. Numerically:
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.preprocessing import SplineTransformer
+
+rng = np.random.default_rng(11)
+x = np.sort(rng.uniform(0, 10, 80))
+y = np.sin(x) + rng.normal(0, 0.3, 80)
+knots = [3, 6]
+
+def trunc_basis(t):
+    return np.column_stack([t**j for j in range(4)] +
+                           [np.maximum(t - k, 0)**3 for k in knots])
+st = SplineTransformer(n_knots=len(knots) + 2, degree=3, include_bias=False)
+B_bs = st.fit_transform(x.reshape(-1, 1))
+
+pred_tp = trunc_basis(x) @ np.linalg.lstsq(trunc_basis(x), y, rcond=None)[0]
+pred_bs = B_bs @ np.linalg.lstsq(B_bs, y, rcond=None)[0]
+print("max |fitted difference|:", np.abs(pred_tp - pred_bs).max())
+print("cond(trunc):", f"{np.linalg.cond(trunc_basis(x)):.2e}")
+print("cond(B-spline):", f"{np.linalg.cond(B_bs):.2e}")
+```
+
+Identical predictions; condition numbers differ by orders of magnitude — B-splines are the numerically civilized coordinate system for the same function space ([6.3](06-3-basis-functions.qmd)'s Chebyshev moral, reprised). Interpret in one, compute in the other.
+</details>
+
+**Q2.** Knot selection as sparse-basis selection: given 20 candidate knots, choosing which 5 to include is a best-subset problem ([5.1](../part-05-regularization-high-dimensions/05-1-feature-selection.qmd)). Verify that Lasso on the full 20-hinge basis (tuned by CV) recovers a competitive fit to the best 5-knot subset search (greedy forward selection on knots), on data with a sharp transition at x = 5. Report both CV MSEs and the selected knots from each. What does the lasso's answer (a spread of small hinge coefficients vs the subset's one big one) say about correlated bases and selection stability?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LassoCV
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import KFold, cross_val_score
+
+rng = np.random.default_rng(12)
+x = np.sort(rng.uniform(0, 10, 200))
+y = 2 / (1 + np.exp(-4 * (x - 5))) + rng.normal(0, 0.25, x.size)
+candidates = np.linspace(1, 9, 20)
+cv = KFold(5, shuffle=True, random_state=13)
+degree = 3
+
+def spline_matrix(t, knots):
+    cols = [t**j for j in range(degree + 1)]
+    cols += [np.maximum(t - k, 0) ** degree for k in knots]
+    return np.column_stack(cols)
+
+def fit_mse(knots):
+    B = spline_matrix(x, knots)
+    return -cross_val_score(LinearRegression(), B, y, cv=cv,
+                            scoring="neg_mean_squared_error").mean()
+
+B_full = spline_matrix(x, candidates)
+stds = B_full.std(axis=0)
+stds[stds == 0] = 1.0        # guard: a hinge beyond x.max() is an all-zero column (0/0 = NaN!)
+Bz = (B_full - B_full.mean(axis=0)) / stds
+lasso = LassoCV(cv=5, max_iter=100_000).fit(Bz, y)
+sel = np.where(lasso.coef_ != 0)[0]
+hinge_sel = [s for s in sel if s >= degree + 1]
+lasso_knots = candidates[np.array(hinge_sel) - (degree + 1)] if hinge_sel else []
+print("lasso-chosen knots:", np.round(lasso_knots, 2))
+
+best_greedy, current = np.inf, []
+for _ in range(5):
+    best_k, best_m = None, np.inf
+    for k in candidates:
+        if k in current:
+            continue
+        m = fit_mse(sorted(current + [k]))
+        if m < best_m:
+            best_m, best_k = m, k
+    current.append(best_k)
+print("greedy knots:", np.round(sorted(current), 2),
+      f"(greedy CV MSE {best_m:.4f})")
+```
+
+The lasso spreads weight across correlated neighboring hinges (stable fit, mushy selection), while greedy subset picks (nearly) the single right knot with a hair better CV MSE but far higher selection variance across resamples. Correlated bases defeat exact recovery — the honest outputs are predictions and stability diagnostics, whichever selector you use.
+</details>
+
+## 6. Complex Questions
+
+**C1 (splines × [5.2 ridge](../part-05-regularization-high-dimensions/05-2-ridge-regression.qmd) × [6.5](06-5-smoothing-splines.qmd) preview).** Fix a fine knot grid (50 knots) and tune ridge α on the spline basis by CV — you have (nearly) built a smoothing spline. Compare against `scipy`'s `UnivariateSpline` smoothing-spline fit (s tuned by CV) on the sinusoid: CV MSE, effective df (trace of the smoother's hat matrix), and visual wiggle. Show the two converge as the ridge α maps to the smoothing parameter — the theoretical identity ([6.5](06-5-smoothing-splines.qmd)) made practical.
+
+**C2 (splines × [2.7 interaction](../part-02-linear-regression/02-7-interaction-terms.qmd) × [6.7](06-7-gam.qmd) preview).** Two-feature smooth surface, two ways: (a) tensor-product spline basis (SplineTransformer on x₁ ⊗ x₂ — count the columns), (b) additive model (spline in x₁ + spline in x₂, no interaction). Generate data that is (i) additive, (ii) with an interaction. Compare CV MSE of (a) vs (b) under each truth, and note the column counts. Write the modeler's decision rule: when is the additive bet worth it?
+
+## 7. Summary
+
+- Splines = piecewise polynomials with enforced smoothness at knots: local bends, global elegance.
+- Truncated powers for understanding, B-splines for computing, natural splines for safe boundaries.
+- Tune knot count/placement (or switch to penalized smoothness) by CV; knots go where curvature lives.
+- Variance concentrates at knots and boundaries — diagnostics and interpretation follow the geometry.
+- B-spline coefficients are not effects; the basis spans the same space with better conditioning.
+- Lasso-on-hinges ≈ adaptive knot selection — with all of [5.1](../part-05-regularization-high-dimensions/05-1-feature-selection.qmd)'s stability caveats.
+- Why choose knots at all when a penalty can spend flexibility continuously everywhere: [6.5 Smoothing splines](06-5-smoothing-splines.qmd).

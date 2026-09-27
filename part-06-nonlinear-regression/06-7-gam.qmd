@@ -1,0 +1,480 @@
+---
+title: "6.7 Generalized Additive Models"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - scipy
+    - statsmodels
+    - scikit-learn
+    - matplotlib
+---
+
+With many features, one multivariate smooth is hopeless ("curse of dimensionality"), but *one smooth per feature, added together* scales beautifully:
+
+$$g\big(\mathbb{E}[Y]\big) = \beta_0 + s_1(x_1) + s_2(x_2) + \cdots + s_p(x_p)$$
+
+Generalized additive models (GAMs) combine Part 6's smoothers with Part 3's GLM likelihoods: flexible per-feature curves, additive structure, interpretable partial effects — the workhorse between linear/GLM models and black boxes.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+No GAM library ships in Pyodide, so we build the core object ourselves — and in doing so learn what a GAM *is*: (1) a smoother per feature, (2) a backfitting loop that coordinates them, (3) a GLM link when the response demands it.
+
+**Backfitting by hand** (Gaussian response): iterate — fit each feature's smoother to the *current residuals*, sweep out its contribution, repeat:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+from scipy.interpolate import UnivariateSpline
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+n = 300
+x1 = rng.uniform(0, 10, n)
+x2 = rng.uniform(0, 10, n)
+y = np.sin(x1) + 0.15 * x2**2 - 4 + rng.normal(0, 0.5, n)
+
+def smooth1(xs, ys, s):
+    o = np.argsort(xs)                      # UnivariateSpline needs increasing x
+    return UnivariateSpline(xs[o], ys[o], k=3, s=s * len(xs))(xs)
+
+def backfit(x1, x2, y, s=1.0, iters=20):
+    f1 = np.zeros(n); f2 = np.zeros(n); b0 = y.mean()
+    for _ in range(iters):
+        r1 = y - b0 - f2
+        f1 = smooth1(x1, r1, s)
+        r2 = y - b0 - f1
+        f2 = smooth1(x2, r2, s)
+    return b0, f1 - f1.mean(), f2 - f2.mean()
+
+b0, f1, f2 = backfit(x1, x2, y)
+print(f"residual SD after backfitting: {np.std(y - b0 - f1 - f2):.3f} (noise: 0.5)")
+
+xg = np.linspace(0, 10, 200)
+fig, axes = plt.subplots(1, 2, figsize=(7, 3))
+axes[0].scatter(x1, f1, s=6, alpha=0.5)
+axes[0].plot(xg, np.sin(xg), "k--", lw=1)
+axes[0].set_title("s1(x1): recovers sin")
+axes[1].scatter(x2, f2, s=6, alpha=0.5)
+axes[1].plot(xg, 0.15 * xg**2 - 4 + 2, "k--", lw=1)
+axes[1].set_title("s2(x2): recovers the parabola")
+fig.tight_layout()
+plt.show()
+```
+
+**The GLM connection** — additive logistic, via spline features in any linear classifier:
+
+```{pyodide}
+import numpy as np
+from sklearn.preprocessing import SplineTransformer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+
+rng = np.random.default_rng(1)
+n = 400
+x1 = rng.uniform(0, 10, n)
+x2 = rng.uniform(0, 10, n)
+logit = np.sin(x1) + 0.3 * (x2 - 5)**2 - 2
+y = (rng.uniform(0, 1, n) < 1 / (1 + np.exp(-logit))).astype(int)
+
+# additive spline basis: per-feature transforms, stacked
+def additive_basis(X):
+    st1 = SplineTransformer(n_knots=6, degree=3, include_bias=False).fit(X[:, [0]])
+    st2 = SplineTransformer(n_knots=6, degree=3, include_bias=False).fit(X[:, [1]])
+    return np.c_[st1.transform(X[:, [0]]), st2.transform(X[:, [1]])]
+
+cv = StratifiedKFold(5, shuffle=True, random_state=2)
+auc_gam = cross_val_score(LogisticRegression(max_iter=4000),
+                          additive_basis(np.c_[x1, x2]), y, cv=cv,
+                          scoring="roc_auc").mean()
+auc_lin = cross_val_score(LogisticRegression(max_iter=4000),
+                          np.c_[x1, x2], y, cv=cv, scoring="roc_auc").mean()
+print(f"additive-spline logistic AUC: {auc_gam:.3f}")
+print(f"linear logistic AUC:          {auc_lin:.3f}")
+```
+
+## 2. Concept Questions
+
+1. What does the additive assumption *exclude*, in one sentence — and why is that often a feature, not a bug?
+2. Why does backfitting converge (when it does)? Connect to coordinate descent ([5.3](../part-05-regularization-high-dimensions/05-3-lasso-regression.qmd)).
+3. In the additive logistic model, how do you interpret $s_1$'s curve on the log-odds scale — and what would you plot for a clinical audience?
+4. Why is a GAM with p = 50 features viable while a full 50-dimensional smooth is not?
+5. Your GAM's $s_3$ looks flat. What are the two possible realities, and which tool distinguishes them?
+
+<details>
+<summary>Answers</summary>
+
+1. It excludes *interactions*: no term like $s_{12}(x_1, x_2)$ — the effect of x₁ is one fixed curve regardless of x₂. Feature: effect estimates are stable, each smooth is plottable, and estimation needs O(p) smooths, not one product-basis monster ([2.7](../part-02-linear-regression/02-7-interaction-terms.qmd) for when that assumption must be tested).
+2. Each step solves *exactly* the same kind of subproblem as lasso's coordinate update: minimize the objective over one function holding the rest fixed. The objective (least squares + smoothing penalties) is convex and separable-ish across functions given residuals, so the cyclic minimizer descends to the (unique, for identifiability-fixed) optimum.
+3. $s_1(x_1)$ is that feature's *additive contribution to log-odds* — a unitless score. For clinicians: transform to the probability scale at meaningful covariate values (plot predicted P(y=1) vs x₁ with x₂ fixed at reference values, with bands).
+4. The curse bites per-smooth, not jointly: each 1-D smooth needs only its own ~df, and estimation error adds across features linearly instead of exponentially ([2.9](../part-02-linear-regression/02-9-knn-regression.qmd)'s curse avoided by construction).
+5. (a) x₃ truly has no effect; (b) the smoother over-penalized (λ too big) or the effect is real but confounded/cancelled. Distinguish: refit with a much looser smoother — if $s_3$ stays flat, believe null; if it explodes, your penalty was the story.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from scipy.interpolate import UnivariateSpline
+rng = np.random.default_rng(3)
+n = 200
+x1 = np.sort(rng.uniform(0, 5, n))
+x2 = np.sort(rng.uniform(0, 5, n))
+y = 2 * np.cos(x1) + rng.normal(0, 0.4, n)          # x2 is pure noise
+b0 = y.mean(); f1 = np.zeros(n); f2 = np.zeros(n)
+for _ in range(15):
+    f1 = UnivariateSpline(x1, y - b0 - f2, k=3, s=1.0 * n)(x1)
+    f2 = UnivariateSpline(x2, y - b0 - f1, k=3, s=1.0 * n)(x2)
+print("SD of f2 (noise feature):", round(float(np.std(f2)), 4),
+      "vs SD of f1:", round(float(np.std(f1)), 3))
+```
+
+```{pyodide}
+import numpy as np
+# identifiability: adding a constant to f1 and subtracting from f2 changes nothing
+n = 100
+x1 = np.linspace(0, 5, n); x2 = np.linspace(0, 5, n)
+y = np.sin(x1) + x2 + np.random.default_rng(4).normal(0, .2, n)
+b0, f1, f2 = 0.0, np.sin(x1), x2
+pred_a = b0 + f1 + f2
+pred_b = (b0 + 5) + (f1 - 5) + f2
+print("identical predictions:", np.allclose(pred_a, pred_b))
+print("-> center the smooths (or the backfit drifts)")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.preprocessing import SplineTransformer
+X = np.random.default_rng(5).normal(0, 1, (30, 3))
+st = SplineTransformer(n_knots=5, degree=3, include_bias=False).fit(X)
+B = st.transform(X)
+print("additive basis columns:", B.shape[1], "= 3 features x", B.shape[1] // 3)
+```
+
+```{pyodide}
+import numpy as np
+# degrees-of-freedom bookkeeping: additive = sum of component dfs
+from scipy.interpolate import UnivariateSpline
+rng = np.random.default_rng(6)
+x = np.sort(rng.uniform(0, 1, 60))
+f = np.sin(2 * np.pi * x)
+sigma = 0.3
+R = 300
+for s_f in [0.1, 1.0, 10.0]:
+    cov = 0.0
+    preds = np.zeros((R, x.size)); ys = np.zeros((R, x.size))
+    rr = np.random.default_rng(1)
+    for r in range(R):
+        y = f + rr.normal(0, sigma, x.size)
+        spl = UnivariateSpline(x, y, k=3, s=s_f * x.size)
+        preds[r] = spl(x); ys[r] = y
+    df = sum(np.cov(preds[:, i], ys[:, i])[0, 1] for i in range(x.size)) / sigma**2
+    print(f"s={s_f}: component df = {df:.1f}  (a 3-feature GAM: ~3x this)")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Finish the GAM: wrap backfitting + a query-time predictor into a small class `MyGAM` with `fit(X, y)` (one spline per column, centered) and `predict(X_new)` (evaluate each stored spline — `UnivariateSpline` objects are callable at new x). Fit on 3-feature data (sin, linear, noise), report test MSE vs linear regression, and verify that `predict` equals the training-time fitted values at training points (self-consistency).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy.interpolate import UnivariateSpline
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+
+class MyGAM:
+    def __init__(self, s=1.0, iters=20):
+        self.s, self.iters = s, iters
+    def fit(self, X, y):
+        n, p = X.shape
+        self.splines_, self.offset_ = [], np.zeros(p)
+        self.b0 = y.mean()
+        fs = np.zeros((p, n))
+        order = [np.argsort(X[:, j]) for j in range(p)]   # increasing x per feature
+        for _ in range(self.iters):
+            resid = y - self.b0 - fs.sum(axis=0)
+            for j in range(p):
+                fs[j] = UnivariateSpline(X[order[j], j], (resid + fs[j])[order[j]],
+                                         k=3, s=self.s * n)(X[:, j])
+        for j in range(p):
+            mu = fs[j].mean()
+            fs[j] -= mu
+            self.offset_[j] = mu
+        self.splines_ = [UnivariateSpline(X[order[j], j], fs[j][order[j]], k=3, s=1e9)
+                         for j in range(p)]           # freeze curves (interpolating)
+        self.b0 += self.offset_.sum()
+        self.fitted_ = self.b0 + fs.sum(axis=0)
+        return self
+    def predict(self, X_new):
+        out = np.full(X_new.shape[0], self.b0)
+        for j, spl in enumerate(self.splines_):
+            out += spl(X_new[:, j]) - spl(X_new[:, j]).mean()
+        return out
+
+rng = np.random.default_rng(9)
+n = 300
+X = np.c_[rng.uniform(0, 10, n), rng.uniform(0, 5, n), rng.uniform(0, 5, n)]
+y = np.sin(X[:, 0]) + 0.8 * X[:, 1] + rng.normal(0, 0.5, n)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=10)
+
+gam = MyGAM(s=1.0).fit(X_tr, y_tr)
+lin = LinearRegression().fit(X_tr, y_tr)
+print("MyGAM  test MSE:", round(float(np.mean((y_te - gam.predict(X_te))**2)), 4))
+print("Linear test MSE:", round(float(np.mean((y_te - lin.predict(X_te))**2)), 4))
+print("self-consistent:", bool(np.allclose(gam.predict(X_tr), gam.fitted_, atol=1e-6)))
+```
+
+`predict` outside training x-ranges uses the frozen curves' extrapolation — police ranges or clamp. The self-consistency check is the regression equivalent of "the pipeline reproduces its training predictions" — a cheap invariant worth asserting in any hand-rolled model.
+</details>
+
+**Exercise 2.** The additive-vs-interaction boundary: truth A: y = sin(x₁) + x₂² + noise; truth B: y = sin(x₁)·x₂/5 + noise. Compare (a) additive spline model, (b) tensor-product spline basis (SplineTransformer on both features jointly), by CV. Report the 2×2 table (model × truth). Quantify the additive model's *bias* on B and the tensor model's *variance* on A — then write the decision rule for adding a specific interaction term (e.g., test $s_{12}$ only where domain theory says interactions live, per [2.7](../part-02-linear-regression/02-7-interaction-terms.qmd)).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.preprocessing import SplineTransformer, StandardScaler
+from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import cross_val_score, KFold
+
+def draw(truth, seed=0):
+    rng = np.random.default_rng(seed)
+    n = 250
+    x1 = rng.uniform(0, 10, n); x2 = rng.uniform(0, 10, n)
+    if truth == "additive":
+        y = np.sin(x1) + x2**2 / 5 + rng.normal(0, .5, n)
+    else:
+        y = np.sin(x1) * x2 / 5 + rng.normal(0, .5, n)
+    return np.c_[x1, x2], y
+
+cv = KFold(5, shuffle=True, random_state=3)
+def additive():
+    return make_pipeline(StandardScaler(), LinearRegression())
+def tensor():
+    return make_pipeline(SplineTransformer(n_knots=6, degree=3), LinearRegression())
+
+# fit additive on explicit per-feature splines:
+def add_basis(X):
+    b1 = SplineTransformer(n_knots=6, degree=3, include_bias=False).fit(X[:, [0]])
+    b2 = SplineTransformer(n_knots=6, degree=3, include_bias=False).fit(X[:, [1]])
+    return np.c_[b1.transform(X[:, [0]]), b2.transform(X[:, [1]])]
+
+for truth in ["additive", "interaction"]:
+    X, y = draw(truth, seed=4)
+    mse_add = -cross_val_score(LinearRegression(), add_basis(X), y, cv=cv,
+                               scoring="neg_mean_squared_error").mean()
+    mse_ten = -cross_val_score(tensor(), X, y, cv=cv,
+                               scoring="neg_mean_squared_error").mean()
+    print(f"truth={truth:11s}: additive {mse_add:.3f} | tensor {mse_ten:.3f}")
+```
+
+Additive truth: both fine (tensor pays a small variance tax). Interaction truth: the additive model's bias floor is visible (it cannot bend with x₂), while the tensor model pays for its freedom on the additive truth. Decision rule: pre-specify candidate interactions from domain knowledge, add each as a tensor term for *those* variables only, and let CV arbitrate — never all-pairs by default ([2.7](../part-02-linear-regression/02-7-interaction-terms.qmd)'s discipline with smoother ingredients).
+</details>
+
+**Exercise 3.** Partial dependence, honestly: fit the additive logistic model (spline-basis logistic from Section 1) on the simulated cohort; produce the partial-dependence plot for x₁ — model predictions averaged over the empirical x₂ distribution as x₁ sweeps a grid — and compare it against the fitted $s_1$ curve. They coincide *because* the model is additive; then break additivity (add a true tensor term to the data-generating process, refit the additive model) and show how the partial-dependence plot and $s_1$ diverge. What does the divergence measure?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.preprocessing import SplineTransformer, StandardScaler
+from sklearn.linear_model import LogisticRegression
+
+rng = np.random.default_rng(11)
+n = 600
+x1 = rng.uniform(0, 10, n)
+x2 = rng.uniform(0, 10, n)
+logit = np.sin(x1) + 0.25 * (x2 - 5)**2 - 2 + 0.3 * np.sin(x1) * (x2 - 5)
+y = (rng.uniform(0, 1, n) < 1 / (1 + np.exp(-logit))).astype(int)
+X = np.c_[x1, x2]
+
+def add_basis(X):
+    b1 = SplineTransformer(n_knots=6, degree=3, include_bias=False).fit(X[:, [0]])
+    b2 = SplineTransformer(n_knots=6, degree=3, include_bias=False).fit(X[:, [1]])
+    return np.c_[b1.transform(X[:, [0]]), b2.transform(X[:, [1]])]
+
+B = add_basis(X)
+m = LogisticRegression(max_iter=4000).fit(B, y)
+
+grid = np.linspace(0, 10, 50)
+pd_curve = []
+for g in grid:
+    Xg = np.c_[np.full(n, g), x2]                     # sweep x1, keep x2 empirical
+    pd_curve.append(m.predict_proba(add_basis(Xg))[:, 1].mean())
+pd_curve = np.array(pd_curve)
+
+# fitted s1 proxy: additive contribution of x1 block at x2 = its median
+med = np.median(x2)
+Xmed = np.c_[grid, np.full(50, med)]
+s1_curve = m.predict_proba(add_basis(Xmed))[:, 1]
+
+print("max |PD - s1| over grid:", round(float(np.abs(pd_curve - s1_curve).max()), 4))
+print("(nonzero divergence = interaction leaking into the additive fit's dependence plot)")
+```
+
+For a truly additive fitted model, partial dependence *equals* the fitted component function — the plot adds nothing but the probability-scale translation. When interactions exist but the model is additive, PD averages the model's best additive compromise while any single-slice curve shows a slice — their divergence is a *diagnostic of missed interaction* (and motivates adding the tensor term for x₁×x₂).
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Identifiability**: additive functions are only defined up to constants that sum to zero — every implementation centers the smooths (your hand-rolled one drifts otherwise, drill 2); report curves centered so their mean is 0.
+- **Smoothing parameter per feature**: one global s imposes one prior flexibility on all features; tune per-feature (or at least per-feature-family) by CV — the same flat-landscape reasoning as [4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd).
+- **Correlated features blur additive effects**: with x₁ ⊥⊥ x₂ the backfit recovers clean components; under collinearity, the split of a joint signal between $s_1$ and $s_2$ is unstable ([2.5](../part-02-linear-regression/02-5-multiple-linear-regression.qmd)'s warning in curve clothing).
+- **Concavity of the penalized objective** holds for Gaussian smoothers; for logistic-GAMs the coordinate updates are iteratively-reweighted — convergence is still well-behaved but slower; watch iteration counts.
+- **Binary/counts**: the right way is additive *logit/log* with the Bernoulli/Poisson likelihood (a true GAM); the spline-features-in-a-GLM shortcut used here is equivalent up to penalty details — declare which you ran.
+- **Interactions are absent by default**: if the science is interactive, GAMs are the wrong default — tensor terms, trees, or kernels ([8.4](../part-08-svm/08-4-kernel-svm.qmd)) take over.
+
+### Read & Refactor AI Code
+
+This AI-generated "GAM" has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from scipy.interpolate import UnivariateSpline
+
+rng = np.random.default_rng(12)
+n = 250
+X = rng.uniform(0, 5, (n, 2))
+y = np.sin(X[:, 0]) + 0.4 * X[:, 1] + rng.normal(0, 0.3, n)
+
+# BUG 1: no centering of component fits (identifiability)
+o0 = np.argsort(X[:, 0])
+f1 = UnivariateSpline(X[o0, 0], y[o0], k=3, s=1.0 * n)(X[:, 0])
+o1 = np.argsort(X[:, 1])
+f2 = UnivariateSpline(X[o1, 1], (y - f1)[o1], k=3, s=1.0 * n)(X[:, 1])
+
+# BUG 2: backfitting without iterating (one pass only)
+print("one-pass residual SD:", round(float(np.std(y - f1 - f2)), 4))
+
+# BUG 3: per-feature splines fit with wildly different s
+f2_loose = UnivariateSpline(X[o1, 1], (y - f1)[o1], k=3, s=50 * n)(X[:, 1])
+print("loose s2 SD:", round(float(np.std(f2_loose)), 4), "-> 'x2 has no effect'")
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Uncentered components**: f1 absorbed everything it could (including x2's signal through correlation) and carries a nonzero level; the pair (f1, f2) is not identifiable and the plots are misleading. Center each component; backfit with partial residuals.
+2. **Single pass**: one sweep is not the fixed point — residuals after one round still carry structure the second pass removes. Iterate until the residual SD stabilizes.
+3. **Per-feature penalties used as feature selection**: a huge s on f2 *forces* it flat, then the flatness gets reported as "no effect" — the conclusion was installed by the dial ([5.3](../part-05-regularization-high-dimensions/05-3-lasso-regression.qmd)'s penalty-as-prior, abused). Tune s per feature by CV; report null effects only after the loosest sensible smoother agrees.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy.interpolate import UnivariateSpline
+
+rng = np.random.default_rng(12)
+n = 250
+X = rng.uniform(0, 5, (n, 2))
+y = np.sin(X[:, 0]) + 0.4 * X[:, 1] + rng.normal(0, 0.3, n)
+
+b0 = y.mean()
+f1 = np.zeros(n); f2 = np.zeros(n)
+o0 = np.argsort(X[:, 0]); o1 = np.argsort(X[:, 1])
+for it in range(25):
+    f1 = UnivariateSpline(X[o0, 0], (y - b0 - f2)[o0], k=3, s=1.0 * n)(X[:, 0])
+    f2 = UnivariateSpline(X[o1, 1], (y - b0 - f1)[o1], k=3, s=1.0 * n)(X[:, 1])
+    f1 -= f1.mean(); f2 -= f2.mean()
+
+print("iterated, centered residual SD:", round(float(np.std(y - b0 - f1 - f2)), 4))
+print("SD(f1):", round(float(np.std(f1)), 3), "| SD(f2):", round(float(np.std(f2)), 3))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Prove backfitting's fixed point: at convergence, each $s_j$ satisfies the normal-equation-like condition $s_j = S_j(y - \sum_{k \ne j} s_k)$ (where $S_j$ is feature j's smoother matrix). Show that stacking these conditions gives $(I - \mathcal{S})\mathbf{s} = \mathbf{Q}y$ for block operator 𝒮, and explain why convergence requires the smoothing matrices to be "not too aggressive" (relate spectral radii to the λ's — the additive-model version of [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd)'s stability intuition).
+
+<details>
+<summary>Hint</summary>
+
+Backfitting is block coordinate descent / fixed-point iteration $\mathbf{s}^{(t+1)} = \mathcal{S}(\mathbf{Q}y) + \mathcal{S}'\mathbf{s}^{(t)}$-style; convergence iff the iteration operator's spectral radius < 1.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+At the fixed point each component's smoother applied to current partial residuals reproduces that component: $s_j = S_j(y - \beta_0\mathbf{1} - \sum_{k\ne j} s_k)$. Stacking across j: $\mathbf{s} = \mathbf{Q}y + \mathcal{A}\mathbf{s}$ where 𝒜 is the block operator with jk-block $-S_j$ for k ≠ j. The backfitting iteration is $\mathbf{s}^{(t+1)} = \mathbf{Q}y + \mathcal{A}\mathbf{s}^{(t)}$, converging iff ρ(𝒜) < 1. Very small λ (aggressive smoothers, S_j ≈ interpolators) pushes 𝒜's radius toward 1 — oscillating, slowly-converging backfits; heavy smoothing shrinks S_j and guarantees convergence but biases components toward zero — the smoothing-parameter choice is literally a convergence/stability choice, mirroring how ridge's λ stabilizes correlated-coordinate descent.
+</details>
+
+**Q2.** Design the **variable-selection GAM**: with p = 12 features (5 real, various shapes), select features by per-feature df tuning + backfit-and-prune: run the full GAM, drop the feature whose removal least increases CV MSE, refit, repeat — record the removal order and the CV-MSE path. Compare against (a) lasso-on-spline-basis ([5.3](../part-05-regularization-high-dimensions/05-3-lasso-regression.qmd)) and (b) marginal filters ([5.1](../part-05-regularization-high-dimensions/05-1-feature-selection.qmd)). Which method recovers the true 5, and what does the comparison teach about selection with nonlinear components?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.preprocessing import SplineTransformer, StandardScaler
+from sklearn.linear_model import LinearRegression, LassoCV
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import cross_val_score, KFold
+from sklearn.feature_selection import SelectKBest, f_regression
+
+rng = np.random.default_rng(13)
+n, p = 300, 12
+X = rng.uniform(0, 5, (n, p))
+y = np.sin(X[:, 0]) + 0.5 * X[:, 1]**2 / 3 - 2 * X[:, 4] + np.exp(X[:, 7] / 2) / 3 \
+    + 0.3 * X[:, 9] + rng.normal(0, 0.5, n)
+true_set = {0, 1, 4, 7, 9}
+
+def add_basis(Xv, knots=6):
+    cols = []
+    for j in range(Xv.shape[1]):
+        st = SplineTransformer(n_knots=knots, degree=3, include_bias=False).fit(Xv[:, [j]])
+        cols.append(st.transform(Xv[:, [j]]))
+    return np.column_stack(cols)
+
+B = add_basis(X)
+cv = KFold(5, shuffle=True, random_state=14)
+
+# (a) lasso on the additive spline basis
+lasso = LassoCV(cv=5, max_iter=100_000).fit(StandardScaler().fit_transform(B), y)
+coefs = lasso.coef_.reshape(p, -1)
+lasso_set = {j for j in range(p) if np.any(coefs[j] != 0)}
+
+# (b) marginal filter
+kb = SelectKBest(f_regression := __import__(
+    "sklearn.feature_selection", fromlist=["f_regression"]).f_regression, k=5).fit(X, y)
+filter_set = set(kb.get_support(indices=True))
+
+print("lasso-on-basis selected:", sorted(lasso_set), "| truth:", sorted(true_set))
+print("marginal filter chose:  ", sorted(filter_set))
+```
+
+Lasso-on-basis recovers most of the true 5 (its joint fit sees conditional contributions) but may keep spline-support extras; the marginal filter misses any feature whose signal is non-monotone or confounded. The lesson: with nonlinear components, selection must happen *in the model class you'll fit* — basis-level penalization or per-component pruning, never univariate scores alone.
+</details>
+
+## 6. Complex Questions
+
+**C1 (GAM × [5.6 high dimensions](../part-05-regularization-high-dimensions/05-6-high-dimensional.qmd)).** Scale test: n = 100 samples, p = 200 features (6 nonlinear signals). Compare (a) additive-spline lasso (your additive basis + LassoCV), (b) plain ridge on raw features, (c) PCR([5.5](../part-05-regularization-high-dimensions/05-5-pcr-pls.qmd)) — all nested-CV'd. Report test MSE and, for (a), the selected features' overlap with truth. Write the guidance: when does the additive-sparse bet beat dimension reduction in the p ≫ n nonlinear world?
+
+**C2 (GAM × [7.4 random forests](../part-07-trees-ensembles/07-4-random-forests.qmd) preview × [2.7](../part-02-linear-regression/02-7-interaction-terms.qmd)).** The interpretability trade, quantified: on a truth with 3 additive components + 1 interaction, compare GAM, GAM+one tensor term, and random forest by CV MSE *and* by recoverability of $s_1$ (correlation of the fitted component with the truth, extracting the forest's partial dependence for the same feature). Produce the 3×2 table (MSE, component-recovery) and write the two-sentence conclusion about what you sell when you sell interpretability.
+
+## 7. Summary
+
+- GAM = GLM + one smooth per feature, added on the link scale: flexible, additive, interpretable.
+- Backfitting = coordinate descent over functions: iterate partial-residual smooths to the fixed point; center components.
+- The additive assumption excludes interactions by default — a stability/interpretability feature and a modeling commitment to test deliberately.
+- Per-feature smoothing penalties are priors: tune them; a flat s₃ is a conclusion only after the dial is honest.
+- Additive splines + L1 give nonlinear variable selection that respects the model class; marginal filters don't.
+- With interactions confirmed, escalate deliberately: tensor terms, then trees ([Part 7](../part-07-trees-ensembles/07-1-decision-trees.qmd)) — which grow the step-function world's interactions automatically: [7.1 Decision trees](../part-07-trees-ensembles/07-1-decision-trees.qmd).

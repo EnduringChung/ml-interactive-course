@@ -1,0 +1,361 @@
+---
+title: "9.1 The Unsupervised Mindset"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - scikit-learn
+    - matplotlib
+---
+
+Everything so far had answers in the data. Unsupervised learning removes them: find *structure* — clusters, directions, patterns — with no labels to score against. The mindset shift is profound: **there is no test set for truth**, so validation becomes stability, interpretability, and usefulness — and every choice (k, scaling, distance) is a建模 statement you must own.
+
+> **Tier 1 — every cell below runs live.**
+
+The shift, demonstrated: same data, two legitimate structures:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+n = 150
+x = np.linspace(0, 10, n)
+y = np.sin(x) * 2 + rng.normal(0, .4, n)
+
+fig, axes = plt.subplots(1, 2, figsize=(7, 3.2))
+axes[0].scatter(x, y, s=12, alpha=0.6)
+axes[0].set_title("What a supervisor sees: y vs x")
+axes[1].scatter(y, x, s=12, alpha=0.6, color="darkorange")
+axes[1].set_title("Unsupervised: structure, no 'answer'")
+for ax in axes:
+    ax.set(xlabel="feature 1", ylabel="feature 2")
+fig.tight_layout()
+plt.show()
+print("same points; the question you ask defines the structure you find")
+```
+
+**Structure-finding with no labels** — two classic moves previewed (deep dives: [9.2](09-2-principal-component-analysis.qmd), [9.4](09-4-k-means.qmd)):
+
+```{pyodide}
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+
+rng = np.random.default_rng(1)
+n = 200
+X = np.c_[rng.normal(0, 3, n), rng.normal(0, 1, n)]
+X[:, 1] += 0.6 * X[:, 0]                        # correlated features
+
+Xs = StandardScaler().fit_transform(X)
+pcs = PCA(n_components=2).fit(Xs)
+km = KMeans(n_clusters=2, n_init=10, random_state=0).fit(Xs)
+
+print("PC1 explains", round(pcs.explained_variance_ratio_[0], 2),
+      "of variance — the data's main direction")
+print("cluster sizes:", np.bincount(km.labels_).tolist(),
+      "— one way to carve it")
+```
+
+## 2. Concept Questions
+
+1. Without labels, what replaces test-set accuracy as the criterion for "this decomposition/clustering is good"?
+2. Why do unsupervised results depend *more* on preprocessing than supervised ones? Name the two preprocessing choices that matter most.
+3. Your PCA finds "PC1 = 60% variance = patient severity." What's the hidden inferential leap in that sentence?
+4. In what sense is clustering a *modeling* decision rather than a discovery? Give two datasets where the same algorithm yields different legitimate clusterings.
+5. How can unlabeled data still improve a *supervised* pipeline? Name three distinct mechanisms.
+
+<details>
+<summary>Answers</summary>
+
+1. External validity: stability under resampling ([1.5](../part-01-statistics-bridge/01-5-resampling-intuition.qmd) logic), interpretability by domain experts, downstream usefulness (does the structure predict outcomes you care about? — a supervised check *after* the fact), and internal indices (silhouette, explained variance) — each necessary, none sufficient. The honest claim is always conditional: "given k = 3 and these distances."
+2. Because structure IS the output: scaling changes distances → changes clusters ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd)'s standardization law, now generative rather than cosmetic); feature selection changes what "similar" means. Also: transformations (log for skewed counts) reshape geometry wholesale.
+3. "PC1 captures 60% of variance" is a mathematical fact; "PC1 = severity" is an *interpretation* — it holds if loadings align with severity markers and survives validation against external severity measures. Variance ≠ importance ([5.5](../part-05-regularization-high-dimensions/05-5-pcr-pls.qmd)'s low-variance-signal lesson at full strength).
+4. Clustering imposes a structure family (K distinct spherical groups) and reports the best fit *of that family*. Same algorithm, different legitimate answers: elongated/gappy data (K-means sees 2 vs 4 depending on scale), multi-scale data (clusters within clusters). The algorithm answers "what does k-means see," not "what clusters exist."
+5. (a) Pretraining/representation: PCA directions as features ([5.5](../part-05-regularization-high-dimensions/05-5-pcr-pls.qmd)); (b) semi-supervision: cluster labels as weak features; (c) leakage-free structure for stratification/normalization (batch detection, [9.3](09-3-missing-values.qmd)) — plus anomaly detection feeding quality control.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.preprocessing import StandardScaler
+rng = np.random.default_rng(2)
+X = np.c_[rng.normal(0, 1, 200), rng.normal(0, 100, 200)]   # unit mismatch
+Xs = StandardScaler().fit_transform(X)
+print("raw correlation:", round(float(np.corrcoef(X.T)[0, 1]), 3))
+print("scaled ranges:  ", Xs.std(axis=0).round(2), "(structure is now unit-free)")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.cluster import KMeans
+rng = np.random.default_rng(3)
+X = np.vstack([rng.normal(0, 1, (80, 2)), rng.normal(4, 1, (80, 2))])
+km2 = KMeans(2, n_init=10, random_state=0).fit(X)
+km4 = KMeans(4, n_init=10, random_state=0).fit(X)
+print("k=2 inertia:", round(km2.inertia_, 1), "| k=4 inertia:", round(km4.inertia_, 1))
+print("inertia always falls with k — it cannot choose k alone")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.decomposition import PCA
+rng = np.random.default_rng(4)
+X = rng.normal(0, 1, (300, 5))
+X[:, 1] = X[:, 0] + rng.normal(0, .1, 300)      # near-duplicate columns
+pca = PCA().fit(X)
+print("explained variance ratios:", pca.explained_variance_ratio_.round(3))
+print("duplicates collapse the effective dimension")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.cluster import KMeans
+rng = np.random.default_rng(5)
+X = rng.normal(0, 1, (150, 2))
+labels_a = KMeans(3, n_init=1, random_state=1).fit(X).labels_
+labels_b = KMeans(3, n_init=1, random_state=2).fit(X).labels_
+from sklearn.metrics import adjusted_rand_score
+print("ARI across two random starts:", round(adjusted_rand_score(labels_a, labels_b), 3),
+      "(1 = identical partition, 0 = chance)")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** The preprocessing sensitivity exhibit: generate 3 elongated Gaussian blobs at different scales. Run K-means (k = 3) on (a) raw data, (b) standardized data, (c) whiten-and-rotate data. Compare cluster assignments against the true blob membership (ARI). Report the 3×1 table and explain *which* preprocessing choice encoded which assumption about what "similar" means.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import adjusted_rand_score
+
+rng = np.random.default_rng(6)
+truth = np.repeat([0, 1, 2], 100)
+centers = np.array([[0, 0], [6, 0], [0, 6]])
+X = np.vstack([rng.normal(c, [0.3, 3.0], (100, 2)) for c in centers])  # elongated
+
+variants = {
+    "raw": X,
+    "standardized": StandardScaler().fit_transform(X),
+    "standardized+whitened": StandardScaler().fit_transform(X) /
+        np.sqrt([1.0, 1.0]),
+}
+for name, Xv in variants.items():
+    km = KMeans(3, n_init=10, random_state=0).fit(Xv)
+    print(f"{name:22s} ARI vs truth = {adjusted_rand_score(truth, km.labels_):.3f}")
+```
+
+Raw data: the wide-scale axis dominates distances — clusters smear. Standardizing equalizes axes (assumes both features equally important). The ARI table *is* the preprocessing-as-assumption lesson: no choice is "correct" — each defines similarity differently, and the right one matches the domain's notion ([9.6](09-6-practical-clustering.qmd) returns to this with full machinery).
+</details>
+
+**Exercise 2.** Stability as validation: build a pipeline that measures clustering stability: bootstrap-resample rows 50×, refit K-means (k = 3), and compute the mean pairwise ARI between the resulting partitions (evaluated on the shared rows via prediction). Apply it to (a) clearly separated blobs and (b) one uniform blob with k = 3. Report both stabilities. What does the stability number *license* you to claim?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.metrics import adjusted_rand_score
+
+def stability(X, k, B=50, seed=0):
+    rng = np.random.default_rng(seed)
+    base = KMeans(k, n_init=10, random_state=seed).fit(X)
+    aris = []
+    for b in range(B):
+        idx = rng.integers(0, len(X), len(X))
+        m = KMeans(k, n_init=10, random_state=b).fit(X[idx])
+        aris.append(adjusted_rand_score(base.labels_, m.predict(X)))
+    return np.mean(aris)
+
+rng = np.random.default_rng(7)
+blobs = np.vstack([rng.normal(c, .5, (80, 2)) for c in [(0, 0), (4, 0), (0, 4)]])
+noise = rng.normal(2, 1, (240, 2))
+
+print("3 well-separated blobs: stability =", round(stability(blobs, 3), 3))
+print("one uniform blob, k=3:  stability =", round(stability(noise, 3), 3))
+```
+
+High stability (blobs) licenses: "the data support a 3-group partition reproducibly." Low stability (uniform): the partition is an artifact of initialization — you may still *use* it operationally, but discovery language is forbidden. Stability validates reproducibility, never truth: a stable wrong clustering (e.g., two true blobs split by a scale artifact) remains stable.
+</details>
+
+**Exercise 3.** Structure ≠ truth, shown twice: (a) run K-means with k = 6 on 3 well-separated blobs and report how the algorithm happily splits true blobs (over-segmentation with high stability!); (b) run K-means with k = 2 on two concentric circles (make_blobs-style construction by hand) and report ARI ≈ 0 despite visually obvious "clusters." Write the two failure modes' names and the tool each demands (validation-set k choice; non-spherical-shape methods).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.metrics import adjusted_rand_score
+
+rng = np.random.default_rng(8)
+blobs = np.vstack([rng.normal(c, .5, (100, 2)) for c in [(0, 0), (5, 0), (0, 5)]])
+truth_a = np.repeat([0, 1, 2], 100)
+km6 = KMeans(6, n_init=10, random_state=0).fit(blobs)
+print("(a) k=6 on 3 blobs: ARI =", round(adjusted_rand_score(truth_a, km6.labels_), 3),
+      "-> over-segmentation (stable but too fine)")
+
+t = rng.uniform(0, 2 * np.pi, 150)
+inner = np.c_[np.cos(t), np.sin(t)]
+outer = 3 * np.c_[np.cos(t), np.sin(t)] + rng.normal(0, .08, (150, 2))
+X = np.vstack([inner, outer])
+truth_b = np.repeat([0, 1], 150)
+km2 = KMeans(2, n_init=10, random_state=0).fit(X)
+print("(b) k=2 on circles: ARI =", round(adjusted_rand_score(truth_b, km2.labels_), 3),
+      "-> K-means splits by radius axis, not ring (wrong shape family)")
+```
+
+(a) **Over-segmentation**: k larger than the truth yields stable, fine partitions — stability alone can't catch it (compare [9.6](09-6-practical-clustering.qmd)'s stability discussion). (b) **Shape mismatch**: K-means carves by distance-to-centroid — it cannot represent rings; spectral/density methods are the cure. Both failures say the same thing: the algorithm's assumptions are the hypothesis being tested.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Unsupervised "validation" is a family, not a number**: stability, internal indices, expert interpretability, downstream-task usefulness — report the ones your claim needs ([9.6](09-6-practical-clustering.qmd) organizes them).
+- **The reification trap**: "K-means found 4 patient subtypes" — the algorithm found 4 centroids minimizing inertia given your scaling; the subtypes exist as model outputs. Clinical translation requires external validation (outcomes, replication cohorts) — always.
+- **Scaling, outliers, skew**: each reshapes distance geometry silently; robust scaling or transformations belong in the unsupervised pipeline *as modeling choices* ([0.4](../part-00-python-foundations/00-4-visualization-eda.qmd)'s skew transforms, now structural).
+- **Curse of dimensionality hits hardest here**: distances concentrate ([2.9](../part-02-linear-regression/02-9-knn-regression.qmd)), variance spreads everywhere — dimension reduction ([9.2](09-2-principal-component-analysis.qmd)) usually precedes clustering in wide data.
+- **Batch effects masquerade as structure**: the strongest "cluster" in biological data is often the processing batch — unsupervised methods find it before biology ([5.6](../part-05-regularization-high-dimensions/05-6-high-dimensional.qmd)'s warning, sharpened).
+- **Multiple testing's cousin — multiple clusterings**: trying k = 2..10 and several algorithms then reporting the "interesting" one is the same selection game ([4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd), [12.x](../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.qmd) stub); pre-specify or correct.
+
+### Read & Refactor AI Code
+
+This AI-generated "unsupervised discovery" has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+
+rng = np.random.default_rng(9)
+n = 300
+batch = rng.integers(0, 2, n)                   # processing batch!
+X = rng.normal(0, 1, (n, 20))
+X[:, 0] += batch * 3                            # batch dominates feature 0
+
+# BUG 1: cluster raw unscaled data
+km = KMeans(3, n_init=10, random_state=0).fit(X)
+
+# BUG 2: 'validate' by inertia (always improves with k)
+inertias = [KMeans(k, n_init=10, random_state=0).fit(X).inertia_ for k in range(1, 8)]
+print("inertias:", [round(i) for i in inertias], "-> 'k=6 looks best where it flattens'")
+
+# BUG 3: declare the clusters as patient subtypes
+print("discovered 3 patient subtypes (inertia-selected)")
+print("cluster vs batch agreement:",
+      round(float(np.mean(km.labels_ == batch)), 3))
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Unscaled clustering** lets the batch-dominated feature decide everything — the "subtypes" are likely batches. Scale, and *audit clusters against known artifacts* (batch, site) before biological naming.
+2. **Inertia as k-selection**: it decreases monotonically — it cannot select k; use stability/silhouette/elbow-with-eyes ([9.4](09-4-k-means.qmd), [9.6](09-6-practical-clustering.qmd)).
+3. **Discovery language without validation**: cross-check against batch labels, report stability, and only then hypothesize — the claim needs external validity to graduate from "partition" to "subtype."
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import adjusted_rand_score
+
+rng = np.random.default_rng(9)
+n = 300
+batch = rng.integers(0, 2, n)
+X = rng.normal(0, 1, (n, 20))
+X[:, 0] += batch * 3
+
+Xs = StandardScaler().fit_transform(X)
+km = KMeans(3, n_init=10, random_state=0).fit(Xs)
+print("ARI(clusters, batch) =", round(adjusted_rand_score(batch, km.labels_), 3),
+      "-> if high, the 'structure' is the artifact, not biology")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Formalize "no free validation": prove that for any partition P of a dataset and any rival partition P′, there exists a distance metric under which P is the exact K-means solution (construct the metric from P's indicator structure). What does this impossibility result imply about unsupervised model selection — and which *external* ingredient breaks the circularity?
+
+<details>
+<summary>Hint</summary>
+
+Define distances: 0 within P-groups, huge between; K-means with k = |P| recovers P exactly under it.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Given P, set d(x, x′) = 0 if same P-cluster, 1 otherwise; all within-cluster variances vanish and between-cluster distances dominate → K-means (and most criteria) select P exactly. Symmetrically for P′. So "the best clustering" is metric-relative — any partition can be crowned by some reasonable-sounding geometry. Implication: internal criteria can't, even in principle, arbitrate between structurally different partitions; the circularity breaks only with *external* reference — outcomes, stability across independent datasets, expert validity, or downstream-task performance. This is the precise reason Part 9's validation chapter ([9.6](09-6-practical-clustering.qmd)) leans so hard on stability and external checks rather than internal indices alone.
+</details>
+
+**Q2.** Design an end-to-end unsupervised analysis protocol for a new 2,000-patient, 50-feature clinical cohort: (a) preprocessing decisions and their justifications, (b) structure-finding methods to run and their assumption families, (c) the validation battery (internal, stability, external), (d) the pre-registered reporting standard (what gets reported regardless of how results look). Implement the skeleton (code structure with the key calls) and annotate each step with the pitfall it prevents — drawing on every Part 9 assumption you can name.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+# Skeleton (structure over full implementation):
+#
+# 1. Preprocessing
+#    - log-transform skewed counts (skew reshapes distance geometry)
+#    - StandardScaler per feature (unit-free similarity)
+#    - audit + adjust batch effects BEFORE clustering (batch > biology trap)
+#    - all transforms fitted inside resampling loops ([0.5] law)
+#
+# 2. Structure-finding (assumption families)
+#    - KMeans k in 2..8, n_init=50        (spherical, equal-size groups)
+#    - Hierarchical ward + average        (nested structure, dendrogram reading)
+#    - GMM-lite / spectral if shapes suspect
+#    - PCA to 2-3 components for visualization ([9.2])
+#
+# 3. Validation battery
+#    - stability: bootstrap ARI per k, per method ([Exercise 2])
+#    - internal: silhouette, gap-style checks (reported, not worshipped)
+#    - external: association with outcomes/batches (batch audit!)
+#    - sensitivity: repeat after dropping each feature block
+#
+# 4. Reporting standard (pre-registered)
+#    - every k tried, every method, every stability number
+#    - the selected partition AND the runner-ups
+#    - all preprocessing choices with domain justification
+#    - replication needs stated explicitly (fresh cohort before "subtypes")
+print("Protocol skeleton — see annotations; each line blocks a named pitfall.")
+```
+
+The deliverable of unsupervised analysis is the *protocol plus evidence*, not a partition: (a) prevents geometry artifacts, (b) spans assumption families so conclusions aren't algorithm-shaped, (c) substitutes for the missing test set, (d) blocks the garden-of-forking-paths ([4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd), [12.x](../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.qmd) selection games). Every pitfall from this part reappears as a checklist line — that's the curriculum compressed.
+</details>
+
+## 6. Complex Questions
+
+**C1 (mindset × [0.3–0.4](../part-00-python-foundations/00-3-pandas.qmd) toolkit).** Exploratory-data-analysis as unsupervised learning in disguise: take the cohort table from [0.3](../part-00-python-foundations/00-3-pandas.qmd) and run the full Part 9 pipeline (scale → PCA → K-means k ∈ {2, 3, 4} → stability) *treating the EDA outputs as findings to validate*. Which EDA observation (skew, correlation, group imbalance) becomes which unsupervised structure? Write the mapping table — EDA view ↔ unsupervised formalization — and note where the formalization *changed your belief* versus merely quantified it.
+
+**C2 (mindset × [12.x multiple testing](../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.qmd) stub × [4.6 tuning](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)).** The selection-game census: enumerate every selection act in a typical unsupervised analysis (k, metric, scaling, features, transformations, algorithm, batch-correction flavor) and estimate the multiplicity. Then design the control: either pre-registration (fix choices from domain theory), selection-frequency reporting ([5.1](../part-05-regularization-high-dimensions/05-1-feature-selection.qmd)), or external validation — and implement the one you can run today on simulated data where the truth is known (plant 3 clusters; measure how often your full pipeline "discovers" them vs noise).
+
+## 7. Summary
+
+- No labels ⇒ no test truth: validation becomes stability, interpretability, external checks, downstream usefulness.
+- Preprocessing *is* the model: scaling, transforms, feature choice define similarity — own them explicitly.
+- Structure claims are conditional on the algorithm's assumptions; reification ("discovered subtypes") requires external validation.
+- Stability licenses reproducibility, not truth; internal indices are evidence, never verdicts.
+- Batch effects and dimensionality are the two ambient hazards of real unsupervised work.
+- The selection game is alive here too — pre-specify, report everything, validate externally.
+- First formal tool, the workhorse of dimension reduction everywhere: [9.2 Principal component analysis](09-2-principal-component-analysis.qmd).

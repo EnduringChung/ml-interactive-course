@@ -1,0 +1,465 @@
+---
+title: "6.6 Local Regression (LOESS)"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - statsmodels
+    - scikit-learn
+    - matplotlib
+---
+
+Local regression fits the curve *one query point at a time*: at each x₀, fit a low-degree polynomial to the nearby points, weighted by distance, and read off the value. No global basis, no knots — just "fit locally, slide along." It is smoothing at its most intuitive and the bridge between weighting (KNN) and global fitting.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+At query point x₀:
+
+1. Take the s nearest points (span s — the dial), or all points within a bandwidth.
+2. Weight them by a **tricube kernel** of their distance: $w_i = (1 - |x_i - x_0|/d_{\max})^3_+$.
+3. Fit weighted least squares (usually a line; LOESS = locally estimated scatterplot smoothing).
+4. $\hat f(x_0) = \hat\beta_0 + \hat\beta_1 x_0$ from that local fit. Slide x₀ across the domain.
+
+Hand-rolled, once:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+
+def loess_fit(x, y, xg, span=0.5, degree=1):
+    n = len(x)
+    out = np.zeros(len(xg))
+    k = max(int(span * n), degree + 2)
+    for i, x0 in enumerate(xg):
+        d = np.abs(x - x0)
+        idx = np.argsort(d)[:k]
+        dmax = d[idx].max()
+        w = (1 - (d[idx] / dmax) ** 3) ** 3 if dmax > 0 else np.ones(k)
+        B = np.vander(x[idx], degree + 1)
+        W = np.sqrt(w)
+        beta, *_ = np.linalg.lstsq(B * W[:, None], y[idx] * W, rcond=None)
+        out[i] = np.polyval(beta[::-1], x0)
+    return out
+
+rng = np.random.default_rng(0)
+x = np.sort(rng.uniform(0, 10, 100))
+y = np.sin(x) + rng.normal(0, 0.4, x.size)
+xg = np.linspace(0, 10, 200)
+
+fig, ax = plt.subplots(figsize=(7, 3.4))
+ax.scatter(x, y, s=12, alpha=0.5, label="data")
+for span, color in [(0.2, "red"), (0.5, "green"), (0.9, "purple")]:
+    ax.plot(xg, loess_fit(x, y, xg, span=span), color=color, lw=2,
+            label=f"span = {span}")
+ax.plot(xg, np.sin(xg), "k--", lw=1, label="truth")
+ax.set(xlabel="x", ylabel="y", title="Span is the smoothing dial")
+ax.legend(fontsize=8)
+plt.show()
+```
+
+The battle-tested version — `statsmodels.lowess`:
+
+```{pyodide}
+import numpy as np
+from statsmodels.nonparametric.smoothers_lowess import lowess
+
+rng = np.random.default_rng(1)
+x = np.sort(rng.uniform(0, 10, 100))
+y = np.sin(x) + rng.normal(0, 0.4, x.size)
+
+smoothed = lowess(y, x, frac=0.4, it=0)        # returns (x, yhat) pairs
+print("lowess output shape:", smoothed.shape)
+print("first 3 points:", smoothed[:3].round(3))
+```
+
+## 2. Concept Questions
+
+1. Span vs bandwidth: what does each control, and what happens at span → 0 and span → 1?
+2. Why weight by the *tricube* kernel rather than uniformly over the neighborhood — what changes visually?
+3. Local *linear* vs local *constant* fitting: where does the difference show up, and why does LOESS prefer degree 1?
+4. LOESS has no closed-form coefficients to report. What ARE its reportable quantities, and how do you get uncertainty?
+5. Cost: LOESS prediction at one new point requires refitting. Quantify the compute difference vs a spline's predict, and name when that matters.
+
+<details>
+<summary>Answers</summary>
+
+1. Span = fraction of data in each local fit (bandwidth = absolute radius). Span → 0: k = degree+2 points — interpolation-grade wiggle; span → 1: everything weighted (far points at weight ≈ 0) — nearly the global fit. Same U-curve, familiar dial.
+2. Uniform weights fit a line through the whole window — a constant slope across it — while tricube downweights the window's edges, so the local line tracks the *center* of the window; the result is visibly smoother and less biased at windows' shoulders.
+3. The difference explodes where f curves: local constants are biased on any slope (each window's fit lags the function), local lines absorb linear trend exactly. LOESS uses degree 1 because bias is then O(h²)-small while variance stays manageable; degree 2 buys a little more for jaggedness.
+4. The smooth itself (plotted/tabulated), its effective df (tr of the smoother — computable but pricey), and bootstrap/CV-derived bands. Report the curve with a band, not coefficients.
+5. Spline predict = basis evaluation (microseconds); LOESS predict = a fresh weighted least squares per query (per-point O(n·s)). Matters when serving many predictions (dashboards, scoring pipelines) — precompute on a grid and interpolate, or switch to a global basis.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from statsmodels.nonparametric.smoothers_lowess import lowess
+rng = np.random.default_rng(2)
+x = np.sort(rng.uniform(0, 1, 80))
+y = np.sin(2 * np.pi * x) + rng.normal(0, 0.3, x.size)
+for frac in [0.1, 0.3, 0.9]:
+    sm = lowess(y, x, frac=frac, it=0)
+    resid = np.mean((y - sm[:, 1])**2)
+    print(f"frac={frac}: in-sample MSE = {resid:.4f}")
+```
+
+```{pyodide}
+import numpy as np
+# robust iterations downweight outliers (it>0)
+rng = np.random.default_rng(3)
+x = np.sort(rng.uniform(0, 10, 100))
+y = np.sin(x) + rng.normal(0, 0.3, x.size)
+y[40] += 6                                      # one wild outlier
+plain = lowess(y, x, frac=0.4, it=0)
+robust = lowess(y, x, frac=0.4, it=3)
+true_at_40 = np.sin(x[40])
+print(f"at outlier x: plain {plain[:,1][40]:.2f} | robust {robust[:,1][40]:.2f} | truth {true_at_40:.2f}")
+```
+
+```{pyodide}
+import numpy as np
+# boundary behavior: LOESS vs smoothing spline at the edges
+rng = np.random.default_rng(4)
+x = np.sort(rng.uniform(0, 10, 120))
+y = np.sin(x) + rng.normal(0, 0.3, x.size)
+from statsmodels.nonparametric.smoothers_lowess import lowess
+from scipy.interpolate import UnivariateSpline
+lo = lowess(y, x, frac=0.35, it=0)
+spl = UnivariateSpline(x, y, k=3, s=1.0 * len(x))
+xg = np.linspace(9.0, 10, 50)
+truth = np.sin(xg)
+lo_err = np.abs(np.interp(xg, lo[:, 0], lo[:, 1]) - truth).mean()
+sp_err = np.abs(spl(xg) - truth).mean()
+print(f"right-boundary mean |error|: LOESS {lo_err:.3f} vs spline {sp_err:.3f}")
+print("(local fits stay honest near edges — their 'basis' is right there)")
+```
+
+```{pyodide}
+import numpy as np
+# KNN-regression with tricube weights ≈ local constant LOESS
+rng = np.random.default_rng(5)
+x = np.sort(rng.uniform(0, 10, 100)).reshape(-1, 1)
+y = np.sin(x).ravel() + rng.normal(0, 0.3, 100)
+from sklearn.neighbors import KNeighborsRegressor
+def tricube(d):
+    dmax = d.max(axis=1, keepdims=True)
+    return (1 - (d / dmax) ** 3) ** 3
+knn = KNeighborsRegressor(n_neighbors=25, weights=tricube).fit(x, y)
+print("prediction at x=5:", round(float(knn.predict([[5.0]])[0]), 3),
+      "| sin(5) =", round(float(np.sin(5)), 3))
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Span selection, honest and cheap: implement 5-fold CV over frac ∈ {0.1, ..., 0.9} using `lowess` on the sinusoid; report the chosen frac and its CV MSE. Then repeat on data with *heteroscedastic* noise (σ growing with x) and on data with a sharp local feature (a narrow Gaussian bump at x = 3). How does the chosen span respond to each geometry, and what does that say about one-global-span?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from statsmodels.nonparametric.smoothers_lowess import lowess
+from sklearn.model_selection import KFold
+
+def cv_frac(x, y, fracs, seed=0):
+    cv = KFold(5, shuffle=True, random_state=seed)
+    best, best_m = None, np.inf
+    for f in fracs:
+        mses = []
+        for tr, va in cv.split(x):
+            sm = lowess(y[tr], x[tr], frac=f, it=0)
+            pred = np.interp(x[va], sm[:, 0], sm[:, 1])
+            mses.append(np.mean((y[va] - pred)**2))
+        if np.mean(mses) < best_m:
+            best, best_m = f, np.mean(mses)
+    return best, best_m
+
+rng = np.random.default_rng(6)
+fracs = np.arange(0.1, 0.95, 0.1)
+
+x = np.sort(rng.uniform(0, 10, 150))
+y1 = np.sin(x) + rng.normal(0, 0.4, x.size)
+f1, m1 = cv_frac(x, y1, fracs)
+
+y2 = np.sin(x) + rng.normal(0, 1, x.size) * (x / 10)
+f2, m2 = cv_frac(x, y2, fracs)
+
+y3 = np.sin(x) + 3 * np.exp(-(x - 3)**2 / 0.02) + rng.normal(0, 0.3, x.size)
+f3, m3 = cv_frac(x, y3, fracs)
+
+print(f"homoscedastic:  frac = {f1:.1f} (MSE {m1:.3f})")
+print(f"heteroscedastic: frac = {f2:.1f} (MSE {m2:.3f}) — pulled stiffer by the noisy tail")
+print(f"sharp bump:     frac = {f3:.1f} (MSE {m3:.3f}) — pulled looser by the narrow feature")
+```
+
+One global span must average over geometry: heteroscedastic tails push stiffer (protect the noisy region) while sharp features push looser (resolve the bump) — a single dial can't do both. Adaptive smoothers (variable bandwidth, [6.5](06-5-smoothing-splines.qmd)'s remark) or transformations are the honest responses.
+</details>
+
+**Exercise 2.** LOESS effective df, estimated: using the covariance estimator (as in [6.5 Exercise 2](06-5-smoothing-splines.qmd)) at fixed x, estimate df(frac) for frac ∈ {0.1, 0.3, 0.9} on n = 60. Compare against the corresponding KNN-with-tricube's df ≈ neighborhood size intuition. What does df ≈ tell you about LOESS's position on the [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd) dial relative to global bases of [6.1](06-1-polynomial-regression.qmd)?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from statsmodels.nonparametric.smoothers_lowess import lowess
+
+rng = np.random.default_rng(7)
+n = 60
+x = np.sort(rng.uniform(0, 1, n))
+f = np.sin(2 * np.pi * x)
+sigma = 0.3
+R = 800
+
+for frac in [0.1, 0.3, 0.9]:
+    preds = np.zeros((R, n))
+    ys = np.zeros((R, n))
+    for r in range(R):
+        y = f + rng.normal(0, sigma, n)
+        sm = lowess(y, x, frac=frac, it=0)
+        preds[r] = np.interp(x, sm[:, 0], sm[:, 1])
+        ys[r] = y
+    cov_sum = sum(np.cov(preds[:, i], ys[:, i])[0, 1] for i in range(n))
+    print(f"frac={frac}: effective df ≈ {cov_sum / sigma**2:.1f}")
+```
+
+df slides from ≈ half of n at frac = 0.1 (very local: many effective parameters) toward 3–4 at frac = 0.9 (nearly the global line) — LOESS occupies the same flexibility continuum as bases but with *space-varying* allocation: more df where data is dense. That's its edge over global bases of equal total df ([6.3 Q1](06-3-basis-functions.qmd)'s alignment argument, in continuous form).
+</details>
+
+**Exercise 3.** LOESS vs spline vs polynomial bake-off: on (a) a smooth sinusoid and (b) a curve with a local spike (narrow bump), compare `lowess(frac by CV)`, the CV-tuned smoothing spline ([6.5](06-5-smoothing-splines.qmd)), and the CV-chosen polynomial ([6.1](06-1-polynomial-regression.qmd)) by *test* MSE on fresh points, with each method's dial tuned inside training only. Report a 3×2 table and write the selection paragraph a methods section would carry.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from statsmodels.nonparametric.smoothers_lowess import lowess
+from scipy.interpolate import UnivariateSpline
+from sklearn.model_selection import KFold
+
+def tune_lowess(x, y, fracs):
+    cv = KFold(5, shuffle=True, random_state=1)
+    best, bm = None, np.inf
+    for f in fracs:
+        mses = []
+        for tr, va in cv.split(x):
+            sm = lowess(y[tr], x[tr], frac=f, it=0)
+            mses.append(np.mean((y[va] - np.interp(x[va], sm[:, 0], sm[:, 1]))**2))
+        if np.mean(mses) < bm:
+            best, bm = f, np.mean(mses)
+    return best
+
+def tune_spline(x, y, sfacs):
+    cv = KFold(5, shuffle=True, random_state=1)
+    best, bm = None, np.inf
+    for s in sfacs:
+        mses = []
+        for tr, va in cv.split(x):
+            spl = UnivariateSpline(x[tr], y[tr], k=3, s=s * len(tr))
+            mses.append(np.mean((y[va] - spl(x[va]))**2))
+        if np.mean(mses) < bm:
+            best, bm = s, np.mean(mses)
+    return best
+
+def tune_poly(x, y, degrees):
+    cv = KFold(5, shuffle=True, random_state=1)
+    best, bm = None, np.inf
+    for d in degrees:
+        mses = []
+        for tr, va in cv.split(x):
+            c = np.polyfit(x[tr], y[tr], d)
+            mses.append(np.mean((y[va] - np.polyval(c, x[va]))**2))
+        if np.mean(mses) < bm:
+            best, bm = d, np.mean(mses)
+    return best
+
+rng = np.random.default_rng(8)
+x = np.sort(rng.uniform(0, 10, 150))
+xte = np.sort(rng.uniform(0, 10, 4000))
+worlds = {
+    "smooth": lambda x: np.sin(x),
+    "spike": lambda x: np.sin(x) + 2.5 * np.exp(-(x - 4)**2 / 0.03),
+}
+fracs, sfacs, degrees = np.arange(0.15, 0.9, 0.1), 10.0**np.arange(-1, 1.5, 0.5), range(1, 13)
+
+for wname, f in worlds.items():
+    y = f(x) + rng.normal(0, 0.3, x.size)
+    yte = f(xte) + rng.normal(0, 0.3, xte.size)
+
+    fl = tune_lowess(x, y, fracs)
+    lo = lowess(y, x, frac=fl, it=0)
+    e_lo = np.mean((yte - np.interp(xte, lo[:, 0], lo[:, 1]))**2)
+
+    ss = tune_spline(x, y, sfacs)
+    e_sp = np.mean((yte - UnivariateSpline(x, y, k=3, s=ss * len(x))(xte))**2)
+
+    dp = tune_poly(x, y, degrees)
+    e_po = np.mean((yte - np.polyval(np.polyfit(x, y, dp), xte))**2)
+
+    print(f"{wname:6s}: LOESS(frac={fl:.2f}) {e_lo:.3f} | "
+          f"spline(s={ss}n) {e_sp:.3f} | poly(d={dp}) {e_po:.3f}")
+```
+
+Smooth world: all three tie within noise. Spiked world: global polynomials and stiff splines smear the bump; LOESS (and loose splines) track it. The write-up: "We selected among three smoothing approaches by within-training CV per dataset; all were statistically equivalent on smooth signals, while local methods were necessary under localized structure" — the disciplined version of "LOESS won once."
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **`lowess(y, x)` argument order** — y first, x second (opposite of most sklearn). Transposed calls don't error; they produce confident nonsense.
+- **`frac` is in *points*, not x-units** — with uneven x-density, equal-frac windows have unequal x-widths (usually desirable: more local where data is dense).
+- **it > 0 enables robustness iterations** (downweight big residuals) — the R in LOESS's name (locally estimated *robust*); cheap outlier armor, at slight efficiency cost ([6.5](06-5-smoothing-splines.qmd)'s weights done adaptively).
+- **No native predict()**: statsmodels returns the fitted grid; new points need `np.interp` onto the grid, or a fresh `lowess` call with the query appended — for serving, precompute a dense grid.
+- **Boundary leverage**: local fits near edges rest on few points (one-sided windows); LOESS degrades more gracefully than splines there (drill 3) but is still shakier than mid-range — report edge bands separately.
+- **df accounting is expensive** for LOESS (the smoother matrix is implicit) — the covariance/bootstrap routes are the practical estimators (Exercise 2).
+
+### Read & Refactor AI Code
+
+This AI-generated smoother has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from statsmodels.nonparametric.smoothers_lowess import lowess
+
+rng = np.random.default_rng(9)
+x = np.sort(rng.uniform(0, 10, 120))
+y = np.sin(x) + rng.normal(0, 0.3, x.size)
+
+# BUG 1: arguments transposed
+sm = lowess(x, y, frac=0.4, it=0)
+print("grid range:", sm[:, 0].min().round(2), "to", sm[:, 0].max().round(2), "(is this x?)")
+
+# BUG 2: predictions via interp on the WRONG column
+x_new = np.array([2.5, 5.0, 7.5])
+pred = np.interp(x_new, sm[:, 1], sm[:, 0])
+print("predictions:", pred.round(3))
+
+# BUG 3: tuned frac on the full data, reported as performance
+fracs = np.arange(0.1, 0.9, 0.1)
+best, bm = None, np.inf
+for f in fracs:
+    s = lowess(y, x, frac=f, it=0)
+    mse = np.mean((y - np.interp(x, s[:, 0], s[:, 1]))**2)
+    if mse < bm:
+        best, bm = f, mse
+print(f"chosen frac={best:.1f}, 'performance' = {1 - bm / np.var(y):.3f}")
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **(x, y) transposed**: `lowess(y, x)` is the signature; the transposed call "succeeds" with x-grid in [−1, 1] — the tell.
+2. **Interp columns swapped**: interp(x_new, xp, fp) needs the grid first — swapped columns return the *input coordinate* as the prediction.
+3. **In-sample tuning and reporting**: frac chosen to minimize *training* residuals, then that same number dressed up as performance — the familiar optimism ([4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd)). Tune by CV, report out-of-sample.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from statsmodels.nonparametric.smoothers_lowess import lowess
+from sklearn.model_selection import KFold
+
+rng = np.random.default_rng(9)
+x = np.sort(rng.uniform(0, 10, 120))
+y = np.sin(x) + rng.normal(0, 0.3, x.size)
+
+cv = KFold(5, shuffle=True, random_state=0)
+best, bm = None, np.inf
+for f in np.arange(0.1, 0.9, 0.1):
+    mses = []
+    for tr, va in cv.split(x):
+        sm = lowess(y[tr], x[tr], frac=f, it=0)
+        mses.append(np.mean((y[va] - np.interp(x[va], sm[:, 0], sm[:, 1]))**2))
+    if np.mean(mses) < bm:
+        best, bm = f, np.mean(mses)
+print(f"CV-chosen frac = {best:.1f}, CV MSE = {bm:.4f}")
+sm = lowess(y, x, frac=best, it=0)
+print("predictions at 2.5/5/7.5:",
+      np.interp([2.5, 5.0, 7.5], sm[:, 0], sm[:, 1]).round(3))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Show that LOESS (degree 0, uniform weights, fixed k neighbors) is a linear smoother: $\hat y_0 = \sum_i w_i y_i$ with weights depending only on x and the neighbor set. Compute its smoother weights explicitly at a mid-domain point for n = 10, k = 4, and explain why degree-1 LOESS with tricube weights is *also* a linear smoother (weights now come from the local WLS hat row). What breaks linearity?
+
+<details>
+<summary>Hint</summary>
+
+Each ŷ₀ is a fixed linear combination of the yᵢ — the coefficients (weights) are functions of x alone, not of y.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Degree-0: ŷ₀ = (1/k)Σ_{i∈N}yᵢ — weights 1/k on the k nearest. Degree-1: ŷ₀ = e₀ᵀ(BᵀWB)⁻¹BᵀWy where e₀ picks the local intercept — the row of the local hat matrix applied globally: still fixed linear coefficients in y. So the whole LOESS curve is ŷ = L y for an L depending only on the design → linear smoother, with tr(L) as its df. What breaks linearity: robust iterations (it > 0 — weights then depend on residuals, i.e., on y) and any adaptive bandwidth chosen from y. Robust LOESS trades smoother-linearity for outlier immunity, which is why its df accounting needs the bootstrap.
+</details>
+
+**Q2.** The bandwidth–bias geometry: for a twice-differentiable f and window half-width h, the local-linear estimator's bias at x₀ is ≈ f″(x₀)·h²·(constant depending on kernel) and variance ≈ σ²·(constant)/(n·h). Derive the MSE-optimal h ∝ (σ²/f″²·n)^{1/5}, verify the 1/5 exponent numerically (fit local-linear MSE vs h on a known f at several n, extract the slope of log-optimal-h vs log n), and state the practical consequence: how much does optimal bandwidth change when you quadruple your data?
+
+<details>
+<summary>Hint</summary>
+
+Balance h⁴-bias against σ²/(nh)-variance; the n^{-1/5} rate is the classic nonparametric law.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Bias² ~ (c₁f″h²)², variance ~ c₂σ²/(nh): MSE ~ c₁²f″²h⁴ + c₂σ²/(nh); d/dh = 0 → h* ∝ (σ²/(f″²n))^{1/5} — the n^{-1/5} law of kernel smoothing.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from statsmodels.nonparametric.smoothers_lowess import lowess
+
+rng = np.random.default_rng(10)
+opt_hs = []
+for n in [60, 120, 240, 480, 960]:
+    x = np.sort(rng.uniform(0, 10, n))
+    y = np.sin(x) + rng.normal(0, 0.3, n)
+    xte = rng.uniform(0, 10, 3000)
+    yte = np.sin(xte) + rng.normal(0, 0.3, 3000)
+    best_f, bm = None, np.inf
+    for fr in np.arange(0.08, 0.9, 0.04):
+        sm = lowess(y, x, frac=fr, it=0)
+        e = np.mean((yte - np.interp(xte, sm[:, 0], sm[:, 1]))**2)
+        if e < bm:
+            best_f, bm = fr, e
+    opt_hs.append((n, best_f))
+
+logn = np.log([v[0] for v in opt_hs])
+logf = np.log([v[1] for v in opt_hs])
+slope = np.polyfit(logn, logf, 1)[0]
+print(f"slope of log(optimal frac) vs log(n): {slope:.3f}  (theory: −0.2)")
+```
+
+Quadrupling n shrinks the optimal bandwidth by 4^{1/5} ≈ 1.32 — bandwidths tune *slowly* with data, and undersmoothing is the standard asymptotic advice (bias visible, variance safe) since CV tends to pick h slightly large. The n^{-1/5} rate is also why nonparametric smoothing can't beat parametric models when the parametric form is right — the price of letting the data speak.
+</details>
+
+## 6. Complex Questions
+
+**C1 (LOESS × [1.5 resampling](../part-01-statistics-bridge/01-5-resampling-intuition.qmd) × [6.5](06-5-smoothing-splines.qmd)).** Bootstrap-banded LOESS vs spline: build 95% bootstrap bands (500 resamples) for both smoothers at their CV-chosen dials on the same dataset, and compare (a) band widths across x, (b) empirical coverage of the truth over 200 simulated datasets. Where do LOESS bands widen relative to splines (windows with few points?), and which smoother's bands would you show a skeptical collaborator, and why?
+
+**C2 (LOESS × [7.4 random forests](../part-07-trees-ensembles/07-4-random-forests.qmd) preview × [9.x](../part-09-unsupervised-learning/09-1-unsupervised-mindset.qmd)).** From one dimension to many: extend your hand-rolled LOESS to 2 features (local linear WLS on the k nearest in Euclidean distance). On a two-feature additive truth vs a truth with a strong interaction, compare 2-D LOESS against (i) a spline-additive model (separate 1-D smooths added — [6.7](06-7-gam.qmd)'s core idea done by hand) and (ii) a random forest. Which fails on interactions, which on sparsity in 2-D neighborhoods, and what does this mini-tournament predict about the additive-vs-fully-nonparametric choice in high dimensions?
+
+## 7. Summary
+
+- LOESS: local weighted polynomials, slid along the domain; span (or bandwidth) is the single dial.
+- Tricube weights and degree-1 local fits are the standard recipe; robust iterations buy outlier immunity at linearity's price.
+- It's a linear smoother (until robustification) — df estimable via covariance/bootstrap; report it.
+- Boundaries are shakier, heteroscedasticity and sharp features strain one global span — diagnose per dataset.
+- Compute is per-query: precompute grids for serving.
+- Statsmodels' `lowess(y, x)` — mind the argument order; interp for new points.
+- Smoothing one x at a time is lovely until there are ten x's: additive models divide and conquer — [6.7 Generalized Additive Models](06-7-gam.qmd).

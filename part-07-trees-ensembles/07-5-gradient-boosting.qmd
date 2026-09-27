@@ -1,0 +1,425 @@
+---
+title: "7.5 Gradient Boosting"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - matplotlib
+---
+
+Boosting flips bagging's logic: instead of fitting independent trees to resampled data in parallel, fit trees **sequentially, each to the residuals** the previous ones left behind. Each weak tree contributes a small correction; the sum climbs toward the truth. Gradient boosting generalizes the idea to any differentiable loss — and introduces the first ensemble in this course that *can* overfit with more trees.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+For squared-error loss, gradient boosting is plain residual fitting:
+
+$$f_m(x) = f_{m-1}(x) + \nu \cdot h_m(x), \qquad h_m = \text{tree fitted to } (y_i - f_{m-1}(x_i))$$
+
+ν (the learning rate) shrinks each step; the general "gradient" version fits $h_m$ to the *negative gradient of any loss* — which for squared loss is exactly the residual, and for other losses (deviance, absolute error) is the loss-specific pseudo-residual.
+
+Hand-rolled on 1-D data — watch the staircase grow:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.tree import DecisionTreeRegressor
+
+rng = np.random.default_rng(0)
+x = np.sort(rng.uniform(0, 1, 100))
+y = np.sin(2 * np.pi * x) + rng.normal(0, 0.3, x.size)
+xg = np.linspace(0, 1, 300)
+
+f = np.full(len(x), y.mean())
+steps = [0, 1, 5, 100]
+snapshots = {}
+nu, depth = 0.3, 2
+for m in range(1, 101):
+    resid = y - f
+    tree = DecisionTreeRegressor(max_depth=depth, random_state=m).fit(
+        x.reshape(-1, 1), resid)
+    f += nu * tree.predict(x.reshape(-1, 1))
+    if m in steps:
+        snapshots[m] = f.copy()
+
+fig, ax = plt.subplots(figsize=(7, 3.4))
+ax.scatter(x, y, s=12, alpha=0.5, label="data")
+for m, curve in snapshots.items():
+    if m > 0:
+        ax.plot(xg, np.interp(xg, x, curve), lw=2, label=f"after {m} trees")
+ax.plot(xg, np.interp(xg, x, np.sin(2 * np.pi * x)), "k--", lw=1, label="truth")
+ax.set(xlabel="x", ylabel="y", title="Sequential residual fitting")
+ax.legend(fontsize=8)
+plt.show()
+```
+
+sklearn's version, with the staged test-error curve — the overfitting watch:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(1)
+x = np.sort(rng.uniform(0, 1, 150))
+y = np.sin(2 * np.pi * x) + rng.normal(0, 0.3, x.size)
+X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y, random_state=2)
+
+gb = GradientBoostingRegressor(n_estimators=500, learning_rate=0.1,
+                               max_depth=2, random_state=0).fit(X_tr, y_tr)
+test_err = [np.mean((y_te - p)**2) for p in gb.staged_predict(X_te)]
+train_err = [np.mean((y_tr - p)**2) for p in gb.staged_predict(X_tr)]
+
+best_m = int(np.argmin(test_err))
+fig, ax = plt.subplots(figsize=(7, 3.2))
+ax.plot(train_err, label="train")
+ax.plot(test_err, label="test")
+ax.axvline(best_m, ls=":", color="gray", label=f"best M = {best_m}")
+ax.set(xlabel="trees M", ylabel="MSE", title="Boosting CAN overfit: watch the turn")
+ax.legend()
+plt.show()
+print(f"test MSE at best M: {min(test_err):.4f} vs M=500: {test_err[-1]:.4f}")
+```
+
+## 2. Concept Questions
+
+1. Contrast the roles of B: why is "more trees" safe for forests but a tuning parameter for boosting?
+2. What exactly does the learning rate ν trade — and what is the classic ν × M coupling rule of thumb?
+3. For absolute-error loss, what is the "gradient" that each tree fits? What does this buy over the squared version?
+4. Why are boosting's base trees kept *shallow* (depth 3–5) while forest trees grow deep?
+5. Two features are perfectly correlated. How do forest importances and boosting importances behave differently — and why does sequential fitting encourage early features to monopolize credit?
+
+<details>
+<summary>Answers</summary>
+
+1. Forest trees are i.i.d.-ish draws: averaging more draws monotonically reduces variance toward the ρσ² floor — no overfitting mechanism. Boosting trees are *sequentially adapted to the current error*: later trees encode increasingly specific structure of this dataset (including noise), so past the optimum test error turns up — B must be tuned (or early-stopped).
+2. ν scales each correction; small ν (0.01–0.1) with large M gives gentle, stagewise refinement — better test error, more compute. Coupling: smaller ν wants proportionally larger M (M ≈ a few/ν as folklore) — tune ν·M as a pair.
+3. The negative gradient of absolute loss is −sign(residual): trees fit the *sign pattern* of errors — robust to outliers (magnitude-blind), the boosting version of [1.1](../part-01-statistics-bridge/01-1-descriptive-statistics.qmd)'s median-vs-mean. sklearn exposes it as loss="absolute_error" (Huber for in-between).
+4. Each boosting tree corrects what's left — a small, structured residual. Deep trees would refit noise wholesale in one step (large ν-equivalent) and erase the stagewise refinement; shallow trees force the ensemble to spread learning over many steps, which is what makes the shrinkage work.
+5. Forest trees are independent draws — twins split importance stochastically ([7.4](07-4-random-forests.qmd)). Boosting is greedy-sequential: the first tree to grab a correlated pair's signal takes it, the second finds little residual to justify itself — credit concentrates in the earlier feature, an order-dependence forests don't have. Importances remain advisory.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.ensemble import GradientBoostingRegressor
+rng = np.random.default_rng(3)
+X = rng.uniform(0, 1, (150, 2))
+y = np.sin(2 * X[:, 0]) + rng.normal(0, .2, 150)
+gb = GradientBoostingRegressor(n_estimators=200, learning_rate=0.05,
+                               max_depth=2, random_state=0).fit(X, y)
+print("train R2:", round(gb.train_score_[-1], 4))
+print("staged predictions available:", len(list(gb.staged_predict(X))) == 200)
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.ensemble import GradientBoostingRegressor
+rng = np.random.default_rng(4)
+x = rng.uniform(0, 1, (150, 1))
+y = rng.normal(0, 1, 150)                    # NO SIGNAL
+gb = GradientBoostingRegressor(n_estimators=300, learning_rate=0.1,
+                               max_depth=2, random_state=0).fit(x, y)
+from sklearn.model_selection import train_test_split
+xtr, xte, ytr, yte = train_test_split(x, y, random_state=1)
+gb.fit(xtr, ytr)
+errs = [np.mean((yte - p)**2) for p in gb.staged_predict(xte)]
+print("null-data best test MSE:", round(min(errs), 3), "vs sigma^2 = 1.0")
+print("-> boosting on noise: turns up after the optimum like anything else")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.ensemble import GradientBoostingRegressor
+rng = np.random.default_rng(5)
+x = rng.uniform(0, 1, 150)
+y = np.sin(2 * np.pi * x) + rng.normal(0, .3, x.size)
+for nu in [1.0, 0.1, 0.02]:
+    gb = GradientBoostingRegressor(n_estimators=400, learning_rate=nu,
+                                   max_depth=2, random_state=0).fit(x.reshape(-1, 1), y)
+    print(f"nu={nu}: train MSE = {gb.train_score_[-1]:.4f}")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.datasets import make_classification
+X, y = make_classification(n_samples=300, n_features=6, random_state=6)
+clf = GradientBoostingClassifier(n_estimators=100, learning_rate=0.1,
+                                 max_depth=2, random_state=0).fit(X, y)
+print("train acc:", round(clf.score(X, y), 3))
+print("feature importances sum:", round(clf.feature_importances_.sum(), 3))
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** The ν × M coupling, mapped: fit boosters on the sinusoid over the grid ν ∈ {0.5, 0.1, 0.02} × M ∈ {50, 200, 800}. Report a 3×3 table of test MSEs. Verify the folklore "small ν + big M beats big ν + small M at equal compute" — and locate the one cell that is dangerous (high ν, high M) and explain its failure in stagewise terms.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(7)
+x = np.sort(rng.uniform(0, 1, 150))
+y = np.sin(2 * np.pi * x) + rng.normal(0, .3, x.size)
+X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y, random_state=8)
+
+print("MSEs (rows = nu, cols = M):")
+print(f"{'':8s}" + "".join(f"{m:>8d}" for m in [50, 200, 800]))
+for nu in [0.5, 0.1, 0.02]:
+    row = f"nu={nu:<6}"
+    for M in [50, 200, 800]:
+        gb = GradientBoostingRegressor(n_estimators=M, learning_rate=nu,
+                                       max_depth=2, random_state=0).fit(X_tr, y_tr)
+        row += f"{np.mean((y_te - gb.predict(X_te))**2):8.4f}"
+    print(row)
+```
+
+The table's sweet corner is small ν + large M (each small step averages over many refinements — variance tamed by shrinkage); the dangerous cell is ν = 0.5, M = 800: each tree makes aggressive corrections to *already-aggressive* fits, and the ensemble chases noise late into training. ν·M coupling: (0.5, 50) ≈ (0.1, 200) in fit quality — pick small ν for accuracy, scale M, and early-stop on validation.
+</details>
+
+**Exercise 2.** Boosting vs bagging head-to-head, with the [7.3](07-3-bagging.qmd) contrast you now own: on (a) the noisy sinusoid and (b) pure-noise data (null), compare single tree, bagged trees (B = 200), and boosted trees (tuned shallow) by test MSE (with early stopping via staged predictions for boosting). Report the 3×2 table. Which method degrades more gracefully on the null — and what does that say about their variance budgets?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import BaggingRegressor, GradientBoostingRegressor
+from sklearn.model_selection import train_test_split
+
+def run(seed, signal=True):
+    rng = np.random.default_rng(seed)
+    x = np.sort(rng.uniform(0, 1, 120))
+    y = (np.sin(2 * np.pi * x) if signal else 0) + rng.normal(0, .4, x.size)
+    X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y, random_state=seed)
+    out = {}
+    t = DecisionTreeRegressor(max_depth=4, random_state=0).fit(X_tr, y_tr)
+    out["tree"] = np.mean((y_te - t.predict(X_te))**2)
+    bag = BaggingRegressor(DecisionTreeRegressor(), n_estimators=200,
+                           random_state=0).fit(X_tr, y_tr)
+    out["bag"] = np.mean((y_te - bag.predict(X_te))**2)
+    gb = GradientBoostingRegressor(n_estimators=500, learning_rate=0.05,
+                                   max_depth=2, random_state=0).fit(X_tr, y_tr)
+    errs = [np.mean((y_te - p)**2) for p in gb.staged_predict(X_te)]
+    out["boost"] = min(errs)
+    return out
+
+for tag, sig in [("signal", True), ("null", False)]:
+    r = run(20 + int(sig), sig)
+    print(f"{tag:6s}: tree {r['tree']:.3f} | bag {r['bag']:.3f} | boost {r['boost']:.3f}")
+```
+
+On signal, boosting usually edges bagging (its sequential bias-reduction suits the smooth truth). On the null, boosting's early stopping limits damage but its tuned optimum still fits noise structure the bag never looks for — bagging's variance-only budget degrades most gracefully. Boosting's power is bias-attacking; on nulls that power is aimed at nothing.
+</details>
+
+**Exercise 3.** Early stopping, industrialized: use `validation_fraction`, `n_iter_no_change`, and `tol` (sklearn's built-in early stopping) vs your manual staged-prediction stop, on the same data. Compare (a) chosen M, (b) test MSE, (c) compute (fit time). Then explain what the validation split costs relative to staged stopping on ALL training data — and when each is the right tool.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import time
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(9)
+x = np.sort(rng.uniform(0, 1, 300))
+y = np.sin(2 * np.pi * x) + rng.normal(0, .3, x.size)
+X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y, random_state=10)
+
+t0 = time.perf_counter()
+gb_es = GradientBoostingRegressor(n_estimators=1000, learning_rate=0.05,
+                                  max_depth=2, validation_fraction=0.2,
+                                  n_iter_no_change=20, random_state=0).fit(X_tr, y_tr)
+t_es = time.perf_counter() - t0
+mse_es = np.mean((y_te - gb_es.predict(X_te))**2)
+print(f"built-in early stop: M used = {gb_es.n_estimators_}, "
+      f"test MSE {mse_es:.4f}, {t_es:.2f}s")
+
+t0 = time.perf_counter()
+gb_full = GradientBoostingRegressor(n_estimators=1000, learning_rate=0.05,
+                                    max_depth=2, random_state=0).fit(X_tr, y_tr)
+errs = [np.mean((y_te - p)**2) for p in gb_full.staged_predict(X_te)]
+t_st = time.perf_counter() - t0
+print(f"staged (test-peeked!): best test MSE {min(errs):.4f}, {t_st:.2f}s")
+print("(staged-on-test is for DIAGNOSIS; the validation split is the deployable stop)")
+```
+
+The built-in early stop holds out a validation slice *inside training*, watches it, halts — deployable and automatic. Staged prediction over the test set diagnoses the curve but is not a legitimate stopping rule for reporting (it's tuned-on-test). Cost: the validation split trains on 80% of data — the same pessimism trade as [4.2](../part-04-validation-model-selection/04-2-validation-set.qmd); CV-wrapped early stopping is the fully honest version.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **The dials and their defaults**: learning_rate (ν, 0.01–0.1), n_estimators (tune with early stopping), max_depth (2–5: interaction depth), subsample (0.5–0.8 stochastic boosting — bagging-flavored variance reduction *inside* boosting).
+- **Boosting ≠ parallelizable like forests**: trees depend on predecessors; the sequential dependence is the algorithm (distributed variants exist but lose the simple story).
+- **Loss choice matters**: squared (default), absolute_error (robust), Huber (robust + smooth), deviance for classification — the pseudo-residual changes, everything else identical ([2.1](../part-02-linear-regression/02-1-regression-setup.qmd)'s loss-matching principle, automated).
+- **Overfitting signature**: staged test error U-curve — always plot it before trusting a fit; the trained `n_estimators` is part of the model spec.
+- **Feature importances inherit the sequential-greedy bias** ([7.1](07-1-decision-trees.qmd)'s note): early features absorb correlated partners' credit; permutation importance on held-out data for claims.
+- **Interactions via depth**: max_depth = 2 allows pairwise interactions per tree; the ensemble composes higher orders through accumulation — check whether your truth needs depth or just more trees.
+- **Scale-invariant like all trees**, but `subsample` and early stopping make forests-of-seeds matter: pin random_state for reproducibility.
+
+### Read & Refactor AI Code
+
+This AI-generated boosting pipeline has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(15)
+x = np.sort(rng.uniform(0, 1, 250))
+y = np.sin(2 * np.pi * x) + rng.normal(0, .3, x.size)
+X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y, random_state=16)
+
+# BUG 1: deep trees, big nu, huge M
+gb = GradientBoostingRegressor(n_estimators=1000, learning_rate=0.5,
+                               max_depth=8, random_state=0).fit(X_tr, y_tr)
+print("train R2:", round(gb.score(X_tr, y_tr), 4))
+print("test R2: ", round(gb.score(X_te, y_te), 4))
+
+# BUG 2: n_estimators tuned on test
+best, bm = None, np.inf
+for M in [100, 300, 500, 1000]:
+    g = GradientBoostingRegressor(n_estimators=M, learning_rate=0.5,
+                                  max_depth=8, random_state=0).fit(X_tr, y_tr)
+    m = np.mean((y_te - g.predict(X_te))**2)
+    if m < bm:
+        best, bm = M, m
+print("M tuned on test:", best)
+
+# BUG 3: deep trees praised for 'capturing interactions' in 1 feature
+print("depth-8 needed to 'capture interactions' in this 1-feature problem")
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Aggressive everything**: ν = 0.5 with depth 8 over 1000 steps is a noise-chaser — train R² ≈ 1, test collapses. Small ν, shallow trees, early stopping.
+2. **M tuned on test**: the staged/test-peeking selection is diagnosis, not protocol; choose M via validation split or CV.
+3. **Depth ≠ interactions here**: with one feature, "interactions" don't exist; depth 8 just overfits wiggles. Depth is the *interaction-order* dial ([2.7](../part-02-linear-regression/02-7-interaction-terms.qmd) vocabulary), meaningful in multivariate problems.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(15)
+x = np.sort(rng.uniform(0, 1, 250))
+y = np.sin(2 * np.pi * x) + rng.normal(0, .3, x.size)
+X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y, random_state=16)
+
+gb = GradientBoostingRegressor(n_estimators=600, learning_rate=0.05,
+                               max_depth=2, validation_fraction=0.2,
+                               n_iter_no_change=25, random_state=0).fit(X_tr, y_tr)
+print("early-stopped at", gb.n_estimators_, "trees")
+print("honest test R2:", round(gb.score(X_te, y_te), 4))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Derive why fitting trees to residuals equals gradient descent in function space: parameterize the model as f(x) = Σₘ ν·hₘ(x); the squared-loss gradient w.r.t. f(xᵢ) is −2(yᵢ − f(xᵢ)); hence "fit the negative gradient" = "fit the residual." Then verify numerically that one gradient-boosting step with squared loss reproduces the residual fit exactly, and state what changes for Huber loss (which points' pseudo-residuals shrink?).
+
+<details>
+<summary>Hint</summary>
+
+Gradient descent in "function space": the "parameter" at each training point is the function's value there; the tree approximates the descent direction.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+With loss L = Σᵢ L(yᵢ, f(xᵢ)), gradient descent updates f(xᵢ) ← f(xᵢ) − ν·∂L/∂f(xᵢ). For squared loss ∂L/∂f(xᵢ) = −2(yᵢ − f(xᵢ)) — the negative gradient IS the residual vector, so "fit a tree to residuals" is exactly "take a tree-approximated gradient step." Verification:
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import GradientBoostingRegressor
+
+rng = np.random.default_rng(18)
+x = rng.uniform(0, 1, (80, 1))
+y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, .2, 80)
+f0 = y.mean()
+
+t = DecisionTreeRegressor(max_depth=2, random_state=0).fit(x, y - f0)
+manual = f0 + 1.0 * t.predict(x)             # nu = 1
+
+gb = GradientBoostingRegressor(n_estimators=1, learning_rate=1.0,
+                               max_depth=2, random_state=0).fit(x, y)
+print("max |manual - sklearn|:", np.abs(manual - gb.predict(x)).max())
+```
+
+For Huber loss, pseudo-residuals equal plain residuals for small |r| but are *clipped* at δ·sign(r) beyond it — large errors contribute bounded direction, not magnitude: boosting with Huber loss is robust regression built from trees.
+</details>
+
+**Q2.** Stochastic boosting's variance attack: `subsample = 0.7` fits each tree on a random 70% — inject bagging into the sequence. Design and run the 2×2 (subsample ∈ {1.0, 0.7} × ν ∈ {0.1, 0.05}) comparison with early stopping, on the noisy sinusoid, reporting test MSE and the M at stopping. Which cell stops earliest, which generalizes best, and what does the exercise teach about combining variance-reduction *within* the bias-attacking algorithm ([4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd) both dials at once)?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(19)
+x = np.sort(rng.uniform(0, 1, 250))
+y = np.sin(2 * np.pi * x) + rng.normal(0, .35, x.size)
+X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y, random_state=20)
+
+for sub in [1.0, 0.7]:
+    for nu in [0.1, 0.05]:
+        gb = GradientBoostingRegressor(n_estimators=1500, learning_rate=nu,
+                                       max_depth=2, subsample=sub,
+                                       validation_fraction=0.2,
+                                       n_iter_no_change=30, random_state=0).fit(X_tr, y_tr)
+        mse = np.mean((y_te - gb.predict(X_te))**2)
+        print(f"subsample={sub}, nu={nu}: stopped M={gb.n_estimators_}, "
+              f"test MSE={mse:.4f}")
+```
+
+Subsampling typically stops *later* (each tree sees noisier residuals → gentler progress) but generalizes *better* — the injected randomness decorrelates successive trees, a ρ-reduction inside the bias-attacking algorithm. The 2×2 confirms the two dials are complementary, not redundant: shrinkage (ν) controls step size; subsampling controls step diversity — the mature boosting configuration uses both.
+</details>
+
+## 6. Complex Questions
+
+**C1 (boosting × [7.3–7.4](07-3-bagging.qmd) × [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd)).** The ensemble family portrait: single tree, bagged trees, random forest, boosted trees on the same truth (sinusoid + interaction feature) — all honestly evaluated (nested CV for tuned members). Produce the accuracy table *and* a bias/variance annotation for each member (from the [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd) protocol where feasible). Write the "family reasoning": given a new tabular problem, what diagnostics would tell you which member to try first?
+
+**C2 (boosting × [3.1 metrics](../part-03-classification-glm/03-1-classification-fundamentals.qmd) × [7.6](07-6-modern-boosting.qmd) preview).** Boosted classification with deviance loss: fit GradientBoostingClassifier to an imbalanced problem (5% positives); evaluate staged AUC and staged log-loss on validation. Do their optima coincide? Connect the divergence to what each metric rewards (ranking vs probability sharpness), and predict what calibration step ([3.7](../part-03-classification-glm/03-7-model-comparison.qmd)) the deployed model needs at the AUC-optimal M.
+
+## 7. Summary
+
+- Boosting = sequential trees on negative gradients (residuals, for squared loss): bias attacks with shrunken steps.
+- ν small + M large + shallow trees: the canonical configuration; ν·M couple; early stopping or CV sets M.
+- Unlike forests, boosting *can* overfit with more trees — the staged curve is the instrument panel.
+- Loss choice is a dial (squared/absolute/Huber/deviance): the same machinery, different pseudo-residuals.
+- Subsample injects bagging into the sequence: variance reduction inside bias correction.
+- Sequential greediness concentrates importances in early features — advisory only.
+- The ideas graduate to industrial libraries with histogram speeds and native NaN handling: [7.6 Modern boosting libraries](07-6-modern-boosting.qmd).

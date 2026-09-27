@@ -1,0 +1,470 @@
+---
+title: "9.6 Practical Clustering Issues"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - scikit-learn
+    - matplotlib
+---
+
+Every previous clustering page deferred the same questions: how do I choose k *defensibly*, which validation do I report, what do I do about mixed data types, outliers, and the fact that clustering is an optimization game with many legitimate answers? This page assembles the practical machinery — stability, internal indices, external validation — into one honest workflow.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+The validation triad, defined precisely:
+
+1. **Internal** — silhouette, inertia-based indices: does the partition fit the *chosen metric*? (necessary, never sufficient)
+2. **Stability** — do partitions reproduce under resampling/perturbation/seed changes? (reproducibility evidence)
+3. **External** — do clusters align with *domain-known* variables (outcomes, batches, replicated cohorts)? (the only truth-adjacent evidence)
+
+```{pyodide}
+#| fig-width: 7.5
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+
+rng = np.random.default_rng(0)
+X = np.vstack([rng.normal(c, .6, (120, 2))
+               for c in [(0, 0), (3.5, 0), (1.7, 3)]])
+X_null = rng.normal(2, 1.5, (360, 2))
+
+ks = range(2, 9)
+sil_real, sil_null = [], []
+for k in ks:
+    sil_real.append(silhouette_score(X, KMeans(k, n_init=10,
+                    random_state=0).fit(X).labels_))
+    sil_null.append(silhouette_score(X_null, KMeans(k, n_init=10,
+                     random_state=0).fit(X_null).labels_))
+
+fig, ax = plt.subplots(figsize=(7, 3.2))
+ax.plot(ks, sil_real, marker="o", label="clustered data")
+ax.plot(ks, sil_null, marker="s", label="null data (no clusters)")
+ax.set(xlabel="k", ylabel="mean silhouette", title="Silhouette: real structure vs null")
+ax.legend()
+plt.show()
+```
+
+Stability as the workhorse — the full implementation (revisited from [9.1 Exercise 2](09-1-unsupervised-mindset.qmd), now with per-k curves):
+
+```{pyodide}
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.metrics import adjusted_rand_score
+
+def clustering_stability(X, k, B=40, seed=0):
+    rng = np.random.default_rng(seed)
+    base = KMeans(k, n_init=10, random_state=seed).fit(X)
+    aris = []
+    for b in range(B):
+        idx = rng.integers(0, len(X), len(X))
+        m = KMeans(k, n_init=10, random_state=b).fit(X[idx])
+        aris.append(adjusted_rand_score(base.labels_, m.predict(X)))
+    return np.mean(aris)
+
+rng = np.random.default_rng(1)
+X = np.vstack([rng.normal(c, .6, (120, 2))
+               for c in [(0, 0), (3.5, 0), (1.7, 3)]])
+for k in range(2, 8):
+    print(f"k={k}: bootstrap stability = {clustering_stability(X, k):.3f}")
+```
+
+## 2. Concept Questions
+
+1. Silhouette's formula rewards which geometry, and what truth-shape makes it systematically misleading?
+2. Stability selects *reproducible* partitions. Construct (in one sentence) the case where a partition is perfectly stable and scientifically wrong.
+3. External validation correlates clusters with outcomes. What does a strong cluster–outcome association *not* prove (two answers: one statistical, one causal)?
+4. Mixed data types (continuous + categorical): why does one-hot + Euclidean quietly distort, and what does the distortion favor?
+5. You report "we found 4 clusters (silhouette-selected among k = 2..9)." Name the two selection games you just played and the evidence a reviewer should demand.
+
+<details>
+<summary>Answers</summary>
+
+1. Silhouette = (b − a)/max(a, b): cohesion-to-nearest-other-neighbor ratio. It rewards convex, well-separated, similarly-sized clusters and *penalizes elongated/ring/uneven truths* even when perfectly recovered ([9.4](09-4-k-means.qmd)'s rings; spectral methods score "poorly" on silhouettes they solve perfectly).
+2. Stable-but-wrong: K-means with k = 4 on two true blobs at a strong scale artifact — resamples reproduce the same 4-way artifact every time (stability measures the *procedure*, the truth lives outside it — [9.1 Q2](09-1-unsupervised-mindset.qmd)).
+3. Statistical: no multiple-testing control (you tested many clusterings/covariates until one "worked" — [12.x](../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.qmd) stub). Causal: cluster membership is a derived feature; association with outcome may ride on the same confounders that shaped the clustering — clusters are not interventions.
+4. One-hot categorical columns contribute 0/1 coordinates whose scale (k levels → unit spacing) silently weights them against standardized continuous features (or for them, with many levels); distances become an accidental blend. Favor: whichever block the encoding happened to amplify — dominant-axis behavior ([9.1](09-1-unsupervised-mindset.qmd)'s sensitivity, encoded).
+5. (1) The k-selection game (9 values tried, best reported — the [4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd) selection bonus); (2) the index-selection game (silhouette chosen from the index zoo). Demanded: stability at reported k, index-agreement, external validation, and all tried values disclosed.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+rng = np.random.default_rng(2)
+t = rng.uniform(0, 2 * np.pi, 200)
+rings = np.c_[np.cos(t), np.sin(t)] * (1 + (np.arange(200) > 100))[:, None]
+truth = (np.arange(200) > 100).astype(int)
+from sklearn.cluster import SpectralClustering
+sc = SpectralClustering(2, affinity="nearest_neighbors", random_state=0).fit(rings)
+km = KMeans(2, n_init=10, random_state=0).fit(rings)
+from sklearn.metrics import adjusted_rand_score
+print("spectral ARI:", round(adjusted_rand_score(truth, sc.labels_), 3),
+      "| silhouette of spectral labels:",
+      round(silhouette_score(rings, sc.labels_), 3))
+print("k-means ARI:", round(adjusted_rand_score(truth, km.labels_), 3),
+      "| silhouette:", round(silhouette_score(rings, km.labels_), 3))
+print("-> silhouette prefers K-means' WRONG partition (convexity bias)")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.metrics import adjusted_rand_score
+rng = np.random.default_rng(3)
+X = np.vstack([rng.normal(c, .5, (100, 2)) for c in [(0, 0), (3, 0), (0, 3)]])
+base = KMeans(3, n_init=10, random_state=0).fit(X)
+agree = []
+for b in range(30):
+    idx = rng.integers(0, len(X), len(X))
+    m = KMeans(3, n_init=10, random_state=b).fit(X[idx])
+    agree.append(np.mean(m.predict(X) == base.labels_))
+print("raw agreement rate:", round(float(np.mean(agree)), 3),
+      "(inflated by chance matches; ARI is the corrected version)")
+from sklearn.metrics import adjusted_rand_score
+aris = [adjusted_rand_score(base.labels_, KMeans(3, n_init=10,
+        random_state=b).fit(X).labels_) for b in range(30)]
+print("ARI stability:      ", round(float(np.mean(aris)), 3))
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.preprocessing import StandardScaler
+rng = np.random.default_rng(4)
+num = rng.normal(0, 1, (200, 3))
+cat = rng.integers(0, 3, 200)                     # 3-level category
+X_num = StandardScaler().fit_transform(num)
+X_cat1 = np.eye(3)[cat]                           # one-hot, weight 1
+X_cat5 = np.eye(3)[cat] * 5                       # same info, 5x weight
+from sklearn.cluster import KMeans
+m1 = KMeans(3, n_init=10, random_state=0).fit(np.c_[X_num, X_cat1])
+m5 = KMeans(3, n_init=10, random_state=0).fit(np.c_[X_num, X_cat5])
+from sklearn.metrics import adjusted_rand_score
+print("weight-1 vs weight-5 category ARI agreement:",
+      round(adjusted_rand_score(m1.labels_, m5.labels_), 3))
+print("the 'same' categorical feature changed the clustering by encoding weight")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.cluster import KMeans
+rng = np.random.default_rng(5)
+X = np.vstack([rng.normal(0, .5, (250, 2)),
+               rng.normal([12, 12], 1.5, (15, 2))])   # a genuine outlier group
+km_all = KMeans(2, n_init=10, random_state=0).fit(X)
+from sklearn.ensemble import IsolationForest
+iso = IsolationForest(random_state=0).fit(X)
+inlier = iso.predict(X) == 1
+km_clean = KMeans(2, n_init=10, random_state=0).fit(X[inlier])
+import collections
+print("with outliers:", collections.Counter(km_all.labels_.tolist()))
+print("cleaned sizes:", collections.Counter(km_clean.labels_.tolist()),
+      "-> outlier audit BEFORE k selection")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** The full k-selection tribunal: implement `select_k(X, k_range, B=40)` producing a DataFrame with, per k: inertia, silhouette, bootstrap stability (mean ARI), and the gap-style null comparison (mini). Run it on (a) 4 planted blobs, (b) null uniform data. Report both tables. Define the selection *policy* you'd pre-register (e.g., "k must maximize ≥2 indices, achieve stability > 0.8, and beat the null silhouette by ≥ 0.1") and check what each dataset yields.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import pandas as pd
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score, adjusted_rand_score
+
+def select_k(X, k_range, B=40, seed=0):
+    rng = np.random.default_rng(seed)
+    rows = []
+    for k in k_range:
+        km = KMeans(k, n_init=10, random_state=seed).fit(X)
+        sil = silhouette_score(X, km.labels_)
+        aris = []
+        for b in range(B):
+            idx = rng.integers(0, len(X), len(X))
+            m = KMeans(k, n_init=10, random_state=b).fit(X[idx])
+            aris.append(adjusted_rand_score(km.labels_, m.predict(X)))
+        null_inertia = np.mean([KMeans(k, n_init=5, random_state=b).fit(
+            rng.uniform(X.min(axis=0), X.max(axis=0), size=X.shape)).inertia_
+            for b in range(15)])
+        gap = np.log(null_inertia) - np.log(km.inertia_)
+        rows.append({"k": k, "inertia": km.inertia_, "silhouette": sil,
+                     "stability": np.mean(aris), "gap": gap})
+    return pd.DataFrame(rows).round(3)
+
+rng = np.random.default_rng(9)
+blobs = np.vstack([rng.normal(c, .6, (120, 2)) for c in [(0, 0), (3, 0), (0, 3), (3, 3)]])
+null = rng.normal(2, 1.5, (480, 2))
+
+print("=== planted blobs ===")
+print(select_k(blobs, range(2, 8)))
+print("=== null data ===")
+print(select_k(null, range(2, 8)))
+```
+
+Pre-registered policy example: "k must have stability ≥ 0.75, silhouette within 0.05 of the max, and gap > 0.1; ties resolved toward smaller k." Planted data: k = 4 passes all gates; null data: nothing passes (stability low, gap ~0) — the pipeline's most important output is often *refusing* to claim clusters. That refusal must be a pre-registered outcome, not a failure.
+</details>
+
+**Exercise 2.** External validation done right: on a dataset with a known binary covariate (treatment arm) and a known continuous outcome, cluster into k = 3 and test cluster–treatment (chi-square) and cluster–outcome (ANOVA/Kruskal) associations *with multiplicity control over k ∈ 2..6* (report best p-value vs Bonferroni threshold). Then invert the causal framing: the clusters were built from features *including* the outcome-correlated ones — what does that contaminate? Rebuild excluding those features and re-test. Write the association-claim sentence that survives.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+from scipy.stats import chi2_contingency, f_oneway
+
+rng = np.random.default_rng(10)
+n = 400
+outcome = rng.normal(0, 1, n)                     # continuous outcome
+treat = rng.integers(0, 2, n)                     # treatment arm
+feats = rng.normal(0, 1, (n, 6))
+feats[:, 0] += 0.8 * outcome                      # outcome-correlated feature!
+X = StandardScaler().fit_transform(feats)
+
+def best_assoc(X, y_cont, treat, ks=range(2, 7)):
+    best_p_treat, best_p_out = 1, 1
+    for k in ks:
+        lab = KMeans(k, n_init=10, random_state=0).fit(X).labels_
+        table = np.array([[np.sum((lab == i) & (treat == j))
+                           for j in range(2)] for i in range(k)])
+        p_t = chi2_contingency(table).pvalue
+        groups = [y_cont[lab == i] for i in range(k)]
+        p_o = f_oneway(*groups).pvalue
+        best_p_treat = min(best_p_treat, p_t)
+        best_p_out = min(best_p_out, p_o)
+    return best_p_treat, best_p_out
+
+p_t, p_o = best_assoc(X, outcome, treat)
+bonf = 0.05 / 5
+print(f"outcome-leaky features: best p(treat)={p_t:.4f}, p(outcome)={p_o:.5f}, "
+      f"Bonferroni alpha={bonf:.4f}")
+
+clean = StandardScaler().fit_transform(feats[:, 1:])   # drop outcome-correlated
+p_t2, p_o2 = best_assoc(clean, outcome, treat)
+print(f"clean features:         best p(treat)={p_t2:.4f}, p(outcome)={p_o2:.4f}")
+```
+
+The leaky features manufacture cluster–outcome association *by construction* (the outcome shaped the clustering) — no causal or even associational claim survives; the multiplicity correction alone doesn't save it. Rebuilt without outcome-correlated features, any surviving association is at least arguable. Surviving sentence: "Clusters derived from baseline features (excluding outcome-correlated measurements) were associated with the outcome at Bonferroni-corrected p = ..., requiring replication in an independent cohort" — associations, replicated, with the construction disclosed.
+</details>
+
+**Exercise 3.** Mixed-type and outlier-safe workflow: on a cohort with 3 numeric + 2 categorical features (some rows also outliers), implement (a) one-hot + standardized-numerics K-means with categorical weight as a *tuned* parameter (compare weight 1 vs √(levels)), (b) outlier screen (IsolationForest or IQR) before clustering with the removed rows reported separately, (c) full validation battery on the final k. Report the pipeline's choices as a reproducible spec — the "methods paragraph" for mixed-data clustering.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import pandas as pd
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.ensemble import IsolationForest
+from sklearn.metrics import silhouette_score
+
+rng = np.random.default_rng(11)
+n = 400
+num = rng.normal(0, 1, (n, 3))
+cat = rng.integers(0, 3, n)                        # 3 levels
+X_num = StandardScaler().fit_transform(num)
+X_cat = OneHotEncoder(sparse_output=False).fit_transform(cat.reshape(-1, 1))
+
+# outlier screen first
+iso = IsolationForest(random_state=0).fit_predict(np.c_[num, cat])
+inlier = iso == 1
+print("outliers removed:", int((~inlier).sum()), "of", n,
+      "(reported separately)")
+
+results = {}
+for w in [1.0, np.sqrt(3)]:
+    X = np.c_[X_num, X_cat * w][inlier]
+    for k in [2, 3, 4]:
+        km = KMeans(k, n_init=10, random_state=0).fit(X)
+        results[(w, k)] = silhouette_score(X, km.labels_)
+
+for (w, k), s in sorted(results.items(), key=lambda kv: -kv[1])[:4]:
+    print(f"cat-weight={w:.2f}, k={k}: silhouette {s:.3f}")
+```
+
+Methods paragraph: "Numeric features were standardized; categorical features were one-hot encoded and weighted at w = √(levels) (comparable total mass to the numeric block; w tuned by silhouette sensitivity). Isolation-forest outliers (n = …) were flagged and analyzed separately. K was selected by combined silhouette/stability criteria over k = 2–4, and the resulting partition was tested against treatment and outcome associations with multiplicity correction." Every number in that paragraph came from a check you've now implemented — that's what makes it reproducible rather than narrative.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **The index zoo is not the law**: dozens of internal indices (Davies–Bouldin, Calinski–Harabasz, ...) exist; they disagree systematically by geometry — pre-commit to your index set and policy, or report the zoo ([12.x](../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.qmd) stub's multiplicity, again).
+- **Subsampling changes k**: stability curves can cross — k stable at bootstrap B₁ unstable at B₂ means your "clusters" live at one sampling density; report the stability *curve*, not one point.
+- **Outliers both create and destroy clusters**: one outlier = one hijacked centroid; a dense outlier pocket = a "real" cluster of artifacts. Detect, report, and decide by mechanism ([7.2](../part-07-trees-ensembles/07-2-advantages-limitations.qmd)'s ledger for trees; here for points).
+- **Batch effects outrun biology** ([5.6](../part-05-regularization-high-dimensions/05-6-high-dimensional.qmd)): audit clusters against batch/site *first* — a cluster that's 95% one batch is a process finding, not a discovery.
+- **Clustering ≠ classification of a latent truth** unless you validate externally: the "confusion matrix" against a known labeling is a bonus analysis (ARI), not the definition of success ([9.1](09-1-unsupervised-mindset.qmd) Q1's impossibility).
+- **Reproducibility spec**: algorithm, version, distance, scaling, k (and how chosen), initialization/restarts, seed, outlier policy — a clustering without this spec is a rumor.
+
+### Read & Refactor AI Code
+
+This AI-generated "validated clustering" has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+
+rng = np.random.default_rng(16)
+n = 300
+batch = rng.integers(0, 2, n)
+X = rng.normal(0, 1, (n, 10))
+X[:, 0] += 4 * batch                              # batch dominates axis 0
+
+# BUG 1: k chosen by max silhouette among MANY algorithms and ks
+best = (None, -2)
+for algo_k in range(2, 9):
+    s = silhouette_score(X, KMeans(algo_k, n_init=3, random_state=0).fit(X).labels_)
+    if s > best[1]:
+        best = (algo_k, s)
+k = best[0]
+print("k:", k, "silhouette:", round(best[1], 3))
+
+# BUG 2: 'validated' by the same metric that selected k
+km = KMeans(k, n_init=3, random_state=0).fit(X)
+print("validation silhouette:", round(silhouette_score(X, km.labels_), 3))
+
+# BUG 3: clusters compared to batch -> 'biological subtypes!'
+agree = np.mean(km.labels_ == batch)
+print(f"cluster-batch agreement: {agree:.2f} -> 'novel subtypes'")
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Argmax over the k × metric zoo**: the selection bonus ([4.1 Q2](../part-04-validation-model-selection/04-1-generalization-problem.qmd)) plus index-shopping — report all tried values and pre-commit the policy.
+2. **Validation by the selection metric**: circular by construction; validation must be a *different* evidence family (stability, external).
+3. **Cluster–batch agreement rebranded as subtypes**: high agreement means the clustering reproduced the artifact. Audit, disclose, batch-correct, and re-cluster — then look for structure that *isn't* the batch.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import adjusted_rand_score, silhouette_score
+
+rng = np.random.default_rng(16)
+n = 300
+batch = rng.integers(0, 2, n)
+X = rng.normal(0, 1, (n, 10))
+X[:, 0] += 4 * batch
+
+Xs = StandardScaler().fit_transform(X)
+# batch audit FIRST
+km2 = KMeans(2, n_init=10, random_state=0).fit(Xs)
+print("ARI(k=2 clusters, batch):", round(adjusted_rand_score(batch, km2.labels_), 3),
+      "<- if high: structure = artifact; correct before claiming anything")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Prove the silhouette–stability independence: construct two datasets with *identical* mean silhouette for k = 3 but different bootstrap stability (one with a genuinely separated 3-group geometry, one with three coin-flip partitions of uniform data). Implement both and verify. What does this construction prove about composing internal and stability evidence — and why is the composition necessary rather than redundant?
+
+<details>
+<summary>Hint</summary»
+
+Silhouette is a *fixed-dataset* geometric average; stability is a *resampling* property. Uniform data can be carved into 3 well-separated-by-chance regions in one draw.
+</details>
+
+<details>
+<summary>Solution</summary»
+
+Uniform data's *one draw* can show decent silhouette by luck (three separated-looking patches from the triangulation of randomness), while resampling reshuffles the patches — stability collapses. Conversely a stable partition can have modest silhouette (elongated truth). Construction:
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score, adjusted_rand_score
+
+rng = np.random.default_rng(22)
+# dataset A: real blobs; dataset B: uniform
+A = np.vstack([rng.normal(c, .4, (100, 2)) for c in [(0, 0), (4, 0), (2, 3.4)]])
+B = rng.uniform(0, 5, (300, 2))
+
+for name, X in [("blobs", A), ("uniform", B)]:
+    km = KMeans(3, n_init=10, random_state=0).fit(X)
+    sil = silhouette_score(X, km.labels_)
+    aris = [adjusted_rand_score(km.labels_, KMeans(3, n_init=10,
+            random_state=b).fit(X).labels_) for b in range(30)]
+    print(f"{name:8s}: silhouette {sil:.3f}, seed-stability {np.mean(aris):.3f}")
+```
+
+The composition is necessary because the two evidences measure orthogonal failure modes: internal indices can't detect sampling fragility; stability can't detect geometry mismatch with the truth. Any single-number validation claim ("silhouette 0.6, good clustering") commits at least one of the two errors this construction isolates.
+</details>
+
+**Q2.** Consensus clustering, built and judged: implement the consensus matrix for K-means across 200 subsampled runs at a given k — C_ij = fraction of runs where i and j co-occur. Visualize C (sorted by consensus ordering) for the planted-blob dataset at k ∈ {2, 3, 4, 5}: the true k shows a clean block-diagonal C, others show ragged off-blocks. Define the summary statistic (mean within-block vs between-block consensus gap) and verify it peaks at the true k. Then state the one caution: consensus measures *clustering-algorithm agreement*, not truth — connect to [9.1](09-1-unsupervised-mindset.qmd) Q1.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.cluster import KMeans
+
+rng = np.random.default_rng(23)
+X = np.vstack([rng.normal(c, .55, (100, 2)) for c in [(0, 0), (4, 0), (1.8, 3)]])
+n = len(X)
+
+def consensus_gap(X, k, B=150):
+    rng = np.random.default_rng(k)
+    C = np.zeros((n, n)); counts = np.zeros(n)
+    for b in range(B):
+        idx = rng.choice(n, size=int(0.8 * n), replace=False)
+        lab = KMeans(k, n_init=5, random_state=b).fit(X[idx]).labels_
+        full = np.full(n, -1); full[idx] = lab
+        obs = full >= 0
+        C[np.ix_(obs, obs)] += (full[obs][:, None] == full[obs][None, :])
+        counts += obs
+    C = C / np.maximum(counts[:, None] + counts[None, :] - (C > 0), 1)
+    km = KMeans(k, n_init=10, random_state=0).fit(X)
+    within, between = [], []
+    for i in range(n):
+        for j in range(i + 1, n):
+            (within if km.labels_[i] == km.labels_[j] else between).append(C[i, j])
+    return np.mean(within) - np.mean(between)
+
+for k in [2, 3, 4, 5]:
+    print(f"k={k}: consensus gap = {consensus_gap(X, k):.3f}")
+```
+
+The gap peaks at the planted k: within-consensus near 1, between near 0 only when k matches the true block structure. Caution: consensus quantifies how *self-consistently the algorithm* partitions this dataset — a memorizable-but-wrong structure is equally capable of high consensus (stable-artifact case, [9.1 Q2](09-1-unsupervised-mindset.qmd)). Consensus is the strongest *internal reproducibility* evidence available; external validation still outranks it.
+</details>
+
+## 6. Complex Questions
+
+**C1 (practical × [7.x ensembles](../part-07-trees-ensembles/07-1-decision-trees.qmd) × [9.2](09-2-principal-component-analysis.qmd)).** Ensemble-clustering pipeline: build a co-association matrix from 100 K-means runs (varying seeds, subsamples, feature subsets) instead of one run; cluster the co-association matrix (hierarchical, ward) for the final partition. On planted data with an ambiguous k, compare consensus-ensemble partition vs single-run K-means by ARI and stability. Quantify the ensemble dividend, name its cost (compute + lost per-run interpretability), and connect to why bagging works for trees ([7.3](../part-07-trees-ensembles/07-3-bagging.qmd)) — variance reduction by averaging unstable structures.
+
+**C2 (practical × [2.5 confounding](../part-02-linear-regression/02-5-multiple-linear-regression.qmd) × [9.1](09-1-unsupervised-mindset.qmd)).** Clusters as covariates, honestly: derive cluster dummies from an unsupervised run, then use them as covariates in a regression predicting an outcome. Simulate data where (a) clusters genuinely moderate the outcome-gradient and (b) clusters are pure noise. Compare: treating cluster dummies as fixed known covariates (ignoring the estimation of clusters) vs the uncertainty-aware view (clusters are estimated — the classic classification-measurement-error issue). Quantify the SE overconfidence of the naive route across 300 simulations, and write the reporting sentence that acknowledges the two-stage estimation.
+
+## 7. Summary
+
+- Validation is a triad: internal (metric fit), stability (resampling reproducibility), external (domain evidence) — claims need the members their language implies.
+- Silhouette rewards convex geometry; stability rewards procedure reproducibility; neither certifies truth — compose them and add external evidence.
+- Choose k by pre-registered multi-evidence policy; refusal ("no defensible clusters") is a publishable outcome.
+- Mixed data: encoding weight is a hyperparameter; outliers are audited before k; batch is audited before biology.
+- Consensus/co-association matrices are the strongest internal reproducibility evidence — algorithm agreement, not truth.
+- Clusters as downstream covariates are estimated quantities: their uncertainty propagates; disclose the two-stage design.
+- The unsupervised toolkit is complete. From here the course's remaining parts (survival analysis, multiple testing, LLMs) lean on it — and on everything Parts 0–8 drilled: this was the checklist chapter.

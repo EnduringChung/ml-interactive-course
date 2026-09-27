@@ -1,0 +1,402 @@
+---
+title: "6.2 Step Functions"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - statsmodels
+    - scikit-learn
+    - matplotlib
+---
+
+The most local basis possible: cut the range of x into intervals and fit a separate constant to each. Step functions trade smoothness for robustness and interpretability — and make the *knots* (cutpoints) an explicit, debatable modeling decision instead of a hidden one.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+Choose cutpoints $c_1 < c_2 < \cdots < c_K$; build dummy columns $C_k(x) = \mathbb{1}(c_{k-1} < x \le c_k)$ (plus the intercept as the first cell's level, or all K cells with no intercept — the cell-means trick from [2.6](../part-02-linear-regression/02-6-categorical-predictors.qmd)). OLS on these columns fits the *mean of y within each bin*:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+n = 150
+x = np.sort(rng.uniform(0, 10, n))
+y = np.sin(1.5 * x) + rng.normal(0, 0.5, n)
+df = pd.DataFrame({"x": x, "y": y})
+
+df["bin"] = pd.cut(df["x"], bins=[0, 2.5, 5, 7.5, 10], include_lowest=True)
+fit = smf.ols("y ~ C(bin)", data=df).fit()
+
+fig, ax = plt.subplots(figsize=(7, 3.4))
+ax.scatter(x, y, s=14, alpha=0.5)
+xg = np.linspace(0, 10, 400)
+grid = pd.DataFrame({"x": xg})
+grid["bin"] = pd.cut(grid["x"], bins=[0, 2.5, 5, 7.5, 10], include_lowest=True)
+ax.plot(xg, fit.predict(grid), color="red", lw=2.5)
+ax.set(xlabel="x", ylabel="y", title="Step function: the mean of each bin")
+plt.show()
+```
+
+Bins as features in a *predictive* pipeline (with CV choosing the resolution):
+
+```{pyodide}
+import numpy as np
+from sklearn.preprocessing import KBinsDiscretizer, StandardScaler
+from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import cross_val_score, KFold
+
+rng = np.random.default_rng(1)
+x = rng.uniform(0, 10, 150)
+y = np.sin(1.5 * x) + rng.normal(0, 0.5, 150)
+cv = KFold(5, shuffle=True, random_state=2)
+
+for n_bins in [2, 4, 8, 16]:
+    pipe = make_pipeline(KBinsDiscretizer(n_bins=n_bins, encode="onehot",
+                                          strategy="uniform"),
+                         LinearRegression())
+    mse = -cross_val_score(pipe, x.reshape(-1, 1), y, cv=cv,
+                           scoring="neg_mean_squared_error").mean()
+    print(f"{n_bins:>2} bins: CV MSE = {mse:.3f}")
+```
+
+## 2. Concept Questions
+
+1. More bins = more flexibility. What are the two failure modes at K → ∞ and K = 1?
+2. Uniform-width vs quantile bins: when does each starve?
+3. Where do discontinuities come from, and when is a discontinuous model *the right answer* (name two real settings)?
+4. Your step fit jumps at x = 5 but the scatter looks smooth there. What made the jump, and which alternative basis would remove it?
+5. How does the step function's bias behave *within* a bin, and why is it worst exactly where the true curve is steepest?
+
+<details>
+<summary>Answers</summary>
+
+1. K → ∞: one observation per bin — the fit interpolates noise (zero bias, maximal variance; the k = 1 KNN of regression). K = 1: the global mean — maximal bias. Between them, the same U-curve as always.
+2. Uniform bins starve where data is sparse (tails: bins with 2 points produce wild constants) and waste bins where data is dense; quantile bins equalize counts (stable constants) but let bin *widths* vary wildly, so the x-resolution is uneven. Match the strategy to the design: uniform for even designs, quantile for skewed designs.
+3. From the basis's own discontinuity at each cutpoint — the model *cannot* be smooth there. Right answer when the world genuinely steps: drug dosing tiers, tax brackets, age-risk categories, tissue types along an anatomical boundary.
+4. The jump is bin-boundary arithmetic (adjacent constants straddling a steep true slope differ by slope × width) — not found structure. Continuous bases ([6.4](06-4-regression-splines.qmd)) trade away the discontinuity.
+5. The constant equals the bin's mean of f — bias at x is f(x) minus that mean: zero at the bin's "center of mass," growing toward the edges, maximal where |f′| is large (steep regions sweep across more f-values per bin).
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+import pandas as pd
+x = np.array([0.5, 2.0, 3.9, 5.1, 7.8])
+b = pd.cut(x, bins=[0, 2, 4, 6, 8], include_lowest=True)
+print(b.astype(str).tolist())
+print(pd.get_dummies(b, dtype=int).to_dict("list"))
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(3)
+x = rng.uniform(0, 10, 1000)
+y = np.sin(1.5 * x) + rng.normal(0, 0.5, 1000)
+# within-bin bias concentrated where |f'| is large
+for lo, hi in [(0, 2), (2, 4), (4, 6)]:
+    m = (x >= lo) & (x < hi)
+    approx = y[m].mean()
+    xs = np.linspace(lo, hi, 200)
+    truth = np.sin(1.5 * xs)
+    print(f"bin [{lo},{hi}): max |bias| = {np.abs(truth - y[m].mean()).max():.3f}")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.preprocessing import KBinsDiscretizer
+rng = np.random.default_rng(4)
+x = rng.lognormal(0, 1, 1000)                # skewed
+u = KBinsDiscretizer(n_bins=4, encode="ordinal", strategy="uniform").fit_transform(x.reshape(-1, 1))
+q = KBinsDiscretizer(n_bins=4, encode="ordinal", strategy="quantile").fit_transform(x.reshape(-1, 1))
+import collections
+print("uniform bin counts:  ", collections.Counter(u.ravel().astype(int)))
+print("quantile bin counts: ", collections.Counter(q.ravel().astype(int)))
+```
+
+```{pyodide}
+import numpy as np
+# a true step: threshold effect at x = 5 — the basis's home game
+rng = np.random.default_rng(5)
+x = rng.uniform(0, 10, 200)
+y = np.where(x < 5, 1.0, 3.0) + rng.normal(0, 0.5, 200)
+from sklearn.preprocessing import KBinsDiscretizer
+from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import train_test_split
+X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y, random_state=6)
+m = make_pipeline(KBinsDiscretizer(n_bins=5, encode="onehot", strategy="uniform"),
+                  LinearRegression()).fit(X_tr, y_tr)
+print("test MSE on a true step:", round(float(np.mean((y_te - m.predict(X_te))**2)), 4))
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Piecewise-constant vs piecewise-linear: fit (a) 5-bin step function, (b) 5-bin *piecewise-linear* (bins + bin×x interaction within each bin — implement via `KBinsDiscretizer` + manual within-bin centering), on the sinusoid. Compare CV MSE and plot both. Which basis removes the edge bias without adding discontinuities *within* bins, and what's the cost?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.preprocessing import KBinsDiscretizer, StandardScaler
+from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.model_selection import cross_val_score, KFold
+
+class WithinBinSlope(BaseEstimator, TransformerMixin):
+    """Bin membership + (x - bin mean) interaction: piecewise-linear basis."""
+    def __init__(self, n_bins=5):
+        self.n_bins = n_bins
+    def fit(self, X, y=None):
+        d = KBinsDiscretizer(n_bins=self.n_bins, encode="ordinal",
+                             strategy="uniform").fit(X)
+        self.discretizer_ = d
+        self.bin_means_ = []
+        for k in range(self.n_bins):
+            self.bin_means_.append(X[d.transform(X).ravel() == k].mean())
+        return self
+    def transform(self, X):
+        b = self.discretizer_.transform(X).astype(int).ravel()
+        cols = np.zeros((len(X), self.n_bins * 2))
+        for k in range(self.n_bins):
+            m = b == k
+            cols[m, k] = 1
+            cols[m, self.n_bins + k] = X[m, 0] - self.bin_means_[k]
+        return cols
+
+rng = np.random.default_rng(7)
+x = rng.uniform(0, 10, 150)
+y = np.sin(1.5 * x) + rng.normal(0, 0.5, 150)
+cv = KFold(5, shuffle=True, random_state=8)
+
+for name, basis in [("5-bin step", KBinsDiscretizer(n_bins=5, encode="onehot", strategy="uniform")),
+                    ("5-bin piecewise-linear", WithinBinSlope(n_bins=5))]:
+    pipe = make_pipeline(basis, LinearRegression())
+    mse = -cross_val_score(pipe, x.reshape(-1, 1), y, cv=cv,
+                           scoring="neg_mean_squared_error").mean()
+    print(f"{name:24s} CV MSE = {mse:.3f}")
+```
+
+Adding (x − bin mean) within each bin upgrades constants to local lines: bias drops where the truth slopes, discontinuities at boundaries shrink (adjacent lines nearly meet), and the price is 2K parameters instead of K. This is, in fact, a crude linear spline — [6.4](06-4-regression-splines.qmd) does it with proper continuity.
+</details>
+
+**Exercise 2.** Quantile vs uniform under skewed x: x ~ lognormal, y = √x + noise. Compare 6-bin uniform vs quantile step fits by CV, *and* by worst-bin error (max |bias| over bins estimated on a dense grid). Explain the winner's mechanism, and state when the loser's strategy would flip to winning.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.preprocessing import KBinsDiscretizer
+from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(9)
+x = rng.lognormal(0, 1, 300)
+y = np.sqrt(x) + rng.normal(0, 0.4, 300)
+X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y, random_state=10)
+
+for strat in ["uniform", "quantile"]:
+    pipe = make_pipeline(KBinsDiscretizer(n_bins=6, encode="onehot", strategy=strat),
+                         LinearRegression()).fit(X_tr, y_tr)
+    mse = np.mean((y_te - pipe.predict(X_te))**2)
+    xg = np.linspace(0.01, x.max(), 4000)
+    yg = np.sqrt(xg)
+    approx = pipe.predict(xg.reshape(-1, 1))
+    worst = np.abs(yg - approx).max()
+    print(f"{strat:8s}: test MSE {mse:.3f}, worst-point error {worst:.3f}")
+```
+
+Quantile wins: lognormal x piles mass near 0, so uniform bins leave the extreme right tail with a handful of points (variance explosion) and the dense left region over-binned (wasted flexibility). Quantile bins equalize evidence per bin. The flip: if the *true function* bends most in the sparse tail, uniform bins' finer resolution out there can win — bin strategy should follow where the *curve* is interesting, not just where the *data* is dense.
+</details>
+
+**Exercise 3.** The threshold hunt: simulate a true jump at unknown t* (y = 1 + 2·1(x > t*) + noise, t* = 6.3). Estimate t* by fitting step functions on a fine grid of candidate cutpoints and choosing the cut whose two-cell fit minimizes RSS. Report the estimate over 200 simulations (bias, SD). Then explain why this is change-point detection, how it relates to the basis view, and what the inference caveat is for the chosen t̂*.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(11)
+estimates = []
+for rep in range(200):
+    x = np.sort(rng.uniform(0, 10, 120))
+    y = 1 + 2 * (x > 6.3) + rng.normal(0, 0.6, x.size)
+    grid = np.arange(0.5, 9.51, 0.1)
+    best_rss, best_t = np.inf, None
+    for t in grid:
+        pred = np.where(x <= t, y[x <= t].mean(), y[x > t].mean())
+        rss = np.sum((y - pred)**2)
+        if rss < best_rss:
+            best_rss, best_t = rss, t
+    estimates.append(best_t)
+estimates = np.array(estimates)
+print(f"t* = 6.3; mean estimate {estimates.mean():.2f}, SD {estimates.std():.2f}")
+```
+
+The grid-of-cells fit *is* a two-bin step model — change-point detection is basis selection with the cutpoint as hyperparameter. Caveat: t̂*'s sampling distribution is nonstandard (the cutpoint is a discrete argmin over candidate fits), so naive "±SE" statements about t̂* are unreliable; proper inference uses specialized change-point machinery, and reporting the estimate with a bootstrap distribution is the honest middle ground.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Cutpoint choice is a hyperparameter** — chosen on validation data, never by staring at the scatter ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)); bins chosen from the full data then CV'd leak (the [0.5](../part-00-python-foundations/00-5-data-splitting.qmd) law, again).
+- **`pd.cut` on test data with bins from training** — freeze the edges: use `KBinsDiscretizer` fitted in-pipeline, or carry `pd.cut(..., bins=frozen_edges)`; re-deriving quantiles on new data silently changes the basis.
+- **Edge handling**: `include_lowest=True` for the left edge; decide explicitly whether bins are (lo, hi]; off-by-one rows at boundaries are classic.
+- **Empty or tiny bins** produce unstable constants; enforce a minimum bin count (quantile strategy + `n_bins` sanity) or merge cells.
+- **Trees are adaptive step functions** ([Part 7](../part-07-trees-ensembles/07-1-decision-trees.qmd)): they choose cutpoints from the data by RSS reduction — the machinery this page builds by hand, automated and greedy.
+- **Dose responses and policy bands** are genuinely discontinuous; forcing a smooth basis there *underfits the phenomenon* — mismatched smoothness is a modeling error in both directions.
+
+### Read & Refactor AI Code
+
+This AI-generated binner has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(12)
+x = rng.uniform(0, 10, 300)
+y = np.sin(1.5 * x) + rng.normal(0, 0.5, 300)
+X_tr, X_te, y_tr, y_te = train_test_split(x, y, random_state=13)
+
+# BUG 1: quantile edges re-derived on train and test separately
+edges_tr = np.quantile(X_tr, [0, .25, .5, .75, 1])
+edges_te = np.quantile(X_te, [0, .25, .5, .75, 1])
+def encode(Xv, edges):
+    return np.column_stack([(Xv > e).astype(float) for e in edges[:-1]])
+m = LinearRegression().fit(encode(X_tr, edges_tr), y_tr)
+print("test MSE:", round(float(np.mean((y_te - m.predict(encode(X_te, edges_te)))**2)), 3))
+
+# BUG 2: cumulative-threshold dummies WITH intercept (near-dummy-trap)
+dum = np.column_stack([(X_tr > e).astype(float) for e in edges_tr[1:]])
+m2 = LinearRegression(fit_intercept=True).fit(dum, y_tr)
+print("coefficients:", m2.coef_.round(3))
+
+# BUG 3: predicting with pd.cut edges from train quantiles on new data
+def predict_bad(x_new):
+    b = pd.cut(x_new, bins=edges_tr, include_lowest=True)
+    return b
+print(predict_bad(np.array([11.0])))
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Edges re-derived per split**: train and test are binned by *different* boundaries — the feature spaces differ; quantile edges must be frozen from training (that's what `KBinsDiscretizer.fit` stores).
+2. **Cumulative dummies + intercept**: indicators (x > e) are nested, and with an intercept the design is rank-deficient-ish (full redundancy at the outer cells); interpretability collapses. Use interval dummies (one per bin, drop-first or cell-means).
+3. **New data outside the training range**: `pd.cut` returns NaN for x = 11 — a silent production crash. Clip, extend the edge bin, or refuse explicitly.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.preprocessing import KBinsDiscretizer
+from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(12)
+x = rng.uniform(0, 10, 300)
+y = np.sin(1.5 * x) + rng.normal(0, 0.5, 300)
+X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y, random_state=13)
+
+pipe = make_pipeline(KBinsDiscretizer(n_bins=4, encode="onehot",
+                                      strategy="quantile"),
+                     LinearRegression()).fit(X_tr, y_tr)
+print("test MSE:", round(float(np.mean((y_te - pipe.predict(X_te))**2)), 3))
+xg = np.clip(np.array([11.0]), X_tr.min(), X_tr.max()).reshape(-1, 1)
+print("clipped prediction at 11.0:", pipe.predict(xg).round(3))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Derive the step-function fit explicitly: with K cells and cell-means parameterization, show the OLS solution assigns each cell its sample mean, that the hat matrix is block-constant, and that tr(H) = K. Then prove the within-bin bias identity: E[μ̂_k] − f(x) = f̄_k − f(x) for x in cell k, and show the integrated bias² over a bin equals the variance of f within the bin (exactly the quantity minimized by optimal binning around steep regions).
+
+<details>
+<summary>Hint</summary>
+
+Cell dummies are disjoint indicators; each cell's normal equation decouples (the [2.6 Q1](../part-02-linear-regression/02-6-categorical-predictors.qmd) argument, geometrically). For the bias: integrate (f̄_k − f(x))² over the bin.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Each row of the design has exactly one 1, so the normal equations decouple per cell: μ̂_k = mean of y in cell k, H is block-diagonal with (1/nₖ) blocks — tr(H) = K effective parameters. Bias at x ∈ cell k: E[μ̂_k] = f̄_k (mean of f over the cell under uniform-x), so bias = f̄_k − f(x); integrating its square over the bin gives ∫(f − f̄_k)²dx = nₖ·Var_bin(f) — the bin's internal variance of the true function. Hence optimal bins concentrate boundaries where f′ is large: equalize *f-variance*, not point counts (the refined version of Exercise 2's moral).
+</details>
+
+**Q2.** Step functions as the t = 0 limit of trees, and the CV consistency question: implement a one-split "stump" fit (threshold chosen to minimize RSS) on the sinusoid; compare its CV MSE against the best 5-bin step model. Then simulate 200 datasets: how often does the stump's chosen threshold fall within ±0.2 of the bin boundary with the smallest within-bin bias? What does the answer say about data-driven cutpoints as *estimators* — consistent, noisy, or both?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(14)
+best_thresholds, stump_mses, step_mses = [], [], []
+for rep in range(200):
+    x = np.sort(rng.uniform(0, 10, 120))
+    y = np.sin(1.5 * x) + rng.normal(0, 0.5, 120)
+    grid = np.arange(0.5, 9.51, 0.1)
+    best_rss, best_t = np.inf, None
+    for t in grid:
+        pred = np.where(x <= t, y[x <= t].mean(), y[x > t].mean())
+        rss = np.sum((y - pred)**2)
+        if rss < best_rss:
+            best_rss, best_t = rss, t
+    best_thresholds.append(best_t)
+
+    # best fixed 5-bin step fit's implied boundary quality
+    stump_pred = np.where(x <= best_t, y[x <= best_t].mean(), y[x > best_t].mean())
+    stump_mses.append(np.mean((y - stump_pred)**2))
+    bins = np.digitize(x, [2.5, 5, 7.5])
+    means = [y[bins == k].mean() for k in range(4)]
+    step_pred = np.array(means)[bins]
+    step_mses.append(np.mean((y - step_pred)**2))
+
+print(f"stump threshold: mean {np.mean(best_thresholds):.2f}, SD {np.std(best_thresholds):.2f}")
+print(f"train MSE stump {np.mean(stump_mses):.4f} vs 5-bin step {np.mean(step_mses):.4f}")
+```
+
+The stump's threshold estimate has SD ≈ 0.4–0.6 at n = 120 — *noisy*: single cutpoints are unstable estimators (the reason random forests average many trees' cuts, Part 7). Meanwhile its 2-cell train MSE beats the fixed 5-bin fit because it's chosen *for* this dataset — in-sample selection flattery again. Cutpoints are consistent only in that they concentrate near the steepest region; they are emphatically not stable point estimates, and any narrative built on a specific estimated threshold needs uncertainty attached (Exercise 3's bootstrap).
+</details>
+
+## 6. Complex Questions
+
+**C1 (steps × [2.6 categorical](../part-02-linear-regression/02-6-categorical-predictors.qmd) × [2.7 interaction](../part-02-linear-regression/02-7-interaction-terms.qmd)).** Two-group step surfaces: y depends on x through different step patterns per group. Fit (a) pooled bins, (b) bins + group, (c) bins + group + bin×group, comparing CV MSE. When does (c) beat (b), and what does the bin×group interaction matrix look like (the subgroup version of cell means)? Connect to how decision trees grow group-specific splits ([7.1](../part-07-trees-ensembles/07-1-decision-trees.qmd)).
+
+**C2 (steps × [4.4 bias–variance](../part-04-validation-model-selection/04-4-bias-variance.qmd)).** Decompose the K-bin step estimator's error across K (protocol of [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd), 300 training sets, n = 40): bias², variance, and total. Verify: variance ≈ K·σ²/n-scaled, bias² tracking the integrated f-variance within bins (Q1's identity). Then overlay the same three curves for piecewise-linear bins ([Exercise 1](#)) and state the K-vs-basis trade in one sentence.
+
+## 7. Summary
+
+- Step functions = dummies over intervals: maximal locality, minimal smoothness, K effective parameters.
+- Cutpoints are hyperparameters (frozen from training, chosen by CV); quantile vs uniform is an evidence-distribution decision.
+- Bias concentrates within bins in steep regions — the f-variance identity tells you where the basis hurts.
+- Discontinuities are basis artifacts unless the world truly steps (doses, brackets, boundaries).
+- One-split stumps are adaptive step functions — unstable cutpoints, the seed of Part 7's trees.
+- Adding within-bin slopes fixes edge bias cheaply — the segue to proper splines.
+- Continuous local bases with enforced smoothness: [6.3 Basis functions](06-3-basis-functions.qmd) generalizes, [6.4 Regression splines](06-4-regression-splines.qmd) perfects it.

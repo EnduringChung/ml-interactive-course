@@ -1,9 +1,438 @@
 ---
-title: "Coming soon"
+title: "9.3 Missing Values & Matrix Completion"
 tier: 1
 engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - scikit-learn
+    - matplotlib
 ---
 
-This page has not been published yet. It is scheduled in the [build order](/index.qmd) and will follow the same seven-section template as every other page.
+Real data has holes: dropped measurements, failed assays, unanswered questions. What you do with them is a *modeling decision* — delete cases, fill with means, model the missingness, or exploit low-rank structure — and each choice encodes an assumption about *why* the values are missing. This page builds the taxonomy and the toolkit.
 
-Check back soon — progress is tracked in the [course home](/index.qmd).
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+The missingness taxonomy (Rubin):
+
+- **MCAR** — missing completely at random: the hole is independent of everything (a scanner glitch).
+- **MAR** — missing at random: the hole depends on *observed* variables only (young patients skip a costly scan).
+- **MNAR** — missing depends on the *missing value itself* (the sickest patients' values are unmeasurable).
+
+The mechanism determines the remedy: deletion is unbiased only under MCAR; imputation models must capture MAR dependencies; MNAR needs explicit missingness modeling (or honesty about limits).
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+n = 300
+x = rng.normal(0, 1, n)
+y = 2 * x + rng.normal(0, 1, n)
+m_mcar = rng.uniform(0, 1, n) < .3
+m_mnar = (y > np.quantile(y, .7))                 # missing the LARGE y
+
+fig, axes = plt.subplots(1, 2, figsize=(7, 3))
+axes[0].scatter(x[m_mcar], y[m_mcar], s=10, color="gray", label="missing")
+axes[0].scatter(x[~m_mcar], y[~m_mcar], s=10, label="observed")
+axes[0].set_title("MCAR: observed = unbiased sample")
+axes[1].scatter(x[m_mnar], y[m_mnar], s=10, color="gray")
+axes[1].scatter(x[~m_mnar], y[~m_mnar], s=10)
+axes[1].set_title("MNAR: observed is biased (big y hidden)")
+for ax in axes:
+    ax.set(xlabel="x", ylabel="y")
+fig.tight_layout()
+plt.show()
+print("same hole rate; opposite inferential consequences")
+```
+
+The basic toolkit on one matrix:
+
+```{pyodide}
+import numpy as np
+import pandas as pd
+from sklearn.impute import SimpleImputer, KNNImputer
+
+rng = np.random.default_rng(1)
+X = rng.normal(0, 1, (100, 4))
+X[:, 1] = X[:, 0] + rng.normal(0, .3, 100)        # correlated pair
+mask = rng.uniform(0, 1, X.shape) < .15
+Xm = X.copy(); Xm[mask] = np.nan
+
+mean_imp = SimpleImputer(strategy="mean").fit_transform(Xm)
+knn_imp = KNNImputer(n_neighbors=5).fit_transform(Xm)
+
+true_vals = X[mask]
+err_mean = np.abs(mean_imp[mask] - true_vals).mean()
+err_knn = np.abs(knn_imp[mask] - true_vals).mean()
+print(f"mean imputation MAE: {err_mean:.3f}  (ignores correlation)")
+print(f"knn  imputation MAE: {err_knn:.3f}  (uses the correlated twin)")
+```
+
+## 2. Concept Questions
+
+1. Complete-case (listwise) deletion: under which mechanism is it unbiased, what does it cost even then, and when is it catastrophic?
+2. Mean imputation's two distinct sins — one statistical (variance), one geometric (for distances/clustering)?
+3. KNN imputation: what structure does it exploit, and what happens to it as dimension grows ([2.9](../part-02-linear-regression/02-9-knn-regression.qmd))?
+4. Why is "impute, then treat imputed values as real" in downstream inference dishonest — and what's the standard fix's name?
+5. A recommender-style matrix (users × items) is 98% missing. Which paradigm applies, and why is this *not* an imputation problem in the usual sense?
+
+<details>
+<summary>Answers</summary>
+
+1. Unbiased under MCAR only. Cost even then: smaller n and wider SEs — you paid data for holes. Catastrophic under MAR/MNAR with systematic missingness (e.g., all severe cases missing one assay): the "complete" sample is a biased population ([1.1](../part-01-statistics-bridge/01-1-descriptive-statistics.qmd)'s summary trap, dataset edition).
+2. Statistical: imputed values are the mean — zero deviation — so variances/correlations shrink toward 0 (n identical contributions). Geometric: every imputed row sits exactly on the mean-point, corrupting distances and cluster structure ([9.1](09-1-unsupervised-mindset.qmd)'s geometry law).
+3. It exploits *local correlation structure*: a missing value is filled from similar rows' values — works while neighbors are informative; under high dimension, neighborhoods blow up and "nearest" becomes meaningless (curse of dimensionality, [2.9](../part-02-linear-regression/02-9-knn-regression.qmd)).
+4. Imputed entries are *guesses with model-derived uncertainty*; treating them as observations understates every SE and overstates every p-value — the imputation model's uncertainty must propagate. The classical fix: multiple imputation (Rubin) — draw several imputations, analyze each, pool with Rubin's rules. (Modern shortcut: models that treat missingness natively, [7.6](../part-07-trees-ensembles/07-6-modern-boosting.qmd).)
+5. Low-rank matrix completion (Netflix problem): the matrix's *rank structure* (users × items have few latent factors) makes recovery possible from sparse entries — the goal is predicting held-out entries, not filling a covariate matrix for a model. Different objective, different machinery (SVD-based, [Exercise 3](#)).
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+import pandas as pd
+df = pd.DataFrame({"a": [1.0, np.nan, 3.0, np.nan],
+                   "b": [5.0, 6.0, np.nan, 8.0],
+                   "c": ["x", "y", "x", "y"]})
+print(df.isna().sum().to_dict())
+print("rows complete:", int(df.dropna().shape[0]), "of", len(df))
+```
+
+```{pyodide}
+import numpy as np
+# mean imputation shrinks variance: witnessed
+rng = np.random.default_rng(2)
+x = rng.normal(0, 1, 200)
+xm = x.copy(); xm[rng.uniform(0, 1, 200) < .4] = np.nan
+filled = np.where(np.isnan(xm), np.nanmean(xm), xm)
+print(f"variance before: {x.var():.3f}")
+print(f"variance after mean-impute: {filled.var():.3f} (40% of values pinned at 0-deviation)")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.impute import KNNImputer
+rng = np.random.default_rng(3)
+X = rng.normal(0, 1, (100, 2))
+X[:, 1] = X[:, 0] + rng.normal(0, .2, 100)
+Xm = X.copy(); Xm[:20, 1] = np.nan
+imp = KNNImputer(n_neighbors=3).fit_transform(Xm)
+true_missing = X[:20, 1]
+mae = np.abs(imp[:20, 1] - true_missing).mean()
+print(f"KNN imputation MAE on correlated twin: {mae:.3f} "
+      f"(x2's own SD ≈ {X[:, 1].std():.2f})")
+```
+
+```{pyodide}
+import numpy as np
+# missingness INDICATOR as a feature: sometimes the hole is the signal
+rng = np.random.default_rng(4)
+n = 300
+x = rng.normal(0, 1, n)
+miss = (rng.uniform(0, 1, n) < (x > 0) * .8).astype(int)   # missing depends on x!
+x_filled = np.where(miss.astype(bool), 0.0, x)
+design = np.c_[x_filled, miss]                  # value + indicator
+print("indicator corr with x:", round(float(np.corrcoef(miss, x)[0, 1]), 3),
+      " <- the hole encodes the value")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Deletion vs imputation under three mechanisms: build y = 2x + ε and censor x (30%) under MCAR, MAR (missing when another observed variable z > 0), and MNAR (missing when |x| large). For each: fit OLS on complete cases and on mean-imputed data; compare slope estimates to truth. Which mechanism breaks deletion? Which breaks naive imputation *worse*? Write the decision rule.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(5)
+results = {}
+for mech in ["MCAR", "MAR", "MNAR"]:
+    n = 400
+    z = rng.normal(0, 1, n)
+    x = rng.normal(0, 1, n)
+    y = 2 * x + rng.normal(0, 1, n)
+    if mech == "MCAR":
+        miss = rng.uniform(0, 1, n) < .3
+    elif mech == "MAR":
+        miss = (z > 0) & (rng.uniform(0, 1, n) < .6)
+    else:
+        miss = np.abs(x) > 1
+    Xd = np.c_[x, z]
+    complete = ~miss
+    slope_cc = np.polyfit(Xd[complete, 0], y[complete], 1)[0]
+    x_filled = np.where(miss, x[~miss].mean(), x)
+    slope_mi = np.polyfit(x_filled, y, 1)[0]
+    results[mech] = (slope_cc, slope_mi)
+
+print("mechanism: complete-case slope | mean-imputed slope  (truth 2.0)")
+for mech, (s_cc, s_mi) in results.items():
+    print(f"{mech:5s}: {s_cc:8.3f} | {s_mi:8.3f}")
+```
+
+Reading: deletion is fine under MCAR, *biased under MAR* (dropping by z distorts x's range) and MNAR; naive mean-imputation is acceptable-ish under MCAR, but under MNAR it *fabricates* average-x values for exactly the extreme cases — often the worse distortion. Decision rule: diagnose the mechanism first (is missingness related to observed data? to itself?); delete freely only under MCAR; under MAR use imputation that models the observed-data dependencies; under MNAR, no mechanical fix — model the missingness explicitly or report the limitation.
+</details>
+
+**Exercise 2.** KNNImputer vs IterativeImputer on structured data: build a 4-feature matrix with two correlated pairs (x₂ ≈ x₁ + noise; x₄ ≈ −x₃ + noise) and 20% MCAR holes. Compare fill quality (MAE on held-out true values) for mean, KNN (k ∈ {2, 5, 15}), and IterativeImputer (round-robin regression). Which wins, and what data property does its win exploit?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.impute import SimpleImputer, KNNImputer
+from sklearn.experimental import enable_iterative_imputer  # noqa
+from sklearn.impute import IterativeImputer
+
+rng = np.random.default_rng(9)
+n = 400
+X = rng.normal(0, 1, (n, 4))
+X[:, 1] = X[:, 0] + rng.normal(0, .25, n)
+X[:, 3] = -X[:, 2] + rng.normal(0, .25, n)
+mask = rng.uniform(0, 1, X.shape) < .2
+Xm = X.copy(); Xm[mask] = np.nan
+
+true_vals = X[mask]
+def mae(filled):
+    return np.abs(filled[mask] - true_vals).mean()
+
+print(f"mean:  {mae(SimpleImputer().fit_transform(Xm)):.3f}")
+for k in [2, 5, 15]:
+    print(f"knn{k:>3}:  {mae(KNNImputer(n_neighbors=k).fit_transform(Xm)):.3f}")
+it = IterativeImputer(random_state=0, max_iter=20).fit_transform(Xm)
+print(f"iter:  {mae(it):.3f}")
+```
+
+Iterative (and small-k KNN) win by exploiting the pairwise correlation structure — each imputation is a mini-regression on the other features, exactly what the correlated pairs make learnable. Large k blurs toward the mean; the mean ignores structure entirely. The property exploited: *conditional correlation among observed features* — the more structure your matrix has, the more sophisticated imputation pays.
+</details>
+
+**Exercise 3.** Low-rank matrix completion by alternating SVD: build a ratings-like matrix with true rank 3 (users × items via 3 latent factors), mask 80% at random. Implement iterative SVD completion: initialize missing entries with the matrix mean; repeat {SVD at rank 3, replace missing entries with reconstruction} until convergence. Report recovery error on held-out entries vs the mean-fill baseline. Then verify the impossibility intuition: rerun on a full-rank (random) matrix — recovery collapses.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(10)
+n_users, n_items, rank = 60, 40, 3
+U = rng.normal(0, 1, (n_users, rank))
+V = rng.normal(0, 1, (n_items, rank))
+M_true = U @ V.T
+
+mask_obs = rng.uniform(0, 1, M_true.shape) < .2      # 20% observed
+M_obs = np.where(mask_obs, M_true, np.nan)
+
+def complete_lowrank(M_obs, r=3, iters=200):
+    M = np.where(np.isnan(M_obs), np.nanmean(M_obs), M_obs)
+    for _ in range(iters):
+        U, S, Vt = np.linalg.svd(M, full_matrices=False)
+        M_r = (U[:, :r] * S[:r]) @ Vt[:r]
+        M = np.where(np.isnan(M_obs), M_r, M_obs)     # re-pin observed entries
+    return M
+
+test = ~mask_obs
+filled = complete_lowrank(M_obs)
+rmse_lowrank = np.sqrt(np.mean((filled[test] - M_true[test])**2))
+mean_fill = np.nanmean(M_obs)
+rmse_mean = np.sqrt(np.mean(((np.where(np.isnan(M_obs), mean_fill, M_obs))[test]
+                             - M_true[test])**2))
+print(f"low-rank completion RMSE: {rmse_lowrank:.3f}")
+print(f"mean-fill RMSE:           {rmse_mean:.3f}")
+
+# full-rank control
+M_rand = rng.normal(0, 1, M_true.shape)
+M_obs_rand = np.where(mask_obs, M_rand, np.nan)
+filled_rand = complete_lowrank(M_obs_rand)
+rmse_rand = np.sqrt(np.mean((filled_rand[test] - M_rand[test])**2))
+print(f"full-rank matrix RMSE:    {rmse_rand:.3f}  <- structure-free: no recovery")
+```
+
+The alternation works because a low-rank matrix is determined by far fewer entries than it contains — the SVD projection strips noise from the *guessed* entries and the observed entries anchor the truth, iterating toward consistency. Random matrices have no such compression: completion is impossible, and the algorithm honestly fails. This is the Netflix-problem paradigm: recovery from structure, not imputation from covariates.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Diagnose before treating**: build missingness indicators and test them against everything observed (chi-square/logistic) — discovered structure means MAR and exploitable signal; undiagnosed MNAR silently biases everything downstream ([1.4](../part-01-statistics-bridge/01-4-statistical-inference.qmd)'s assumption discipline).
+- **The missingness indicator trick** (drill 4): adding "was-missing" as a feature lets tree/boosting models use the pattern — legitimate under MAR-ish mechanisms, and standard practice in Kaggle-grade pipelines; but it *assumes* the pattern is informative, which MNAR can violate subtly.
+- **Impute inside pipelines**: imputers are fitted statistics (means, neighbor structure, regression coefficients) — fit per fold, transform test ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd) law); fitting the imputer on all data leaks.
+- **Dropping columns with high missingness** is also a modeling decision: threshold-based dropping (">40% missing → drop") is arbitrary unless tied to mechanism reasoning; a column that's missing *because of the outcome* is informative, not broken.
+- **sklearn's `IterativeImputer` is experimental** (`enable_iterative_imputer` import) — it's MICE-flavored; still single-imputation: uncertainty propagation needs multiple draws (or a native-NaN model like [7.6](../part-07-trees-ensembles/07-6-modern-boosting.qmd)'s boosters).
+- **Matrix completion ≠ imputation**: completion predicts held-out *entries* of one big low-rank matrix (no response variable); imputation fills *covariates* for downstream models. Choose by what the filled values are for.
+
+### Read & Refactor AI Code
+
+This AI-generated imputation pipeline has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.impute import SimpleImputer
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+
+rng = np.random.default_rng(11)
+n = 400
+X = rng.normal(0, 1, (n, 5))
+y = (X[:, 0] + rng.normal(0, 1, n) > 0).astype(int)
+X[rng.uniform(0, 1, X.shape) < .2] = np.nan
+
+# BUG 1: imputer fit on ALL data before split
+imp = SimpleImputer(strategy="mean").fit(X)
+Xf = imp.transform(X)
+X_tr, X_te, y_tr, y_te = train_test_split(Xf, y, random_state=12)
+acc = LogisticRegression(max_iter=3000).fit(X_tr, y_tr).score(X_te, y_te)
+print("accuracy:", round(acc, 3))
+
+# BUG 2: median-impute then CLUSTER (geometry destroyed silently)
+from sklearn.cluster import KMeans
+km = KMeans(3, n_init=10, random_state=0).fit(imp.transform(X))
+print("cluster sizes:", np.bincount(km.labels_).tolist())
+
+# BUG 3: dropped a 45%-missing column without asking why
+print("dropped column was missing mostly for y==1 -> 'it was too empty'")
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Imputer fit before split**: means/structure from test rows entered training — leakage ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd)). Imputer inside the pipeline.
+2. **Mean-impute-then-cluster**: imputed rows sit at the mean point, corrupting distances and fabricating a "central" mega-cluster ([Concept 2b](#)); use KNN-imputation, native-NaN models, or missingness-aware clustering.
+3. **Dropped informative column**: missingness correlated with y is *signal* — dropping it discards mechanism information; keep it with an indicator, or model the mechanism ([drill 4](#)).
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.impute import KNNImputer
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+
+rng = np.random.default_rng(11)
+n = 400
+X = rng.normal(0, 1, (n, 5))
+y = (X[:, 0] + rng.normal(0, 1, n) > 0).astype(int)
+X[rng.uniform(0, 1, X.shape) < .2] = np.nan
+
+pipe = make_pipeline(KNNImputer(n_neighbors=5), StandardScaler(),
+                     LogisticRegression(max_iter=3000))
+cv = StratifiedKFold(5, shuffle=True, random_state=0)
+acc = cross_val_score(pipe, X, y, cv=cv).mean()
+print("pipeline-imputed CV accuracy:", round(acc, 3),
+      "(imputer refit inside every fold)")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Prove mean-imputation's variance shrinkage: for x with variance σ² and fraction p missing-at-random imputed with x̄, the imputed vector's variance is (1−p)σ² (+ a p(1−p)x̄-level correction of order 1/n). Verify by simulation across p ∈ {0, .25, .5, .75}, and derive the same shrinkage for correlations between two independently-imputed columns. What does this imply for downstream PCA/clustering on naively imputed matrices?
+
+<details>
+<summary>Hint</summary>
+
+Imputed entries contribute zero deviation from the mean by construction; compute Var = (1/n)Σ(observed deviations² + p·0²).
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Imputed entries equal x̄ exactly, so Σ(xᵢ − x̄)² accumulates only over the (1−p)n observed rows: Var ≈ (1−p)σ² (exactly, for MCAR, in expectation). For two columns independently imputed, imputed positions are mean-valued in both — cross-products with imputed rows contribute 0 in deviation — correlations shrink toward 0 similarly. Simulation:
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(18)
+for p in [0, .25, .5, .75]:
+    n = 5000
+    x = rng.normal(0, 1, n)
+    z = 0.8 * x + rng.normal(0, .6, n)
+    miss_x = rng.uniform(0, 1, n) < p
+    miss_z = rng.uniform(0, 1, n) < p
+    xf = np.where(miss_x, x[~miss_x].mean(), x)
+    zf = np.where(miss_z, z[~miss_z].mean(), z)
+    print(f"p={p:.2f}: Var(x) = {xf.var():.3f} (true 1.0), "
+          f"corr(x,z) = {np.corrcoef(xf, zf)[0,1]:.3f} (true ~0.8)")
+```
+
+Downstream consequence: naively mean-imputed matrices show shrunken variances and correlations — PCA underestimates structure, clusters blur toward the centroid, loadings flatten ([9.2](09-2-principal-component-analysis.qmd)). Every structure-seeking method sees a *demorphosed* world; the fix is uncertainty-aware imputation or methods treating missingness natively.
+</details>
+
+**Q2.** Missingness-forest vs MICE-style imputation on MAR data: simulate MAR missingness (probability of missing x₁ increases with observed x₂) with x₁ genuinely needed downstream; compare (a) KNN/Iterative imputation then logistic, (b) HistGradientBoosting with native NaN ([7.6](../part-07-trees-ensembles/07-6-modern-boosting.qmd)), (c) mean-impute + missingness-indicator logistic. Report downstream test accuracy/AUC. Which approach captures the MAR information, and what does the native-NaN win tell you about where imputation models *actually* earn their keep?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.experimental import enable_iterative_imputer  # noqa
+from sklearn.impute import KNNImputer, IterativeImputer, SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+
+rng = np.random.default_rng(19)
+n = 600
+x2 = rng.normal(0, 1, n)
+x1 = 0.7 * x2 + rng.normal(0, 1, n)
+logit = 2.0 * x1 - x2
+y = (rng.uniform(0, 1, n) < 1 / (1 + np.exp(-logit))).astype(int)
+p_miss = 1 / (1 + np.exp(-(1.5 * x2 - 1)))         # MAR: depends on observed x2
+X = np.c_[x1, x2]
+miss = rng.uniform(0, 1, n) < p_miss
+X[miss, 0] = np.nan
+cv = StratifiedKFold(5, shuffle=True, random_state=0)
+
+models = {
+    "KNN imp + logit": make_pipeline(KNNImputer(n_neighbors=5), StandardScaler(),
+                                     LogisticRegression(max_iter=3000)),
+    "Iter imp + logit": make_pipeline(IterativeImputer(random_state=0),
+                                      StandardScaler(),
+                                      LogisticRegression(max_iter=3000)),
+    "mean + indicator + logit": make_pipeline(SimpleImputer(add_indicator=True),
+                                              StandardScaler(),
+                                              LogisticRegression(max_iter=3000)),
+    "HistGB native NaN": HistGradientBoostingClassifier(max_iter=200,
+                                                        random_state=0),
+}
+for name, m in models.items():
+    auc = cross_val_score(m, X, y, cv=cv, scoring="roc_auc").mean()
+    print(f"{name:26s} AUC {auc:.4f}")
+```
+
+All imputation-and-indicator approaches capture most of the MAR information (the pattern is observable in x₂ and indicators); native-NaN boosting matches without maintaining an imputation model — its per-split missing-branch learns the pattern *where it matters for the decision*. The broader lesson: imputation models earn their keep by preserving the *joint structure* (correlations, mechanism) that the downstream task uses — when the downstream learner can ingest missingness natively and the pattern is simple, the elaborate imputer is optional; when inference (not prediction) is the goal, MICE-style multiple imputation remains the principled standard.
+</details>
+
+## 6. Complex Questions
+
+**C1 (missingness × [0.5 splitting](../part-00-python-foundations/00-5-data-splitting.qmd) × [4.6 tuning](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)).** The full missing-data pipeline audit: build a pipeline (imputer-choice tuned + model tuned) under 25% missingness; evaluate three protocol variants — (a) imputer fit on all data (leaky), (b) imputer per-fold (honest), (c) per-fold imputer *with imputation strategy also tuned* — by nested CV. Quantify each gap and write the audit checklist item that would have caught (a) in review.
+
+**C2 (missingness × [9.2 PCA](09-2-principal-component-analysis.qmd) × [5.6](../part-05-regularization-high-dimensions/05-6-high-dimensional.qmd)).** PCA of incomplete wide data: n = 150, p = 300, 30% MCAR. Compare (a) mean-impute → PCA, (b) IterativeImputer → PCA, (c) native low-rank completion → rank-3 scores, by recovery of the planted 3-factor structure (subspace angle to true loadings). Which preserves structure, which shrinks it (recall [Q1](#)'s variance shrinkage), and what does this imply for omics-style workflows where >50% of values are missing at low abundance?
+
+## 7. Summary
+
+- Missingness has mechanisms (MCAR/MAR/MNAR); the mechanism, not convenience, picks the remedy.
+- Deletion: unbiased only under MCAR, always costly; catastrophic under systematic missingness.
+- Mean imputation: shrinks variance and correlations, wrecks geometry — a placeholder, not a method.
+- KNN/Iterative imputers exploit observed-feature structure; fit them inside CV folds; uncertainty needs multiple imputation or native-NaN models.
+- Missingness indicators turn holes into features — legitimate when the pattern is informative; an assumption when it isn't.
+- Low-rank completion solves the sparse-matrix problem (Netflix) from rank structure — impossible without it.
+- Every choice here is a missingness-mechanism assumption — diagnose the holes before modeling them.
+- Structure found, holes filled — now partition it: [9.4 K-means clustering](09-4-k-means.qmd).

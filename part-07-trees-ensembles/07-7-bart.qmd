@@ -1,0 +1,429 @@
+---
+title: "7.7 Bayesian Additive Regression Trees (BART)"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scipy
+    - matplotlib
+---
+
+BART keeps boosting's "sum of small trees" architecture but replaces sequential greedy fitting with a **Bayesian posterior**: a prior over tree shapes and leaf values, MCMC sampling over the space of tree ensembles, and — the payoff — *honest uncertainty intervals* on predictions from a nonlinear, interaction-friendly model. No BART library runs in Pyodide, so this page builds the Bayesian machinery the model rests on, hands you the concepts, and flags where the production implementations live.
+
+> **Tier 1 — every cell below runs live** (the Bayesian core; the full BART sampler is conceptual).
+
+## 1. Basic Concept
+
+The BART model:
+
+$$y = \sum_{m=1}^M g(x; T_m, M_m) + \varepsilon, \qquad \varepsilon \sim N(0, \sigma^2)$$
+
+— M small trees (T = shape, M = leaf values) with a **regularizing prior**: shallow trees favored (deep splits penalized), leaf values shrunk toward 0, σ² given its own prior. Fitting = MCMC over (T₁…T_M, M₁…M_M, σ²), sampling tree grows/prunes/swaps and leaf draws.
+
+The Bayesian core you can run here: a **conjugate Bayesian linear model** — prior + likelihood → posterior → credible intervals. This is the identical inference object BART produces, just with a linear basis instead of trees:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+n = 40
+x = np.linspace(0, 1, n)
+X = np.c_[np.ones(n), x, np.sin(2 * np.pi * x)]      # a basis (here: chosen, in BART: trees)
+beta_true = np.array([0.5, 1.0, 2.0])
+y = X @ beta_true + rng.normal(0, 0.5, n)
+
+tau2, sigma2 = 4.0, 0.25                              # prior & noise variance
+prior_mean = np.zeros(3)
+post_cov = np.linalg.inv(X.T @ X / sigma2 + np.eye(3) / tau2)
+post_mean = post_cov @ (X.T @ y / sigma2 + prior_mean / tau2)
+
+post_sd = np.sqrt(np.diag(post_cov))
+xg = np.linspace(0, 1, 200)
+Xg = np.c_[np.ones(200), xg, np.sin(2 * np.pi * xg)]
+pred_mean = Xg @ post_mean
+pred_sd = np.sqrt(np.einsum("ij,jk,ik->i", Xg, post_cov, Xg))
+
+fig, ax = plt.subplots(figsize=(7, 3.4))
+ax.scatter(x, y, s=14, alpha=0.6, label="data")
+ax.plot(xg, pred_mean, "r-", lw=2, label="posterior mean")
+ax.fill_between(xg, pred_mean - 2 * pred_sd, pred_mean + 2 * pred_sd,
+                alpha=0.2, color="red", label="95% credible band")
+ax.plot(xg, Xg @ beta_true, "k--", lw=1, label="truth")
+ax.set(xlabel="x", ylabel="y", title="Bayesian fit: mean + credible band")
+ax.legend(fontsize=8)
+plt.show()
+print("posterior beta:", post_mean.round(3), "±", post_sd.round(3))
+```
+
+**Posterior sampling** — the MCMC connection — via direct draws from that conjugate posterior:
+
+```{pyodide}
+import numpy as np
+
+rng = np.random.default_rng(1)
+n = 40
+x = np.linspace(0, 1, n)
+X = np.c_[np.ones(n), x, np.sin(2 * np.pi * x)]
+y = X @ np.array([0.5, 1.0, 2.0]) + rng.normal(0, 0.5, n)
+tau2, sigma2 = 4.0, 0.25
+
+post_cov = np.linalg.inv(X.T @ X / sigma2 + np.eye(3) / tau2)
+post_mean = post_cov @ (X.T @ y / sigma2)
+
+draws = rng.multivariate_normal(post_mean, post_cov, size=2000)
+lo, hi = np.percentile(draws, [2.5, 97.5], axis=0)
+print("posterior draws per coefficient (2.5%, median, 97.5%):")
+for j, name in enumerate(["b0", "b1", "b2"]):
+    print(f"  {name}: {lo[j]:.3f}  {np.median(draws[:, j]):.3f}  {hi[j]:.3f}")
+print("-> in BART, these draws are over TREES: same Bayesian logic, richer basis")
+```
+
+## 2. Concept Questions
+
+1. What does BART's tree-shape prior (prefer shallow, shrink leaves) accomplish, in regularization language ([5.2](../part-05-regularization-high-dimensions/05-2-ridge-regression.qmd))?
+2. Contrast fitting: boosting finds *one* greedy sequential ensemble; BART samples *many* ensembles from a posterior. What does the second buy at prediction time?
+3. Why is BART's uncertainty interval meaningfully different from a bootstrap band ([4.5](../part-04-validation-model-selection/04-5-bootstrap.qmd)) — even though both are intervals around predictions?
+4. The sum-of-trees form with M small trees resembles boosting's Σνhₘ. What replaces boosting's learning rate and residual chasing?
+5. Name two practical reasons BART remains niche despite its uncertainty output — and the niches where it wins anyway.
+
+<details>
+<summary>Answers</summary>
+
+1. A prior favoring shallow trees and shrunken leaves is L0-on-structure + shrinkage-on-values simultaneously: the model *starts* regularized, and the data moves it only as far as evidence pushes — the Bayesian rendering of "keep trees weak" (boosting enforces it by construction via depth limits and ν).
+2. A posterior predictive distribution: every future prediction can carry its own interval, and new-observation uncertainty is separate from fit uncertainty (the σ² layer). Boosting gives a point prediction; intervals must be bolted on ([4.5](../part-04-validation-model-selection/04-5-bootstrap.qmd)-style), with weaker guarantees.
+3. Bootstrap bands reflect *resampling variability of a procedure*, assuming the model; posterior credible bands reflect *conditional uncertainty given the prior and likelihood* — they can differ when the prior matters, and they natively separate parameter-uncertainty from observation-noise layers.
+4. The prior plays ν's role (shallow+shrunk = small steps are likely a priori), and MCMC's grow/prune moves play residual-chasing: the chain revises trees wherever the current ensemble's residuals are largest, stochastically rather than greedily.
+5. (a) MCMC compute: thousands of tree-ensemble draws vs one greedy pass — slow on big n/p; (b) implementation maturity/deployment tooling (boosting libraries are industrial; BART's are research-grade, R-centric). It wins where uncertainty-qualified predictions are the product — clinical dosing, causal-effect estimation with interactions, small-n scientific inference.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+# conjugate update in one dimension: prior N(0, tau2), data y ~ N(beta, sigma2/n)
+tau2, sigma2, n, ybar = 4.0, 1.0, 25, 0.8
+post_mean = (n * ybar / sigma2) / (n / sigma2 + 1 / tau2)
+post_var = 1 / (n / sigma2 + 1 / tau2)
+print(f"posterior: mean {post_mean:.3f}, sd {np.sqrt(post_var):.3f}")
+print("-> data pulls the prior toward ybar; precision adds")
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(2)
+# prior shrinkage: small tau2 pins beta near 0 regardless of noisy data
+X = np.c_[np.ones(30), rng.normal(0, 1, 30)]
+beta_true = np.array([1.0, 3.0])
+y = X @ beta_true + rng.normal(0, 1, 30)
+for tau2 in [0.01, 1.0, 100.0]:
+    post_cov = np.linalg.inv(X.T @ X + np.eye(2) / tau2)
+    post_mean = post_cov @ X.T @ y
+    print(f"tau2={tau2:>6}: posterior beta = {post_mean.round(3)} (truth [1, 3])")
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(3)
+# predictive distribution = mean uncertainty + noise layer
+post_mean, post_sd, sigma = 1.2, 0.4, 0.5
+param_draws = rng.normal(post_mean, post_sd, 100000)
+new_obs = param_draws + rng.normal(0, sigma, 100000)
+print("95% interval for the MEAN:     ",
+      np.percentile(param_draws, [2.5, 97.5]).round(3))
+print("95% interval for a NEW POINT:  ",
+      np.percentile(new_obs, [2.5, 97.5]).round(3))
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(4)
+# sum-of-trees flavor: average of 20 shallow-tree fits = a smoother function
+from sklearn.tree import DecisionTreeRegressor
+x = np.sort(rng.uniform(0, 1, 60))
+y = np.sin(2 * np.pi * x) + rng.normal(0, .3, x.size)
+xg = np.linspace(0, 1, 300)
+preds = [DecisionTreeRegressor(max_depth=2, random_state=b)
+         .fit(x.reshape(-1, 1), y).predict(xg.reshape(-1, 1)) for b in range(20)]
+print("single-tree SD across domain:", round(float(np.std(preds[0])), 3))
+print("20-tree-average SD:          ", round(float(np.std(np.mean(preds, axis=0))), 3))
+print("(BART averages over a POSTERIOR of such ensembles, not one greedy one)")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Full conjugate workflow: given X (n = 50, 3 features incl. intercept), y, prior N(0, τ²I) with τ = 2, σ² = 1: compute (a) posterior mean and covariance, (b) 95% credible intervals for each β, (c) the posterior probability that β₂ > 0 (via draws). Compare the interval for β₂ against the *frequentist* OLS CI (statsmodels). Where do they differ, and which prior choice drove the difference?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(5)
+n = 50
+X = sm.add_constant(rng.normal(0, 1, (n, 2)))
+beta_true = np.array([1.0, 1.5, -0.5])
+y = X @ beta_true + rng.normal(0, 1, n)
+tau = 2.0
+
+post_cov = np.linalg.inv(X.T @ X + np.eye(3) / tau**2)
+post_mean = post_cov @ X.T @ y
+draws = rng.multivariate_normal(post_mean, post_cov, 20000)
+cis = np.percentile(draws, [2.5, 97.5], axis=0)
+print("Bayesian 95% CIs:")
+for j, name in enumerate(["b0", "b1", "b2"]):
+    print(f"  {name}: ({cis[0, j]:.3f}, {cis[1, j]:.3f})")
+print("P(beta2 > 0 | data) =", round(float((draws[:, 2] > 0).mean()), 3))
+
+ols = sm.OLS(y, X).fit()
+print("OLS 95% CIs:")
+for j, name in enumerate(["b0", "b1", "b2"]):
+    lo, hi = ols.conf_int()[j]
+    print(f"  {name}: ({lo:.3f}, {hi:.3f})")
+```
+
+With τ = 2 the prior is weak — Bayesian and OLS intervals nearly coincide (the data dominates). Shrink τ and the Bayesian intervals contract toward 0 *by assumption*, while OLS stays data-only; the difference between the two outputs is exactly the prior's influence — know what you chose. The P(β₂ > 0) statement is the Bayesian bonus: direct probability claims about parameters, no null-hypothesis machinery.
+</details>
+
+**Exercise 2.** The sum-of-trees prior, simulated: implement a toy "BART-lite": fit B = 200 tiny ensembles where each ensemble is 5 depth-2 trees fit on *bootstrap* data with leaf values *shrunk* by a factor κ ∈ {0.2, 1.0}; predict as the average. Measure test MSE and the SD of predictions across ensembles at fixed points, for both κ. Shrinkage (small κ) is the prior doing regularization — verify its variance/accuracy signature and connect it to boosting's learning rate ν ([7.5](07-5-gradient-boosting.qmd)).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+
+rng = np.random.default_rng(6)
+n = 80
+x = np.sort(rng.uniform(0, 1, n)).reshape(-1, 1)
+y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, .4, x.size)
+xte = np.linspace(0, 1, 2000).reshape(-1, 1)
+yte = np.sin(2 * np.pi * xte).ravel() + rng.normal(0, .4, 2000)
+
+for kappa in [0.2, 1.0]:
+    ensemble_preds, point_sd = [], []
+    for e in range(200):
+        pred = np.full(len(xte), y.mean())
+        for m in range(5):
+            idx = rng.integers(0, n, n)
+            t = DecisionTreeRegressor(max_depth=2, random_state=e*10+m).fit(
+                x[idx], y[idx] - pred.mean())
+            pred += kappa * t.predict(xte) / 5
+        ensemble_preds.append(pred)
+        point_sd.append(pred.std())
+    E = np.array(ensemble_preds)
+    mse = np.mean((yte - E.mean(axis=0))**2)
+    print(f"kappa={kappa}: test MSE {mse:.4f}, across-ensemble SD {E.std(axis=0).mean():.4f}")
+```
+
+κ = 0.2 (strong prior shrinkage) tames each tree's contribution — lower variance across ensembles, often better test MSE on noisy truths; κ = 1 lets each tree speak at full volume (variance up). This is ν-as-prior: BART's leaf-shrinkage prior plays precisely boosting's learning-rate role, but inside a sampling framework where the "right" amount is informed by the data through σ² and the marginal likelihood.
+</details>
+
+**Exercise 3.** Uncertainty layers, separated: using the conjugate model, produce three intervals for a new observation at a test point x₀: (a) the posterior interval of the *mean* f(x₀), (b) the predictive interval of a *new y*, (c) the OLS-style interval ignoring parameter uncertainty (just ±1.96σ̂). Plot all three and compute coverage of each over 500 simulated datasets. Which layer does each interval answer — and which would you show a patient (a new individual) vs a review board (the model's claim)?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(7)
+sigma = 0.5
+x0 = np.array([1.0, 0.5])
+X0 = np.r_[1.0, x0]
+beta_true = np.array([1.0, 2.0, -1.0])
+X0_full = np.r_[1.0, x0]
+f0 = beta_true @ X0_full
+
+cover_mean, cover_new, cover_naive = 0, 0, 0
+for d in range(500):
+    n = 40
+    Xd = np.c_[np.ones(n), rng.normal(0, 1, (n, 2))]
+    yd = Xd @ beta_true + rng.normal(0, sigma, n)
+    Pc = np.linalg.inv(Xd.T @ Xd / sigma**2 + np.eye(3) / 4.0)
+    pm = Pc @ Xd.T @ yd / sigma**2
+    f0_mean, f0_sd = X0_full @ pm, np.sqrt(X0_full @ Pc @ X0_full)
+
+    a = (abs(f0 - f0_mean) < 1.96 * f0_sd)
+    b = (abs(f0 - f0_mean) < 1.96 * np.sqrt(f0_sd**2 + sigma**2))
+    c = (abs(f0 - f0_mean) < 1.96 * sigma)
+    cover_mean += a; cover_new += b; cover_naive += c
+
+print(f"(a) posterior mean-interval coverage:    {cover_mean/500:.2f}")
+print(f"(b) predictive interval coverage:        {cover_new/500:.2f}")
+print(f"(c) noise-only interval coverage:        {cover_naive/500:.2f}")
+```
+
+(a) answers "where is the function here," (b) "where will this patient land," (c) pretends the fit is certain — it undercovers whenever parameter uncertainty is real (small n). BART's headline feature is delivering (a) and (b) *for nonlinear tree ensembles* — the same layering, no conjugate shortcut required.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Priors are design decisions**: BART's defaults (depth-limiting probabilities, β-shrinkage quantiles, σ prior) encode "sparse, weak interactions" — check them against your problem instead of outsourcing the choice to the library default.
+- **MCMC diagnostics are mandatory**: run multiple chains, check mixing of σ² and tree counts; BART's credible intervals are only as trustworthy as the chain's convergence — the Bayesian tax for the uncertainty feature.
+- **BART is not fast**: minutes on n = 1,000 where boosting takes milliseconds; parallel chains help but the algorithm is inherently sequential. For speed-uncertainty trade-offs, quantile-regression forests are the cheaper cousin.
+- **Variable selection leanings**: BART underuses weak features under strong priors (like all shrinkage) — presence in the model ≠ importance; use inclusion frequencies across MCMC draws as the diagnostic.
+- **Causal inference is BART's flagship niche** (treatment-effect estimation with exchangeability assumptions): the posterior over heterogeneous effects is exactly what applied micro is after — but the causal validity lives in the design, as always ([2.2 Q2](../part-02-linear-regression/02-2-simple-linear-regression.qmd)).
+- **Binary/count responses**: BART extends via probit/logit link versions (MCMC gets latent-variable steps) — the additive-GAM-to-GLM move ([6.7](../part-06-nonlinear-regression/06-7-gam.qmd)) replayed in Bayesian key.
+
+### Read & Refactor AI Code
+
+This AI-generated "Bayesian model" has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+
+rng = np.random.default_rng(15)
+n = 30
+X = np.c_[np.ones(n), rng.normal(0, 1, (n, 2))]
+y = X @ np.array([1.0, 2.0, -1.0]) + rng.normal(0, .5, n)
+
+# BUG 1: prior precision inverted (tau2 used as precision)
+tau2 = 4.0
+post_cov = np.linalg.inv(X.T @ X + tau2 * np.eye(3))       # should be /tau2
+post_mean = post_cov @ X.T @ y
+
+# BUG 2: posterior SD from the WRONG diagonal (mean's, not cov's)
+post_sd = np.abs(post_mean) / 10
+
+# BUG 3: predictive interval ignores sigma
+interval = 2 * post_sd
+print("95% predictive interval half-widths:", np.round(interval, 3),
+      "(sigma = 0.5 ignored)")
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Precision/convention flip**: the conjugate posterior is (XᵀX/σ² + I/τ²)⁻¹ — multiplying by τ² (instead of dividing) *strengthens* the prior as τ² grows, backwards. Get the precision algebra right; it's the entire estimator.
+2. **Posterior SD ≠ rescaled mean**: it's √diag(posterior covariance). Hand-waving SDs make every downstream interval fiction.
+3. **Predictive intervals need σ²**: new observations add the noise layer — parameter uncertainty alone undercovers new points ([Exercise 3](#)'s layer separation).
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(15)
+n = 30
+X = np.c_[np.ones(n), rng.normal(0, 1, (n, 2))]
+y = X @ np.array([1.0, 2.0, -1.0]) + rng.normal(0, .5, n)
+tau2, sigma2 = 4.0, 0.25
+
+post_cov = np.linalg.inv(X.T @ X / sigma2 + np.eye(3) / tau2)
+post_mean = post_cov @ (X.T @ y / sigma2)
+post_sd = np.sqrt(np.diag(post_cov))
+
+x0 = np.r_[1.0, 0.3, -0.2]
+f0_sd = np.sqrt(x0 @ post_cov @ x0)
+print("posterior mean:", post_mean.round(3))
+print("posterior sd:  ", post_sd.round(3))
+print(f"95% interval for new point at x0: "
+      f"{x0 @ post_mean - 1.96 * np.sqrt(f0_sd**2 + sigma2):.3f} to "
+      f"{x0 @ post_mean + 1.96 * np.sqrt(f0_sd**2 + sigma2):.3f}")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Derive the conjugate update: prior β ~ N(0, τ²I), likelihood y ~ N(Xβ, σ²I) ⇒ posterior N(μₙ, Σₙ) with Σₙ = (XᵀX/σ² + I/τ²)⁻¹, μₙ = ΣₙXᵀy/σ². Verify that as τ² → ∞ you recover OLS and as τ² → 0 you recover β = 0 — the two endpoints matching ridge's λ → 0/∞ ([5.2](../part-05-regularization-high-dimensions/05-2-ridge-regression.qmd) Q2). Then compute the posterior probability P(β_j > 0) via draws and show it equals Φ(μⱼ/√Σⱼⱼ) — no simulation needed.
+
+<details>
+<summary>Hint</summary>
+
+Complete the square on β in the joint density; Gaussian arithmetic; the marginal of a Gaussian is Gaussian.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Joint ∝ exp(−‖y − Xβ‖²/2σ² − ‖β‖²/2τ²); expanding in β and completing the square gives precision Λ = XᵀX/σ² + I/τ² and mean μₙ = Λ⁻¹Xᵀy/σ². Limits: τ² → ∞ removes the prior term → Λ = XᵀX/σ², μₙ = (XᵀX)⁻¹Xᵀy = OLS; τ² → 0 forces μₙ → 0. Since marginals of Gaussians are Gaussian, β_j | y ~ N(μⱼ, Σⱼⱼ), so P(β_j > 0) = Φ(μⱼ/√Σⱼⱼ):
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy.stats import norm
+
+rng = np.random.default_rng(16)
+n = 40
+X = np.c_[np.ones(n), rng.normal(0, 1, (n, 2))]
+beta = np.array([0.8, 1.2, -0.6])
+y = X @ beta + rng.normal(0, .5, n)
+tau2, s2 = 4.0, 0.25
+
+Lam = X.T @ X / s2 + np.eye(3) / tau2
+mu = np.linalg.solve(Lam, X.T @ y / s2)
+Sd = np.sqrt(np.diag(np.linalg.inv(Lam)))
+print("closed-form P(beta_j > 0):", norm.cdf(mu / Sd).round(3))
+
+draws = rng.multivariate_normal(mu, np.linalg.inv(Lam), 100000)
+print("draw-based estimate:      ", (draws > 0).mean(axis=0).round(3))
+```
+
+The closed form is the sampling-based one at infinite draws — Bayesian inference for conjugate models is *exactly computed*, and BART's MCMC exists because tree ensembles forfeit conjugacy, not because sampling is inherently superior.
+</details>
+
+**Q2.** BART vs boosting uncertainty, head-to-head design: on 200 simulated datasets (n = 60, smooth truth), compare three interval producers — (a) boosted trees + residual ± band, (b) bootstrap-banded forest ([4.5](../part-04-validation-model-selection/04-5-bootstrap.qmd)), (c) the conjugate Bayesian interval on the *correct* basis — by nominal-95% coverage of the truth and of new points. Which achieves nominal coverage for the function, which for observations, and what structural feature does (c) have that (a)/(b) must borrow? Write the practical guidance you'd give before someone reaches for bands.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(17)
+sigma = 0.4
+cover = {"function": 0, "new point": 0}
+for d in range(300):
+    n = 60
+    x = np.sort(rng.uniform(0, 1, n))
+    X = np.c_[np.ones(n), np.sin(2 * np.pi * x)]
+    beta = rng.normal(0, 2, 2)
+    f = X @ beta
+    y = f + rng.normal(0, sigma, n)
+
+    L = X.T @ X / sigma**2 + np.eye(2) / 4.0
+    mu = np.linalg.solve(L, X.T @ y / sigma**2)
+    S = np.linalg.inv(L)
+    x0 = np.r_[1.0, np.sin(2 * np.pi * 0.3)]
+    f0, sd0 = x0 @ mu, np.sqrt(x0 @ S @ x0)
+
+    cover["function"] += abs(f0 - beta @ x0) < 1.96 * sd0
+    cover["new point"] += abs(f0 + rng.normal(0, sigma) - beta @ x0) \
+        < 1.96 * np.sqrt(sd0**2 + sigma**2)
+
+for k, v in cover.items():
+    print(f"{k:10s} coverage: {v/300:.3f}")
+```
+
+The correctly-specified Bayesian interval hits nominal coverage for *both* layers because it carries the two uncertainty sources separately. Boosted trees ± residual band covers observations roughly but has no parameter-uncertainty layer (function claims undercoverage); bootstrap bands estimate procedure variability (often near-nominal for the function on stable learners) but can't separate the layers without adding σ̂. Guidance: decide *which claim* you're making first — function vs new point — then pick the machinery that natively states it; and remember (c)'s advantage came from knowing the basis, i.e., from model correctness, which no interval machinery can grant.
+</details>
+
+## 6. Complex Questions
+
+**C1 (BART × [7.5 boosting](07-5-gradient-boosting.qmd) × [4.5 bootstrap](../part-04-validation-model-selection/04-5-bootstrap.qmd)).** The uncertainty triathlon on one dataset: point predictions from boosting, bootstrap bands from a forest, and (on the *correct* linear basis, as BART-stand-in) posterior bands. Compare widths and calibration of the three intervals for both functions and new points over 200 simulations. Write the decision tree a practitioner should follow: "if you need ___ and can assume ___, use ___" — three branches, honestly conditioned.
+
+**C2 (BART × [2.5 confounding](../part-02-linear-regression/02-5-multiple-linear-regression.qmd) × [12.x](../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.qmd) stub).** Treatment effects, BART's home turf: simulate an observational study with a binary treatment, confounders, and *heterogeneous* effects (effect varies with x₁). Using the conjugate Bayesian machinery on a basis that includes treatment × covariate terms, compute the posterior distribution of the effect at several x₁ values. Report the effect curve with credible bands, and state precisely what design assumption (unconfoundedness) the bands still require — the Bayesian machinery quantifies uncertainty, not identification.
+
+## 7. Summary
+
+- BART = boosting's sum-of-small-trees, fitted by MCMC under a regularizing prior — the Bayesian answer to nonlinear tabular regression.
+- The prize: posterior predictive distributions — function-uncertainty and new-observation uncertainty as separate, honest layers.
+- The conjugate Bayesian model is the runnable core: same updates, same credible intervals, closed-form ([drills](#)).
+- Priors replace boosting's ν; MCMC replaces greedy residual-chasing; tree-depth preferences replace depth caps.
+- Costs: MCMC compute, implementation maturity, and mandatory chain diagnostics.
+- Niche of strength: small-to-mid n, uncertainty-qualified predictions, causal effect estimation — not the 100M-row leaderboard.
+- Part 7 closes with the full arc: one greedy algorithm → ensembles → sequential → Bayesian. Next, geometry takes the stage: [8.1 Geometry essentials](../part-08-svm/08-1-geometry.qmd).

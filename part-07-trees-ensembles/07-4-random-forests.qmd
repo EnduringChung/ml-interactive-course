@@ -1,0 +1,429 @@
+---
+title: "7.4 Random Forests"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - matplotlib
+---
+
+Random forests = bagged trees ([7.3](07-3-bagging.qmd)) **plus random feature subsampling at every split**. The extra randomness decorrelates the trees — attacking the ρσ² floor that plain bagging can't touch — and produced the most reliable off-the-shelf learner for tabular data of its era.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+Two randomness sources per tree: (1) a bootstrap sample ([7.3](07-3-bagging.qmd)); (2) at *each split*, only `max_features` (mtry) randomly-chosen features may be considered. The second is the forest's signature — trees are forced to disagree:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.ensemble import RandomForestRegressor, BaggingRegressor
+from sklearn.tree import DecisionTreeRegressor
+
+rng = np.random.default_rng(0)
+n, p = 80, 10
+X = rng.normal(0, 1, (n, p))
+y = 3 * X[:, 0] - 2 * X[:, 1] + rng.normal(0, .8, n)
+xte = rng.normal(0, 1, (5000, p))
+yte = 3 * xte[:, 0] - 2 * xte[:, 1] + rng.normal(0, .8, 5000)
+
+methods = {
+    "single tree": DecisionTreeRegressor(random_state=0).fit(X, y),
+    "bagged trees (all features)": BaggingRegressor(
+        DecisionTreeRegressor(random_state=1), n_estimators=100,
+        random_state=2).fit(X, y),
+    "random forest (mtry=3)": RandomForestRegressor(
+        n_estimators=100, max_features=3, random_state=3).fit(X, y),
+}
+for name, m in methods.items():
+    mse = np.mean((yte - m.predict(xte))**2)
+    print(f"{name:28s} test MSE = {mse:.3f}")
+```
+
+The mtry dial, swept: decorrelation vs per-tree quality:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.ensemble import RandomForestRegressor
+
+rng = np.random.default_rng(1)
+n, p = 80, 10
+X = rng.normal(0, 1, (n, p))
+y = 3 * X[:, 0] - 2 * X[:, 1] + rng.normal(0, .8, n)
+xte = rng.normal(0, 1, (5000, p))
+yte = 3 * xte[:, 0] - 2 * xte[:, 1] + rng.normal(0, .8, 5000)
+
+mf_grid = [1, 2, 3, 5, 10]
+mses = []
+for mf in mf_grid:
+    m = RandomForestRegressor(n_estimators=200, max_features=mf,
+                              random_state=4).fit(X, y)
+    mses.append(np.mean((yte - m.predict(xte))**2))
+
+fig, ax = plt.subplots(figsize=(7, 3.2))
+ax.plot(mf_grid, mses, marker="o", ms=4)
+ax.set(xlabel="max_features (mtry)", ylabel="test MSE",
+       title="Too random (mtry=1) and too greedy (mtry=p) both lose")
+plt.show()
+```
+
+OOB comes free, and feature importances are one attribute away:
+
+```{pyodide}
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+rng = np.random.default_rng(2)
+n, p = 150, 8
+X = rng.normal(0, 1, (n, p))
+y = 2 * X[:, 0] - 1.5 * X[:, 3] + rng.normal(0, 1, n)
+rf = RandomForestRegressor(n_estimators=300, oob_score=True,
+                           random_state=5).fit(X, y)
+print("OOB R2:", round(rf.oob_score_, 3))
+print("importances:", (rf.feature_importances_ / rf.feature_importances_.sum())
+      .round(3))
+```
+
+## 2. Concept Questions
+
+1. State precisely what `max_features` does at each split, and why forcing trees to be *weaker* can make the forest *better*.
+2. Standard defaults: mtry = √p for classification, p/3 for regression. What trade produces each?
+3. Why don't random forests overfit when you add more trees — and which earlier ensemble violated that?
+4. OOB error vs CV error for a forest: when do they agree, and what procedure detail (not the error estimate itself) makes them differ?
+5. Two features are near-duplicates. What happens to (a) impurity importances, (b) the model's predictions?
+
+<details>
+<summary>Answers</summary>
+
+1. Each split may only *consider* mtry randomly-drawn features; if the strong feature isn't in the draw, the tree must split on something else — producing a different tree. Individually worse (weaker splits), collectively decorrelated: in ρσ² + (1−ρ)σ²/B terms, ρ drops enough that the (1−ρ)/B term's collapse dominates.
+2. The trade is per-split quality vs decorrelation. Classification: √p candidates usually include enough signal to keep splits decent while decorrelating across p choices. Regression: p/3 — regression signals are typically spread over more features, needing wider draws.
+3. Adding trees only averages more draws from the same randomized procedure — Var → ρσ² + (1−ρ)σ²/B monotonically decreasing, no overfitting term in B. Gradient boosting ([7.5](07-5-gradient-boosting.qmd)) fits trees *sequentially to residuals*, so more trees keep changing the function — and can overfit.
+4. They estimate the same quantity (test error of the procedure) by the same principle (out-of-sample rows). They differ in *mechanics*: OOB uses ≈ 0.368B trees per row and bootstrap-sized training sets, CV uses full ensemble and (K−1)/K-sized sets — so numbers differ by a few percent while conclusions rarely do.
+5. (a) Impurity importances split the credit arbitrarily between the twins (each mirrors the other; whichever is drawn first takes the share) — importances are diluted and unstable; (b) predictions are essentially unaffected — the forest uses the shared signal whichever twin carries it. Interpretation is where duplicates hurt, not prediction.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+rng = np.random.default_rng(3)
+X = rng.normal(0, 1, (200, 6))
+y = X[:, 2] * 2 + rng.normal(0, 1, 200)
+rf = RandomForestRegressor(n_estimators=100, random_state=0).fit(X, y)
+print("trees in forest:", len(rf.estimators_))
+print("default max_features:", rf.max_features, "(regression default)")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+rng = np.random.default_rng(4)
+X = rng.normal(0, 1, (200, 9))
+y = (X[:, 0] + rng.normal(0, 1, 200) > 0).astype(int)
+clf = RandomForestClassifier(n_estimators=100, oob_score=True,
+                             random_state=0).fit(X, y)
+print("classification default max_features:", clf.max_features, "(= sqrt(9))")
+print("OOB needs oob_score=True:", clf.oob_score_)
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+rng = np.random.default_rng(5)
+X = rng.normal(0, 1, (150, 5))
+y = X[:, 1] * X[:, 2] + rng.normal(0, .3, 150)      # pure interaction
+rf = RandomForestRegressor(n_estimators=200, random_state=0).fit(X, y)
+print("R2 on interaction truth:", round(rf.score(X, y), 3),
+      "(linear models score ~0 here)")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.inspection import permutation_importance
+rng = np.random.default_rng(6)
+X = rng.normal(0, 1, (200, 4))
+X[:, 1] = X[:, 0] + rng.normal(0, .1, 200)          # twins
+y = X[:, 0] * 2 + rng.normal(0, 1, 200)
+rf = RandomForestRegressor(n_estimators=200, random_state=0).fit(X, y)
+print("impurity importances:", rf.feature_importances_.round(3), "(twins split it)")
+pi = permutation_importance(rf, X, y, n_repeats=10, random_state=0)
+print("permutation importances:", pi.importances_mean.round(3))
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** The decorrelation dividend, isolated: build a wide dataset where ONE feature is strongly informative and 19 are weak-but-real (so plain bagging's trees all grab the same one). Compare bagging (max_features = p) vs forest (max_features = √p): test MSE, and the *average pairwise correlation* between member-tree predictions. Verify that the forest's gain tracks the ρ drop — the ρσ²-floor argument made empirical.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor, BaggingRegressor
+from sklearn.tree import DecisionTreeRegressor
+
+rng = np.random.default_rng(7)
+n, p = 100, 20
+X = rng.normal(0, 1, (n, p))
+X[:, 0] += 3                                        # the loud feature
+y = 4 * X[:, 0] + np.sum(X[:, 1:] * 0.4, axis=1) + rng.normal(0, 1, n)
+xte = rng.normal(0, 1, (5000, p))
+yte = 4 * xte[:, 0] + np.sum(xte[:, 1:] * 0.4, axis=1) + rng.normal(0, 1, 5000)
+
+bag = BaggingRegressor(DecisionTreeRegressor(random_state=1), n_estimators=100,
+                       random_state=2).fit(X, y)
+forest = RandomForestRegressor(n_estimators=100, max_features=4,
+                               random_state=3).fit(X, y)
+
+def avg_corr(model):
+    P = np.array([est.predict(xte) for est in model.estimators_])
+    R = np.corrcoef(P)
+    return R[np.triu_indices(100, 1)].mean()
+
+for name, m in [("bagging", bag), ("forest mtry=4", forest)]:
+    mse = np.mean((yte - m.predict(xte))**2)
+    print(f"{name:14s}: test MSE {mse:.3f}, mean pairwise rho = {avg_corr(m):.3f}")
+```
+
+The forest's trees disagree more (lower ρ) even though each is individually handicapped — and the test MSE tracks ρ almost mechanically. This one experiment is the random forest's raison d'être.
+</details>
+
+**Exercise 2.** Importance forensics: on data with (a) one signal feature, (b) its near-duplicate twin, (c) 18 noise features, compare impurity importances vs permutation importances (`permutation_importance` computed on a held-out set). Report both rankings' treatment of the twins and the noise. Which importance answers "which feature does the *model* use" and which answers "which feature helps *predictions*"?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.inspection import permutation_importance
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(8)
+n = 300
+X = rng.normal(0, 1, (n, 10))
+X[:, 1] = X[:, 0] + rng.normal(0, .1, n)             # twin of feature 0
+y = 3 * X[:, 0] + rng.normal(0, 1, n)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=9)
+
+rf = RandomForestRegressor(n_estimators=300, random_state=0).fit(X_tr, y_tr)
+imp = rf.feature_importances_
+pi = permutation_importance(rf, X_te, y_te, n_repeats=20, random_state=0)
+
+print("impurity:     f0", imp[0].round(3), "| f1 (twin)", imp[1].round(3),
+      "| noise max", round(float(imp[2:].max()), 4))
+print("permutation:  f0", pi.importances_mean[0].round(3),
+      "| f1 (twin)", pi.importances_mean[1].round(3),
+      "| noise max", round(float(pi.importances_mean[2:].max()), 4))
+```
+
+Impurity importance *splits* credit between twins (whichever is drawn first claims the split, starving the other) and inflates noise features with many split opportunities. Permutation importance on held-out data answers the deployment question — breaking f1 breaks predictions because f0 alone (fitted with a twin present) doesn't fully carry the mapping — while correctly zeroing noise. The two questions are different; quote the one you mean.
+</details>
+
+**Exercise 3.** The honest forest workflow: build `Pipeline(StandardScaler-optional, RandomForest)` — deliberately *without* scaling (defend the choice) — tune `max_features` and `min_samples_leaf` by inner CV, evaluate by outer nested CV, and report OOB alongside. Apply to a 600-feature, 100-row problem ([5.6](../part-05-regularization-high-dimensions/05-6-high-dimensional.qmd) territory). Write the three-sentence summary comparing the forest to your Part 5 linear winners on accuracy, assumptions, and interpretation.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import GridSearchCV, KFold, cross_val_score
+from sklearn.datasets import make_regression
+
+X, y = make_regression(n_samples=100, n_features=600, n_informative=8,
+                       noise=25, random_state=10)
+inner = KFold(4, shuffle=True, random_state=1)
+outer = KFold(5, shuffle=True, random_state=2)
+
+pipe = GridSearchCV(
+    RandomForestRegressor(n_estimators=200, random_state=0),
+    {"max_features": [0.1, 0.3, 0.5], "min_samples_leaf": [1, 3, 5]},
+    cv=inner)
+nested = cross_val_score(pipe, X, y, cv=outer, scoring="r2")
+print("nested CV R2:", round(nested.mean(), 4), "±", round(nested.std(), 4))
+
+forest = pipe.fit(X, y).best_estimator_
+print("chosen:", forest.max_features, "mtry,", forest.min_samples_leaf, "min leaf")
+print("(no scaler: trees are scale-invariant — [7.2 Q1]; the scaler would be dead weight)")
+```
+
+Summary template: "The random forest matched the penalized linear models' nested-CV accuracy without linearity or scaling assumptions, at the cost of coefficient interpretability; its per-feature importances are advisory, and its OOB estimate tracked nested CV within noise. On n = 100, p = 600 data both families are viable; the choice is driven by the shape of the signal (sparse-linear → lasso; interaction-rich → forest) rather than by leaderboard deltas."
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **OOB is not a license to tune on everything**: OOB can pick hyperparameters *weakly*, but heavy tuning against OOB re-inflates selection optimism ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)); nested CV for claims.
+- **Impurity importance's bias**: favors continuous/high-cardinality features and splits credit arbitrarily under correlation — permutation importance on held-out data is the defensible default (Exercise 2).
+- **`n_estimators` is compute, not tuning**: more trees monotonically help (plateau); tune `max_features`, `min_samples_leaf`, `max_depth` — the variance/correlation dials.
+- **Regression forests can't extrapolate** (leaf means, [7.2](07-2-advantages-limitations.qmd)): trending time series need detrending or different tools.
+- **Probabilities**: forest class fractions average many noisy leaf estimates — better than one tree, still not calibrated; check reliability ([3.7](../part-03-classification-glm/03-7-model-comparison.qmd)).
+- **Missing values**: classic sklearn forests need imputation; HistGradientBoosting ([7.6](07-6-modern-boosting.qmd)) handles NaN natively — a practical deciding factor in messy pipelines.
+- **Class imbalance**: forests inherit tree biases; `class_weight="balanced"` or stratified sampling — then evaluate with AUC/PR ([3.1](../part-03-classification-glm/03-1-classification-fundamentals.qmd), [3.1.5](../part-03-classification-glm/03-1-5-auprc.qmd)).
+
+### Read & Refactor AI Code
+
+This AI-generated forest has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(13)
+from sklearn.datasets import make_regression
+X, y = make_regression(n_samples=300, n_features=15, n_informative=4,
+                       noise=20, random_state=14)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=15)
+
+# BUG 1: n_estimators=5
+rf = RandomForestRegressor(n_estimators=5, random_state=0).fit(X_tr, y_tr)
+print("5-tree forest test R2:", round(rf.score(X_te, y_te), 4))
+
+# BUG 2: tuning n_estimators on the test set
+best_b, best_r = None, -np.inf
+for B in [10, 50, 200, 500]:
+    r = RandomForestRegressor(n_estimators=B, random_state=0).fit(X_tr, y_tr) \
+        .score(X_te, y_te)
+    if r > best_r:
+        best_b, best_r = B, r
+print("tuned B on test:", best_b)
+
+# BUG 3: importances quoted from correlated features as causal effects
+rf2 = RandomForestRegressor(n_estimators=200, random_state=0).fit(X_tr, y_tr)
+top = np.argsort(-rf2.feature_importances_)[:3]
+print("top features (causal?):", top)
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Five trees**: more trees monotonically improve — B is a compute setting (≥ a few hundred); report the plateau, not a 5-tree straw model.
+2. **B is not a tuning parameter** — sweeping it on test burns the test set for nothing. Fix B by compute budget; tune max_features/min_samples_leaf by inner CV.
+3. **Importances ≠ causation** (and are unreliable under correlation): if features 5/6 are near-duplicates of feature 0, impurity importance fragments across them. Use permutation importance on held-out data, disclose correlation structure, and claim "model relies on," never "causes."
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.inspection import permutation_importance
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import GridSearchCV, KFold, train_test_split
+from sklearn.datasets import make_regression
+
+X, y = make_regression(n_samples=300, n_features=15, n_informative=4,
+                       noise=20, random_state=14)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=15)
+
+grid = GridSearchCV(
+    RandomForestRegressor(n_estimators=300, random_state=0),
+    {"max_features": [0.2, 0.5, 1.0], "min_samples_leaf": [1, 3]},
+    cv=KFold(4, shuffle=True, random_state=0)).fit(X_tr, y_tr)
+rf = grid.best_estimator_
+print("chosen params:", grid.best_params_)
+print("test R2:", round(rf.score(X_te, y_te), 4))
+pi = permutation_importance(rf, X_te, y_te, n_repeats=20, random_state=0)
+print("held-out permutation importances (top 3):",
+      np.argsort(-pi.importances_mean)[:3])
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Derive the forest's OOB prediction for row i: the average over trees whose bootstrap sample excluded i, and show its expected training-set size per OOB prediction is ≈ 0.368B trees on ≈ 0.632n rows. Then verify empirically that OOB error estimates the error of the *0.632n-trained* forest, not the full-data forest, by comparing OOB against honest test error as n grows (n ∈ {50, 200, 800}) — the [4.5 Q1](../part-04-validation-model-selection/04-5-bootstrap.qmd) mismatch, in forest clothing. At which n is OOB's pessimism negligible?
+
+<details>
+<summary>Hint</summary>
+
+Each row is OOB with probability (1 − 1/n)ⁿ → e⁻¹; the OOB prediction averages only the trees that didn't train on it.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+OOB row i uses trees B_b with i ∉ bootstrap_b: a fraction (1−1/n)ⁿ ≈ 0.368 of B trees, each trained on a bootstrap of all n rows *excluding* i's influence — effectively ≈ 0.632n-row models.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+rng = np.random.default_rng(16)
+for n in [50, 200, 800]:
+    X = rng.normal(0, 1, (n, 8))
+    y = X[:, 0] * 2 + rng.normal(0, 1, n)
+    xte = rng.normal(0, 1, (5000, 8))
+    yte = 2 * xte[:, 0] + rng.normal(0, 1, 5000)
+    rf = RandomForestRegressor(n_estimators=300, oob_score=True,
+                               random_state=0).fit(X, y)
+    oob = 1 - rf.oob_score_
+    truth = 1 - rf.score(xte, yte)
+    print(f"n={n:>3}: OOB R2-loss {oob:.4f} vs full-train test {truth:.4f} "
+          f"(gap {oob - truth:+.4f})")
+```
+
+The OOB gap shrinks as n grows — at a few hundred rows it's negligible, at n = 50 it's a visible pessimism tax. Report OOB as the free monitor; spend a holdout or CV when the claim matters.
+</details>
+
+**Q2.** Why does mtry = 1 sometimes *win*? Construct a truth with exactly one strong feature and many weak ones; sweep mtry ∈ {1, 2, 4, 8, p} and plot test error. Explain the U-shape via ρ and per-tree quality (the [7.3](07-3-bagging.qmd) formula: variance floor = ρ(mtry)·σ²(mtry) with both terms mtry-dependent). Then state the symptom-based default: if your forest at default mtry underperforms a single pruned tree, which direction do you move mtry and why?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+rng = np.random.default_rng(17)
+n, p = 100, 20
+X = rng.normal(0, 1, (n, p))
+X[:, 0] += 2
+y = 5 * X[:, 0] + rng.normal(0, 1, n)      # ONE loud feature
+xte = rng.normal(0, 1, (5000, p))
+yte = 5 * xte[:, 0] + rng.normal(0, 1, 5000)
+
+for mf in [1, 2, 4, 8, 20]:
+    m = RandomForestRegressor(n_estimators=200, max_features=mf,
+                              random_state=0).fit(X, y)
+    print(f"mtry={mf:>2}: test MSE = {np.mean((yte - m.predict(xte))**2):.4f}")
+```
+
+With one loud feature, small mtry forces many trees to *miss* it (bad individual splits — high bias) but the trees that do use it are nearly independent (low ρ); large mtry gives strong trees that are near-clones (ρ → 1, bagging-floor). The optimum balances the two — and with a single dominant feature, small mtry wins because decorrelation matters more than split polish. Symptom default: if the forest loses to a single pruned tree, per-tree quality is being sacrificed — raise mtry toward p (bagging limit) and re-tune min_samples_leaf.
+</details>
+
+## 6. Complex Questions
+
+**C1 (forest × [5.6 high-dimensional](../part-05-regularization-high-dimensions/05-6-high-dimensional.qmd)).** Forest vs lasso rematch with mixed truth: n = 120, p = 300, where 6 features are sparse-linear, 3 contribute only through interactions, and 1 has a threshold effect. Nested-CV both (lasso on raw features; forest), report test MSE *and* each method's recovery of the three signal types (linear coefficients for lasso; importances for forest). Which truth components favor which method — and what ensemble-plus-lasso combined workflow would you pre-register?
+
+**C2 (forest × [3.6 GLM](../part-03-classification-glm/03-6-generalized-linear-models.qmd) × [6.7 GAM](../part-06-nonlinear-regression/06-7-gam.qmd)).** Interpretability triangulation: on a truth with one smooth effect + one interaction + one threshold, fit forest, GAM, and GAM+interaction-term. Compare CV MSE and each method's recovery of the *smooth component* (correlate forest partial-dependence and GAM's $s_1$ with truth). Write the reporting rule: which model for the coefficient table, which for the black-box check, and what agreement between forest-PD and GAM smooths certifies about the additive assumption ([6.7 C2](../part-06-nonlinear-regression/06-7-gam.qmd)'s triangulation, formalized).
+
+## 7. Summary
+
+- Forest = bagged trees + mtry-limited splits: decorrelation attacks the ρσ² floor bagging can't.
+- mtry is the key dial (√p classification, p/3 regression defaults): too small starves splits, too large clones trees.
+- n_estimators is compute; more trees never overfit — boosting will break that rule next page.
+- OOB: free internal validation, tracks CV closely, slightly pessimistic at small n.
+- Importances: impurity-based ones fragment under correlation; permutation-on-held-out is the defensible kind — and neither is causal.
+- Inherited from trees: no extrapolation, scale-invariance, uncalibrated probabilities; new superpowers: interactions and nonlinearity by default.
+- The sequential alternative: fit trees to *residuals* and climb — [7.5 Gradient boosting](07-5-gradient-boosting.qmd).

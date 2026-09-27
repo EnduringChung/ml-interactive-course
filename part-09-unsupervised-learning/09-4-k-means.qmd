@@ -1,0 +1,380 @@
+---
+title: "9.4 K-means Clustering"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - matplotlib
+---
+
+K-means partitions data into k groups by minimizing within-cluster distance to centroids: pick k centers, assign points to the nearest, move each center to its cluster's mean, repeat. It is fast, scalable, universally available — and explicitly assumes spherical, equal-sized groups. Knowing exactly what it optimizes tells you exactly when it lies.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+The objective (inertia):
+
+$$\min_{C_1, \ldots, C_k} \sum_{j=1}^k \sum_{i \in C_j} \|x_i - \mu_j\|^2, \qquad \mu_j = \text{mean of cluster } j$$
+
+Lloyd's algorithm alternates assign↔update until convergence — each step never increases inertia, so it converges (to a *local* optimum; hence `n_init` restarts):
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+
+rng = np.random.default_rng(0)
+X = np.vstack([rng.normal([0, 0], .7, (100, 2)),
+               rng.normal([4, 0], .7, (100, 2)),
+               rng.normal([2, 3.2], .7, (100, 2))])
+
+km = KMeans(n_clusters=3, n_init=10, random_state=1).fit(X)
+
+fig, ax = plt.subplots(figsize=(6.5, 3.6))
+ax.scatter(X[:, 0], X[:, 1], s=12, c=km.labels_, cmap="tab10")
+ax.scatter(*km.cluster_centers_.T, marker="X", s=200, c="black", label="centroids")
+ax.set(aspect="equal", title="K-means: Voronoi cells around centroids")
+ax.legend()
+plt.show()
+print("inertia:", round(km.inertia_, 2), "| iterations:", km.n_iter_)
+```
+
+Lloyd's algorithm, by hand:
+
+```{pyodide}
+import numpy as np
+
+rng = np.random.default_rng(1)
+X = np.vstack([rng.normal([0, 0], .6, (60, 2)),
+               rng.normal([4, 3], .6, (60, 2))])
+k = 2
+
+centers = X[rng.choice(len(X), k, replace=False)]        # random init
+for it in range(10):
+    d2 = ((X[:, None, :] - centers[None, :, :]) ** 2).sum(axis=2)
+    labels = d2.argmin(axis=1)                           # assign
+    new_centers = np.array([X[labels == j].mean(axis=0) if np.any(labels == j)
+                            else centers[j] for j in range(k)])  # update
+    if np.allclose(new_centers, centers):
+        break
+    centers = new_centers
+
+print(f"converged in {it + 1} iterations")
+print("inertia by hand:", round(float(((X - centers[labels])**2).sum()), 2))
+from sklearn.cluster import KMeans
+print("inertia sklearn:", round(KMeans(2, n_init=1, random_state=0)
+                                .fit(X).inertia_, 2))
+```
+
+## 2. Concept Questions
+
+1. Why does K-means implicitly assume spherical, equal-variance, equal-size clusters — derive each from the Euclidean-distance-to-centroid criterion?
+2. Why must centroids be initialized well (`n_init`, k-means++), and what does Lloyd's convergence guarantee *not* include?
+3. Elbow vs silhouette vs gap statistic for choosing k: state what each measures and their shared blind spot.
+4. Your feature is "income" in dollars and another is "age" in years. What happens to the clustering, and why is this the same disease as [9.1](09-1-unsupervised-mindset.qmd) Exercise 1?
+5. K-means on data with one categorical feature encoded as integers (0, 1, 2)? What breaks, and what are the two standard repairs?
+
+<details>
+<summary>Answers</summary>
+
+1. The criterion cares only about distance to the *centroid* (a single point): (a) elongated clusters get split (a long ellipse has far corners even with one true group — variance in every direction costs); (b) unequal variances misassign (the wide cluster's points sit "closer" to the tight neighbor's centroid); (c) unequal sizes bias boundary placement toward the big cluster ([6.2](../part-06-nonlinear-regression/06-2-step-functions.qmd)-style bias, Voronoi edition).
+2. Lloyd's converges to *a* local optimum — bad inits (two centers in one true cluster) converge to poor partitions that still satisfy the fixed point. `n_init` restarts take the best; k-means++ seeds centers far apart probabilistically — better optima, fewer restarts.
+3. Elbow: inertia vs k, look for the bend (subjective; inertia always falls). Silhouette: mean (b−a)/max(a,b) per point — cohesion vs separation (−1..1, computable, biased toward convex shapes). Gap statistic: inertia vs its null-expectation under uniform sampling (principled, costlier). Shared blind spot: all measure *spherical-metric* fit — none can tell you the true k for structured/non-spherical data.
+4. Dollars dominate Euclidean distance by units — income decides everything, age is invisible. Same disease: unscaled features weight the metric; standardize (or weight features deliberately).
+5. Integer-coded categories fabricate arithmetic: category 2 is "twice" category 1 and between 0 and 3 — the centroid becomes a meaningless average label. Repairs: one-hot the categorical (then distances are Hamming-ish on that block) or use k-modes/mixed-type distances ([9.6](09-6-practical-clustering.qmd)).
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.datasets import make_blobs
+X, y = make_blobs(n_samples=300, centers=3, random_state=2)
+km = KMeans(3, n_init=10, random_state=0).fit(X)
+from sklearn.metrics import adjusted_rand_score
+print("ARI vs truth:", round(adjusted_rand_score(y, km.labels_), 3),
+      "(K-means' home game: blobs)")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.cluster import KMeans
+rng = np.random.default_rng(3)
+t = rng.uniform(0, 2 * np.pi, 200)
+X = np.c_[np.cos(t), np.sin(t)] * (1 + (np.arange(200) > 100))[:, None]  # two rings
+km = KMeans(2, n_init=10, random_state=0).fit(X)
+from sklearn.metrics import adjusted_rand_score
+truth = (np.arange(200) > 100).astype(int)
+print("ARI on rings:", round(adjusted_rand_score(truth, km.labels_), 3),
+      "-> halves the annulus, not the rings (shape assumption violated)")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.cluster import KMeans
+rng = np.random.default_rng(4)
+X = np.vstack([rng.normal(0, 3, (150, 2)), rng.normal(0, .3, (50, 2)) + 8])
+km = KMeans(2, n_init=10, random_state=0).fit(X)
+import collections
+print("cluster sizes:", collections.Counter(km.labels_.tolist()))
+print("(the small tight cluster gets carved; boundaries favor the big one)")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+rng = np.random.default_rng(5)
+X = np.vstack([rng.normal(c, .6, (100, 2)) for c in [(0, 0), (3, 0), (1.5, 2.6)]])
+for k in [2, 3, 4, 5]:
+    km = KMeans(k, n_init=10, random_state=0).fit(X)
+    print(f"k={k}: silhouette = {silhouette_score(X, km.labels_):.3f}")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Init sensitivity, quantified: for the 3-blob data, run K-means with `n_init=1` over 200 different random seeds; record the final inertia and cluster quality (ARI). Plot the histogram of inertias — how many distinct optima exist, and what fraction of seeds found the global one? Then rerun with k-means++ (`init="k-means++"`) and report the same. What does `n_init=10` default buy you?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.datasets import make_blobs
+from sklearn.metrics import adjusted_rand_score
+
+X, y = make_blobs(n_samples=300, centers=3, random_state=2)
+inertias, aris = [], []
+for s in range(200):
+    km = KMeans(3, n_init=1, init="random", random_state=s).fit(X)
+    inertias.append(km.inertia_)
+    aris.append(adjusted_rand_score(y, km.labels_))
+
+inertias = np.array(inertias)
+import collections
+rounded = collections.Counter(inertias.round(0))
+print("distinct local optima (rounded inertia):", dict(sorted(rounded.items())))
+print(f"fraction at global optimum: {np.mean(inertias <= inertias.min() * 1.01):.2f}")
+
+km_pp = KMeans(3, n_init=1, init="k-means++", random_state=0).fit(X)
+print("k-means++ inertia:", round(km_pp.inertia_, 1),
+      "ARI:", round(adjusted_rand_score(y, km_pp.labels_), 3))
+```
+
+Random init finds the global optimum only some fraction of the time — the rest converge to split-cluster/merge-cluster locals with visibly worse inertia. k-means++ seeding (far-apart probabilistic starts) hits the global basin nearly always, which is why it's the modern default and why `n_init` remains as insurance.
+</details>
+
+**Exercise 2.** Choosing k with three judges: for data with a planted k* = 4 (unequal weights), compute for k ∈ 2..9: (a) inertia (elbow by eye + second-difference knee detection), (b) mean silhouette, (c) a mini gap statistic (compare inertia to the mean inertia of uniform data in the same bounding box, B = 20 draws). Report the table and each judge's verdict. Where do they disagree, and which do you trust for the final claim — with what supporting evidence?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+
+rng = np.random.default_rng(9)
+X = np.vstack([rng.normal(c, .5, (m, 2)) for c, m in
+               [((0, 0), 150), ((5, 0), 60), ((0, 5), 60), ((5, 5), 150)]])
+
+rows = []
+for k in range(2, 10):
+    km = KMeans(k, n_init=10, random_state=0).fit(X)
+    sil = silhouette_score(X, km.labels_)
+    # mini gap: uniform reference in bounding box
+    null_inertias = []
+    for b in range(20):
+        Xu = rng.uniform(X.min(axis=0), X.max(axis=0), size=X.shape)
+        null_inertias.append(KMeans(k, n_init=5, random_state=b).fit(Xu).inertia_)
+    gap = np.log(np.mean(null_inertias)) - np.log(km.inertia_)
+    rows.append((k, km.inertia_, sil, gap))
+
+print(f"{'k':>2} {'inertia':>9} {'silhouette':>11} {'gap':>7}")
+for k, ine, sil, gap in rows:
+    print(f"{k:>2} {ine:9.0f} {sil:11.3f} {gap:7.3f}")
+```
+
+The three judges typically agree on the planted k here, but through different evidence: silhouette peaks (separation quality), gap spikes (vs null), inertia elbows (rate change). When they disagree: silhouette/gap answer "is this partition defensible", the elbow answers "where do returns vanish" — for a *claim* ("there are 4 groups"), demand the stability evidence of [9.1 Exercise 2](09-1-unsupervised-mindset.qmd) on top: no single index crowns k.
+</details>
+
+**Exercise 3.** Break it three ways, then fix what's fixable: (a) two moons (hand-rolled crescents), (b) three clusters with wildly different variances, (c) one big uniform blob with 5% far outliers. For each: K-means k = true-k ARI, then the best repair among {more clusters + merge, K-means on PCA-2 ([9.2](09-2-principal-component-analysis.qmd)), scaling tweaks, or "wrong tool — use a different family"}. Write the diagnosis-to-algorithm mapping sentence for each.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.metrics import adjusted_rand_score
+
+rng = np.random.default_rng(10)
+
+# (a) two moons
+t = rng.uniform(0, np.pi, 100)
+moons = np.vstack([np.c_[np.cos(t), np.sin(t)],
+                   np.c_[1 - np.cos(t), 0.5 - np.sin(t)]]) + rng.normal(0, .06, (200, 2))
+truth_a = np.repeat([0, 1], 100)
+km = KMeans(2, n_init=10, random_state=0).fit(moons)
+print("(a) moons: K-means ARI =", round(adjusted_rand_score(truth_a, km.labels_), 3),
+      "-> wrong family (non-convex); needs spectral/DBSCAN-style methods")
+
+# (b) unequal variances
+Xb = np.vstack([rng.normal(0, 2.5, (150, 2)), rng.normal(6, .3, (150, 2))])
+truth_b = np.repeat([0, 1], 150)
+km = KMeans(2, n_init=10, random_state=0).fit(Xb)
+print("(b) unequal variance: ARI =", round(adjusted_rand_score(truth_b, km.labels_), 3),
+      "-> Gaussian-mixture (soft assignment, per-cluster variance) territory")
+
+# (c) outliers
+Xc = np.vstack([rng.normal(0, .5, (250, 2)), rng.normal(20, 1, (12, 2))])
+km = KMeans(2, n_init=10, random_state=0).fit(Xc)
+import collections
+print("(c) outliers: sizes =", collections.Counter(km.labels_.tolist()),
+      "-> K-means spends a centroid on outliers; detect outliers FIRST (9.6)")
+```
+
+(a) Non-convex truth: K-means' Voronoi cells cannot represent crescents — change algorithm family (spectral, DBSCAN), not hyperparameters. (b) Shape/size assumption: Gaussian mixtures relax K-means's hard spherical prior while staying in the centroid family. (c) Outliers hijack centroids (a single far point is its own "cluster's" gravity) — outlier removal/detection is a preprocessing obligation. The mapping sentence: *diagnose which assumption fails — convexity, variance-equality, or outlier-freedom — and switch algorithms at that assumption, not at the accuracy number.*
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **K-means is a special case of a Gaussian mixture** (equal spherical covariances, hard assignment) — GMMs ([Exercise 3b](#)) are the generalization when clusters differ in shape/size/weight.
+- **`n_init` and `random_state` belong in every report**: K-means' local optima make runs incomparable otherwise; report the initialization scheme, restarts, and convergence criterion.
+- **The k-choice is a claim**: "k = 4 subtypes" enters papers; support it with stability + external validation ([9.1](09-1-unsupervised-mindset.qmd) Q2, [9.6](09-6-practical-clustering.qmd)), not the elbow alone.
+- **Feature weighting is hidden tuning**: scaling up a feature weights it in every distance — deliberate weighting (domain-informed) is legitimate; accidental weighting (units) is the [9.1](09-1-unsupervised-mindset.qmd) disease.
+- **Empty clusters**: a centroid can lose all its points; sklearn relocates it — but your hand-rolled version (Exercise 0's update) needs the guard (we kept the old center).
+- **K-means on PCA scores** ([9.2](09-2-principal-component-analysis.qmd)) is standard for wide data (denoised, decorrelated distances) — but it clusters the *projection*: structure in discarded components is invisible (C2 of [9.2](09-2-principal-component-analysis.qmd)'s batch caution).
+
+### Read & Refactor AI Code
+
+This AI-generated clustering has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.cluster import KMeans
+
+rng = np.random.default_rng(11)
+n = 300
+X = np.c_[rng.normal(0, 1, n), rng.normal(0, 1, n)]
+X[:, 0] += (rng.uniform(0, 1, n) < 0).astype(int)   # dead line, no effect
+
+# BUG 1: k chosen by 'looks about right in one run', no n_init
+km = KMeans(3, n_init=1, random_state=0).fit(X)
+print("labels:", np.bincount(km.labels_).tolist())
+
+# BUG 2: categorical codes entered as numeric
+color_code = rng.integers(0, 3, n)
+X2 = np.c_[X, color_code]                           # 0/1/2 as a NUMBER
+km2 = KMeans(3, n_init=10, random_state=0).fit(X2)
+print("with coded category, sizes:", np.bincount(km2.labels_).tolist())
+
+# BUG 3: inertia as the 'quality score' of the final clustering
+print("quality:", round(km2.inertia_, 2), "-> 'lower is better' (always)")
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **n_init = 1 with no initialization report**: the run is a lottery ticket on local optima. Use k-means++ with `n_init ≥ 10` and report stability ([9.1 Exercise 2](09-1-unsupervised-mindset.qmd)).
+2. **Integer-coded category in Euclidean space** — the [Concept Question 5](#) breakage: one-hot (or k-modes); the category now dominates distance by its arbitrary spacing.
+3. **Inertia as quality**: it only ever decreases with k and says nothing about validity — report silhouette/stability alongside, and interpret inertia only comparatively *at fixed k and features*.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+
+rng = np.random.default_rng(11)
+n = 300
+X = rng.normal(0, 1, (n, 2))
+color = rng.integers(0, 3, n)
+X_oh = np.eye(3)[color]                              # one-hot: proper handling
+X_all = np.c_[X, X_oh]
+
+km = KMeans(3, n_init=10, random_state=0).fit(X_all)
+print("sizes:", np.bincount(km.labels_).tolist())
+print("silhouette:", round(silhouette_score(X_all, km.labels_), 3),
+      "(one of several validation views — [9.6])")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Prove Lloyd's algorithm never increases inertia, and that it converges in finitely many steps: (a) the assignment step (each point to nearest centroid) cannot increase inertia for fixed centers; (b) the update step (centroid = cluster mean) minimizes within-cluster squared distance for fixed assignments; (c) finitely many partitions ⇒ termination. What does this proof *not* promise — and which quantity's monotonicity would an observer track to detect a buggy implementation?
+
+<details>
+<summary>Hint</summary>
+
+Each step is an exact coordinate-wise minimization of the same objective; monotone decrease + finite states ⇒ convergence.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+(a) For fixed centers, nearest-centroid assignment minimizes each point's contribution — inertia weakly decreases. (b) For fixed assignments, each Σ‖xᵢ − c‖² over a cluster is minimized at c = mean — weakly decreases again. (c) Inertia strictly decreases unless the partition repeats; partitions are finite ⇒ termination at a local optimum. Not promised: global optimality, a bound on iterations, or correctness of k. The tracked quantity is inertia per iteration — it must be monotone non-increasing; any increase means an implementation bug (misaligned assignment/update, or empty-cluster handling).
+</details>
+
+**Q2.** K-means vs GMM on unequal variances, theory and measurement: a GMM with full per-cluster covariances reduces to K-means when all covariances = σ²I and responsibilities are hard. Construct data where K-means and a fitted 2-component GMM disagree (variance ratio 4:1), fit both (`GaussianMixture` if available, else compare K-means on raw vs per-cluster-standardized features as the poor-man's GMM), and report ARI vs truth for each. What does the GMM's soft responsibility fix that hard assignment cannot?
+
+<details>
+<summary>Hint</summary>
+
+Hard assignment sends wide-cluster points at the boundary to the tight cluster; soft responsibilities weigh by each cluster's density — variance-aware.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+K-means' Voronoi boundary equidistant in raw space ignores that one cluster is *supposed* to be wider; a GMM's responsibility compares *densities* — a point moderately far from the wide cluster's mean is still probably wide-cluster. With equal-variance assumption dropped, the boundary curves around the tight cluster.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.mixture import GaussianMixture
+from sklearn.metrics import adjusted_rand_score
+
+rng = np.random.default_rng(20)
+X = np.vstack([rng.normal(0, 2.5, (200, 2)), rng.normal(7, .4, (200, 2))])
+truth = np.repeat([0, 1], 200)
+
+km = KMeans(2, n_init=10, random_state=0).fit(X)
+gmm = GaussianMixture(2, random_state=0).fit(X)
+print("K-means ARI:", round(adjusted_rand_score(truth, km.labels_), 3))
+print("GMM ARI:    ", round(adjusted_rand_score(truth, gmm.predict(X)), 3))
+```
+
+GMM's soft responsibilities also give *graded membership* — points near boundaries are honestly uncertain instead of hard-assigned, which downstream pipelines can propagate. The general lesson: K-means is the spherical hard special case; each relaxation (covariance, softness) buys validity on a wider cluster family at the cost of parameters and compute.
+</details>
+
+## 6. Complex Questions
+
+**C1 (K-means × [5.6](../part-05-regularization-high-dimensions/05-6-high-dimensional.qmd) × [9.2](09-2-principal-component-analysis.qmd)).** Wide-data clustering protocol: n = 200, p = 500 (5 planted clusters, strong batch direction). Compare pipelines: (a) raw → K-means; (b) scale → K-means; (c) scale → PCA-5 → K-means; (d) scale → batch-corrected → PCA-5 → K-means. Evaluate ARI vs biological truth AND vs batch. Write the pipeline decision and the audit that justified it — the realistic omics workflow in miniature.
+
+**C2 (K-means × [9.6](09-6-practical-clustering.qmd) × [12.x](../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.qmd) stub).** The k-selection multiplicity experiment: run the full k-selection circus (elbow, silhouette, gap, stability) on *null* data (no clusters) for k ∈ 2..9, 100 datasets. How often does each judge declare some k "clearly best"? Implement the correction (require judge agreement + stability + effect-size floor) and measure the false-discovery rate of "we found k clusters" claims. This is Part 12's logic wearing unsupervised clothes.
+
+## 7. Summary
+
+- K-means minimizes within-cluster squared distance to centroids: Lloyd assign/update, monotone, local-optimum.
+- Assumptions: spherical, equal-variance, equal-size clusters in Euclidean space — each breakage has a named failure mode.
+- k-means++ + `n_init` manage initialization; report the setup or the run isn't reproducible.
+- k is chosen by converging evidence — elbow + silhouette + gap + stability — and it's a claim, not a setting.
+- Categorical codes, unscaled units, outliers, non-convex shapes: each is a diagnosed assumption violation with a mapped repair.
+- GMMs generalize; spectral/density methods change families; the diagnosis-first rule routes you.
+- Clusters need validation, comparison, and honesty about selection — the practical centerpiece: [9.6 Practical clustering issues](09-6-practical-clustering.qmd), after hierarchical trees of clusters in [9.5](09-5-hierarchical-clustering.qmd).

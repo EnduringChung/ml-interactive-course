@@ -1,0 +1,421 @@
+---
+title: "7.1 Decision Trees"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - scikit-learn
+    - matplotlib
+---
+
+A decision tree predicts by asking a sequence of yes/no questions about the features, splitting the data into ever-purer regions. It is the first model in this course that *learns its own basis functions* — the adaptive step functions of [6.2](../part-06-nonlinear-regression/06-2-step-functions.qmd), with cutpoints chosen by greedy RSS/impurity reduction — and the atom from which the most successful tabular learners (Parts 7.3–7.6) are built.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+**Growing a tree** = recursive binary splitting: at each node, search every feature × every cutpoint for the split that most reduces impurity — RSS for regression, Gini or cross-entropy for classification:
+
+$$\text{Gini}: \; G = \sum_k \hat p_k (1 - \hat p_k), \qquad \text{RSS} = \sum_{i \in R} (y_i - \hat y_R)^2$$
+
+Grow deep, then **prune** back (cost-complexity: minimize RSS + α·|leaves|) — because a fully grown tree interpolates its training data ([4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd)).
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor, export_text
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+x = np.sort(rng.uniform(0, 10, 120))
+y = np.sin(x) + rng.normal(0, 0.3, x.size)
+X = x.reshape(-1, 1)
+
+tree = DecisionTreeRegressor(max_depth=3).fit(X, y)
+xg = np.linspace(0, 10, 400)
+
+fig, ax = plt.subplots(figsize=(7, 3.4))
+ax.scatter(x, y, s=12, alpha=0.5)
+ax.plot(xg, tree.predict(xg.reshape(-1, 1)), color="red", lw=2,
+        label="depth-3 tree (adaptive steps)")
+ax.plot(xg, np.sin(xg), "k--", lw=1, label="truth")
+ax.set(xlabel="x", ylabel="y", title="A tree is a greedy, adaptive step function")
+ax.legend()
+plt.show()
+print(export_text(tree, feature_names=["x"]))
+```
+
+Classification trees and their region structure:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.tree import DecisionTreeClassifier
+
+rng = np.random.default_rng(1)
+n = 150
+X = np.vstack([rng.normal([0, 0], 1.1, (n, 2)),
+               rng.normal([1.5, 1.5], 1.1, (n, 2))])
+y = np.r_[np.zeros(n), np.ones(n)].astype(int)
+
+clf = DecisionTreeClassifier(max_depth=4).fit(X, y)
+xx, yy = np.meshgrid(np.linspace(-4, 6, 220), np.linspace(-4, 6, 220))
+Z = clf.predict(np.c_[xx.ravel(), yy.ravel()]).reshape(xx.shape)
+
+fig, ax = plt.subplots(figsize=(5.5, 4))
+ax.contourf(xx, yy, Z, levels=[-0.5, 0.5, 1.5], alpha=0.2,
+            colors=["steelblue", "salmon"])
+ax.scatter(X[y == 0, 0], X[y == 0, 1], s=10, c="steelblue")
+ax.scatter(X[y == 1, 0], X[y == 1, 1], s=10, c="salmon")
+ax.set_title("Axis-parallel boundaries, however the classes run")
+plt.show()
+```
+
+## 2. Concept Questions
+
+1. Why grow deep and then prune, rather than stopping early at "no split looks useful"?
+2. The greedy split at the root maximizes immediate impurity reduction. Construct (in words) a truth where this misses the optimal first split.
+3. What exactly does `min_samples_leaf` trade, and how does it differ in spirit from `max_depth`?
+4. A tree needs no feature scaling — why, and which earlier models contradicted that requirement?
+5. Your tree's regression fit is piecewise-constant, so predictions within a leaf don't move. Name two modeling consequences.
+
+<details>
+<summary>Answers</summary>
+
+1. Early stopping is myopic: a split that looks useless now enables a powerful split one level down (the XOR/interaction structure of [2.7](../part-02-linear-regression/02-7-interaction-terms.qmd)). Grow-full-then-prune evaluates subtrees *globally* against data via cross-validated α — a better search over tree sizes than greedy stopping.
+2. Two features where the best *pair* of splits is diagonal but each single split is weak: e.g. class = "x1 XOR x2 > 0". Any first axis-parallel split leaves both children 50/50 (zero impurity gain), so greedy stops — while a diagonal cut at 45° separates perfectly. Trees can still represent XOR with *two* levels, but greedy search needs luck (or the data volume) to find it.
+3. Both limit complexity, but `min_samples_leaf` enforces a *data-density guarantee* (every prediction rests on ≥ m observations — stable leaf means, honest confidence), while `max_depth` caps *interaction depth* regardless of density. Deep-but-wide and shallow-but-narrow are different failure shapes.
+4. Splits compare features via ordered thresholds — invariant to any monotone rescaling. Ridge/lasso/PCA/KNN all depended on magnitudes/distances ([5.2](../part-05-regularization-high-dimensions/05-2-ridge-regression.qmd), [0.5](../part-00-python-foundations/00-5-data-splitting.qmd)); trees don't, which is also why they're forgiving with mixed units.
+5. (a) The response is *discontinuous* at every split — an artifact unless the world truly steps ([6.2](../part-06-nonlinear-regression/06-2-step-functions.qmd)); (b) smooth trends are approximated as staircases — many leaves needed for accuracy, and derivatives are zero inside leaves. Model averaging ([7.3](../part-07-trees-ensembles/07-3-bagging.qmd)) smooths both problems.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+rng = np.random.default_rng(2)
+X = rng.normal(0, 1, (100, 1))
+y = rng.normal(0, 1, 100)
+t1 = DecisionTreeRegressor(max_depth=None).fit(X, y)
+print("unpruned leaves:", t1.get_n_leaves(), "(≈ 100: interpolation)")
+t2 = DecisionTreeRegressor(max_depth=2).fit(X, y)
+print("depth-2 leaves:", t2.get_n_leaves())
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.tree import DecisionTreeClassifier
+X = np.array([[0., 0.], [0., 1.], [1., 0.], [1., 1.]])
+y = np.array([0, 1, 1, 0])                     # XOR
+clf = DecisionTreeClassifier(random_state=0).fit(X, y)
+print("XOR train accuracy:", clf.score(X, y))  # 1.0 with two levels
+print("feature importances:", clf.feature_importances_.round(3))
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+rng = np.random.default_rng(3)
+X = rng.normal(0, 1, (200, 4))
+y = 3 * X[:, 1] + rng.normal(0, 1, 200)        # signal only in feature 1
+t = DecisionTreeRegressor(max_depth=3).fit(X, y)
+print("importances:", t.feature_importances_.round(3), "-> feature 1 owns everything")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.datasets import make_classification
+X, y = make_classification(n_samples=400, n_features=6, random_state=4)
+clf = DecisionTreeClassifier(random_state=0).fit(X, y)
+path = clf.cost_complexity_pruning_path(X, y)
+print("ccp_alphas range:", path.ccp_alphas.min().round(5), "to",
+      path.ccp_alphas.max().round(4))
+print("n candidate alphas:", len(path.ccp_alphas))
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Pruning, done properly: grow a full tree on noisy regression data (n = 150), extract the cost-complexity path, and select α by 5-fold CV over the path. Report (a) leaves and test MSE for the unpruned tree, (b) for the CV-pruned tree, (c) for the true-model oracle (degree-known step fit). Then state what pruning bought and what it cost.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.model_selection import cross_val_score, KFold, train_test_split
+
+rng = np.random.default_rng(5)
+x = np.sort(rng.uniform(0, 10, 150))
+y = np.sin(x) + rng.normal(0, 0.4, x.size)
+X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y,
+                                          random_state=6, test_size=0.3)
+
+full = DecisionTreeRegressor(random_state=0).fit(X_tr, y_tr)
+path = full.cost_complexity_pruning_path(X_tr, y_tr)
+alphas = path.ccp_alphas[:-1]                   # skip the single-leaf end
+
+cv = KFold(5, shuffle=True, random_state=1)
+scores = []
+for a in alphas:
+    t = DecisionTreeRegressor(random_state=0, ccp_alpha=a).fit(X_tr, y_tr)
+    s = -cross_val_score(DecisionTreeRegressor(random_state=0, ccp_alpha=a),
+                         X_tr, y_tr, cv=cv,
+                         scoring="neg_mean_squared_error").mean()
+    scores.append(s)
+best_a = alphas[int(np.argmin(scores))]
+pruned = DecisionTreeRegressor(random_state=0, ccp_alpha=best_a).fit(X_tr, y_tr)
+
+for name, m in [("unpruned", full), ("CV-pruned", pruned)]:
+    print(f"{name:10s}: leaves = {m.get_n_leaves():>3}, "
+          f"test MSE = {np.mean((y_te - m.predict(X_te))**2):.4f}")
+print("noise floor ≈ 0.16")
+```
+
+Pruning removes the interpolation tail (hundreds of leaves → a handful), recovering most of the achievable accuracy; the cost is a few hundredths of MSE vs the theoretical best plus one CV loop. This grow-then-prune is the template every ensemble in this part inherits.
+</details>
+
+**Exercise 2.** The greedy trap, demonstrated: build the diagonal-separability truth — classes split by the line x₁ + x₂ = 0 with noise — and fit trees of depth 1, 2, 4. Plot boundaries and report test accuracy. Then fit a *rotated* model: tree on features (x₁+x₂)/√2, x₁ (a basis trick from [6.3](../part-06-nonlinear-regression/06-3-basis-functions.qmd)). Write the lesson about axis-parallel bias and what fixes it (rotation, ensembles, or kernels — [8.4](../part-08-svm/08-4-kernel-svm.qmd)).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(7)
+n = 300
+X = rng.normal(0, 1, (2 * n, 2))
+y = (X[:, 0] + X[:, 1] > 0).astype(int)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=8)
+
+for depth in [1, 2, 4]:
+    acc = DecisionTreeClassifier(max_depth=depth, random_state=0) \
+        .fit(X_tr, y_tr).score(X_te, y_te)
+    print(f"depth {depth}: test acc = {acc:.3f}")
+
+Xr_tr = np.c_[(X_tr[:, 0] + X_tr[:, 1]) / np.sqrt(2), X_tr[:, 0]]
+Xr_te = np.c_[(X_te[:, 0] + X_te[:, 1]) / np.sqrt(2), X_te[:, 0]]
+acc_r = DecisionTreeClassifier(max_depth=1, random_state=0) \
+    .fit(Xr_tr, y_tr).score(Xr_te, y_te)
+print(f"depth 1 on rotated features: test acc = {acc_r:.3f}")
+```
+
+A single depth-1 stump on raw features is near a coin flip (the diagonal truth gives no axis-parallel purchase); depth 4 stitches four axis-parallel cells into a staircase approximating the line. One rotated feature makes a *stump* near-perfect. Axis-parallel greediness is the tree's bias; basis rotation, oblique trees, ensembles of perturbed trees, or kernel methods are the standard remedies — each paying a different price.
+</details>
+
+**Exercise 3.** Impurity zoo: fit classification trees with `criterion="gini"` vs `"entropy"` on the same 6 datasets (varying class overlap and balance), comparing test accuracy and *tree size* (leaves). Then implement Gini by hand for a node with class proportions p and verify against `tree.compute_feature_importances`-style arithmetic on one split: predict the impurity drop of a candidate split manually and confirm it matches the reduction the fitted tree realized at that node (via `tree_.impurity`).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split
+
+diffs = []
+for seed in range(6):
+    X, y = make_classification(n_samples=300, n_features=6, weights=[0.7, 0.3],
+                               class_sep=0.6 + 0.4 * seed, random_state=seed)
+    X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=seed)
+    g = DecisionTreeClassifier(criterion="gini", random_state=0).fit(X_tr, y_tr)
+    e = DecisionTreeClassifier(criterion="entropy", random_state=0).fit(X_tr, y_tr)
+    diffs.append(g.score(X_te, y_te) - e.score(X_te, y_te))
+print("gini-minus-entropy accuracy over 6 datasets:", np.round(diffs, 3))
+print("practical difference: negligible; both greedy, both axis-parallel")
+
+# hand Gini drop for the root split of a tiny tree
+X = np.array([[0.], [0.5], [1.], [1.5], [2.], [2.5]])
+y = np.array([0, 0, 0, 1, 1, 1])
+t = DecisionTreeClassifier(max_depth=1, random_state=0).fit(X, y)
+thr = t.tree_.threshold[0]
+L, R = y[X[:, 0] <= thr], y[X[:, 0] > thr]
+def gini(v):
+    p = v.mean()
+    return 2 * p * (1 - p) if len(np.unique(v)) > 1 else 0.0
+drop = gini(y) - (len(L) / 6) * gini(L) - (len(R) / 6) * gini(R)
+realized = (t.tree_.impurity[0]
+            - (len(L) / 6) * t.tree_.impurity[1]
+            - (len(R) / 6) * t.tree_.impurity[2])
+print(f"root split at {thr:.2f}: hand impurity drop = {drop:.4f}, "
+      f"tree realized = {realized:.4f}")
+```
+
+Gini vs entropy: cosmetic — the criteria are nearly proportional for two classes; neither fixes greediness or axis-alignment (the real tree biases). The hand computation is the whole learning algorithm in four lines: weighted impurity drop, maximized over splits.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Instability is the defining flaw**: resample the data and the root split can move to a different feature entirely — small structural changes, big prediction changes. This is precisely what bagging ([7.3](../part-07-trees-ensembles/07-3-bagging.qmd)) exploits and cures.
+- **Impurity-based feature importances are biased toward high-cardinality/continuous features** and unreliable under correlated features ([7.4](../part-07-trees-ensembles/07-4-random-forests.qmd) covers the fix: permutation importance).
+- **No extrapolation**: regression trees predict leaf means — flat outside and between ([2.1](../part-02-linear-regression/02-1-regression-setup.qmd)'s warning at its extreme); time-trended data needs care (or linex tricks).
+- **Unbalanced classes**: deep trees isolate rare-class pockets happily; use `class_weight="balanced"` or stratified evaluation ([3.1](../part-03-classification-glm/03-1-classification-fundamentals.qmd)).
+- **`random_state` matters more than it should**: tie-breaking among equally-good splits is random — pin seeds for reproducibility, but note ties indicate the data doesn't care which split it got.
+- **Interpretation caveat**: a single small tree is genuinely interpretable (export_text); a deep tree is a *maze* — "interpretable model class" ≠ "this particular 500-leaf object is readable."
+
+### Read & Refactor AI Code
+
+This AI-generated tree has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(11)
+x = np.sort(rng.uniform(0, 1, 200))
+y = np.sin(2 * np.pi * x) + rng.normal(0, 0.3, 200)
+X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y, random_state=12)
+
+# BUG 1: default tree = full interpolation
+t = DecisionTreeRegressor().fit(X_tr, y_tr)
+print("train R2:", round(t.score(X_tr, y_tr), 4))
+print("test R2: ", round(t.score(X_te, y_te), 4))
+
+# BUG 2: scaled features and proud of it
+from sklearn.preprocessing import StandardScaler
+sc = StandardScaler().fit(X_tr)
+t2 = DecisionTreeRegressor(max_depth=4).fit(sc.transform(X_tr), y_tr)
+print("scaled test R2:", round(t2.score(sc.transform(X_te), y_te), 4),
+      "(identical — but the scaler adds complexity for nothing)")
+
+# BUG 3: predictions far outside the training range reported as trend
+print("trend at x = 5 (range ends at 1):",
+      round(float(t2.predict([[5.0]])[0]), 3))
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Unpruned default tree**: train R² = 1.0, test R² collapses — the interpolation pathology; prune (ccp_alpha via CV) or cap depth/leaves.
+2. **Pointless scaler**: trees are scale-invariant; the transform is dead weight that will silently bite later (transforming serving data with a scaler the model never needed). Drop it — knowing *why* is the point.
+3. **Extrapolated "trend"**: the tree returns a leaf mean for x = 5 — the last leaf's constant, dressed as a forecast. Refuse out-of-range queries or switch to a basis that extrapolates deliberately ([6.4](../part-06-nonlinear-regression/06-4-regression-splines.qmd)).
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(11)
+x = np.sort(rng.uniform(0, 1, 200))
+y = np.sin(2 * np.pi * x) + rng.normal(0, 0.3, 200)
+X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y, random_state=12)
+
+t = DecisionTreeRegressor(max_depth=5, min_samples_leaf=10,
+                          random_state=0).fit(X_tr, y_tr)
+print("pruned-tree test R2:", round(t.score(X_te, y_te), 4))
+x_new = 5.0
+if x_new > X_tr.max():
+    print(f"x = {x_new} is outside training range — no prediction offered.")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Regression trees are adaptive step functions — show it: prove that a depth-d tree partitions the feature space into ≤ 2^d rectangles and predicts the *mean* of each. Then verify numerically that for a single feature, the depth-1 stump's chosen threshold equals the RSS-minimizing split over all candidate cutpoints (compute both by brute force). What does the greedy-vs-exhaustive distinction cost when splits interact ([2.7](../part-02-linear-regression/02-7-interaction-terms.qmd))?
+
+<details>
+<summary>Hint</summary>
+
+Induction on depth for the partition; for the stump, each candidate cut creates two means — compute RSS directly.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Each internal node splits a rectangle into two rectangles by one threshold, so depth-d yields ≤ 2^d disjoint rectangles, and each leaf's prediction is its training mean — a piecewise-constant function ([6.2](../part-06-nonlinear-regression/06-2-step-functions.qmd) with data-chosen boundaries). For the stump:
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+
+rng = np.random.default_rng(13)
+x = np.sort(rng.uniform(0, 1, 80))
+y = rng.normal(0, 1, 80)
+order = np.argsort(x)
+xs, ys = x[order], y[order]
+cuts = (xs[1:] + xs[:-1]) / 2
+rss = [np.sum((ys[:k] - ys[:k].mean())**2) +
+       np.sum((ys[k:] - ys[k:].mean())**2) for k in range(2, len(xs))]
+best_cut = cuts[int(np.argmin(rss))]
+tree_cut = DecisionTreeRegressor(max_depth=1).fit(xs.reshape(-1, 1), ys) \
+    .tree_.threshold[0]
+print(f"brute-force best cut: {best_cut:.4f} | tree's cut: {tree_cut:.4f}")
+```
+
+They match to the candidate grid. Greediness costs nothing at the stump (exhaustive over one variable's cutpoints is cheap); the bill arrives with interactions: the best *pair* of splits may look worthless individually ([2.7](../part-02-linear-regression/02-7-interaction-terms.qmd)'s XOR), and greedy trees find such structures only when data volume makes intermediate gains real — the honest argument for deeper search or ensembles.
+</details>
+
+**Q2.** Cost-complexity pruning as a regularization path: relate the ccp objective RSS(T) + α|T| to ridge's penalty ([5.2](../part-05-regularization-high-dimensions/05-2-ridge-regression.qmd)) — what is the "norm" being constrained (|T| = leaf count = L0-style), and why does the α-path exist as a *finite* sequence of distinct trees (verify: len(path.ccp_alphas) ≪ 2^leaves)? Then plot test MSE vs α on one dataset and mark the CV choice — identifying the U-curve of [4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd) in tree space.
+
+<details>
+<summary>Solution</summary>
+
+ ccp penalizes the *L0 "norm"* of the tree (number of leaves) — combinatorial regularization, vs ridge's smooth L2. The key fact: as α increases, the optimal subtree changes only at O(#internal nodes) critical values — the whole pruning path is computable in one pass (that's what `cost_complexity_pruning_path` returns), not a search over 2^leaves subsets.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.model_selection import cross_val_score, KFold, train_test_split
+
+rng = np.random.default_rng(14)
+x = np.sort(rng.uniform(0, 10, 150))
+y = np.sin(x) + rng.normal(0, 0.4, x.size)
+X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y, random_state=15)
+
+full = DecisionTreeRegressor(random_state=0).fit(X_tr, y_tr)
+path = full.cost_complexity_pruning_path(X_tr, y_tr)
+alphas = path.ccp_alphas[::max(1, len(path.ccp_alphas) // 20)]
+
+test_mse, leaves = [], []
+for a in alphas:
+    t = DecisionTreeRegressor(random_state=0, ccp_alpha=a).fit(X_tr, y_tr)
+    test_mse.append(np.mean((y_te - t.predict(X_te))**2))
+    leaves.append(t.get_n_leaves())
+
+i = int(np.argmin(test_mse))
+print(f"alpha path length: {len(path.ccp_alphas)} distinct trees "
+      f"(vs {2**(full.get_n_leaves()-1):.0e} subsets!)")
+print(f"CV-style pick: alpha={alphas[i]:.4f}, leaves={leaves[i]}, "
+      f"test MSE={test_mse[i]:.4f} (floor 0.16)")
+```
+
+Same U-curve, same CV discipline — pruning is regularization where the penalty counts leaves instead of coefficient mass, and the path algorithm is what makes it tractable.
+</details>
+
+## 6. Complex Questions
+
+**C1 (trees × [6.2 step functions](../part-06-nonlinear-regression/06-2-step-functions.qmd)).** Face-off in their home game: truth = a true threshold (y = 1 + 2·1(x > t*) + noise, t* unknown). Compare (a) hand grid-searched 2-bin step ([6.2 Exercise 3](../part-06-nonlinear-regression/06-2-step-functions.qmd)), (b) depth-1 stump, (c) depth-3 tree, by threshold-recovery error and test MSE over 200 simulations. Connect the stump's threshold variance to [6.2 Q2](../part-06-nonlinear-regression/06-2-step-functions.qmd) and state why ensembles of trees ([7.3](07-3-bagging.qmd)) both stabilize predictions *and* blur individual thresholds — is that blur a scientific loss?
+
+**C2 (trees × [5.x no other fixes](../part-05-regularization-high-dimensions/05-6-high-dimensional.qmd)).** Trees in p ≫ n: n = 80, p = 500, 8 true signals. Fit a pruned tree, lasso-linear, and a random forest ([7.4](07-4-random-forests.qmd), teaser) with nested CV. Compare test MSE and which true features land in the top-10 importances. Which method's feature ranking would you trust for follow-up, and does the tree's axis-parallel greediness help or hurt under sparse signal?
+
+## 7. Summary
+
+- Trees = greedy recursive partitioning: impurity-drop splits, grow deep, prune by cost-complexity.
+- Adaptive axis-parallel step functions: no scaling needed, interactions reachable in depth, boundaries always rectangular.
+- Default = interpolation: pruning (ccp_alpha via CV) is not optional.
+- Greedy search misses XOR-style structures at shallow depth; basis rotation or ensembles compensate.
+- Single trees are unstable — a flaw so central that the next three pages turn it into a superpower.
+- Piecewise-constant predictions: no extrapolation, no smoothness — fine for regimes, wrong for trends.
+- The fix for instability without losing adaptivity: average many trees — [7.2 Advantages & limitations](07-2-advantages-limitations.qmd) first catalogues what we're averaging.

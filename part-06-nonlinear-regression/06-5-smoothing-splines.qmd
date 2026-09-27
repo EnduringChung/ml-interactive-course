@@ -1,0 +1,414 @@
+---
+title: "6.5 Smoothing Splines"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scipy
+    - scikit-learn
+    - matplotlib
+---
+
+Instead of choosing where to put knots, put a knot at **every data point** and pay a penalty for roughness. The smoothing spline minimizes
+
+$$\sum_i (y_i - f(x_i))^2 + \lambda \int \big(f''(t)\big)^2 dt$$
+
+— fit the data, but pay for wiggling. One continuous dial, λ, replaces knot placement: the elegance that makes this the statistician's smoothing benchmark.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+The minimizer of that criterion is a **natural cubic spline with knots at every distinct x** — the penalty converts "how many knots" into "how much bending," λ trading fidelity against roughness: λ = 0 interpolates, λ = ∞ returns the least-squares straight line.
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+from scipy.interpolate import UnivariateSpline
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+x = np.sort(rng.uniform(0, 10, 80))
+y = np.sin(x) + rng.normal(0, 0.4, x.size)
+xg = np.linspace(0, 10, 400)
+
+fig, ax = plt.subplots(figsize=(7, 3.4))
+ax.scatter(x, y, s=14, alpha=0.5, label="data")
+for s_factor, color in [(0.01, "red"), (1.0, "green"), (50.0, "purple")]:
+    spl = UnivariateSpline(x, y, k=3, s=s_factor * len(x))
+    ax.plot(xg, spl(xg), color=color, lw=2, label=f"s = {s_factor}·n")
+ax.plot(xg, np.sin(xg), "k--", lw=1, label="truth")
+ax.set(xlabel="x", ylabel="y", title="One dial: the smoothing parameter")
+ax.legend(fontsize=8)
+plt.show()
+```
+
+`UnivariateSpline`'s `s` is a *sum-of-squared-residuals allowance* (not λ itself): s ≈ nσ² targets the truth's smoothness. Tune it by CV like any hyperparameter:
+
+```{pyodide}
+import numpy as np
+from scipy.interpolate import UnivariateSpline
+from sklearn.model_selection import KFold
+
+rng = np.random.default_rng(1)
+x = np.sort(rng.uniform(0, 10, 80))
+y = np.sin(x) + rng.normal(0, 0.4, x.size)
+
+cv = KFold(5, shuffle=True, random_state=2)
+results = []
+for s_factor in [0.01, 0.1, 0.5, 1.0, 2.0, 5.0]:
+    mses = []
+    for tr, va in cv.split(x):
+        spl = UnivariateSpline(x[tr], y[tr], k=3, s=s_factor * len(tr))
+        mses.append(np.mean((y[va] - spl(x[va]))**2))
+    results.append((s_factor, np.mean(mses)))
+
+for s_f, mse in results:
+    print(f"s = {s_f:>4}·n: CV MSE = {mse:.4f}")
+best = min(results, key=lambda r: r[1])
+print(f"chosen: s = {best[0]}·n  (theory suggests ≈ σ² = 0.16 per point)")
+```
+
+## 2. Concept Questions
+
+1. Why must the roughness penalty use the *second* derivative (and not the first or the function itself)?
+2. λ = 0 and λ = ∞: state both endpoints precisely, including what the penalty's null space contributes.
+3. `UnivariateSpline`'s `s` is not λ. What is the relationship, and why does the "s ≈ nσ²" heuristic make sense?
+4. What are the effective degrees of freedom of a smoothing spline, and how does it behave as λ moves?
+5. Your data has 80 points but you know the first 10 are from a different regime (batch artifact). Why is a single global λ the wrong tool, and what are the two standard remedies?
+
+<details>
+<summary>Answers</summary>
+
+1. Penalizing f itself would fight the data's level; f′ would penalize any slope (linear functions cost infinitely). f″ is the *curvature* — zero for lines (so lines are free, matching the penalty's null space) and growing with wiggliness: it measures exactly what "too wiggly" means.
+2. λ = 0: pure interpolation — the natural cubic spline through every point (n df). λ = ∞: f″ ≡ 0 forced → f is any straight line, fitted by least squares (2 df). The linear functions sit in the penalty's null space and are never penalized.
+3. The criterion balances RSS + λ·∫f″²; `s` bounds the RSS directly, so s ≈ n·(per-point noise variance) reproduces the λ that an honest bias–variance trade would pick when σ² is known — a heuristic starting point, still tuned by CV.
+4. df(λ) = tr(S_λ) for the smoother matrix S_λ — a continuous quantity sliding from n (λ=0) to 2 (λ=∞). Report it alongside any smoothing-spline fit: it is the model's honest complexity.
+5. A global λ imposes one smoothness everywhere, but the artifact region needs *different* smoothness (or exclusion). Remedies: (a) regime-wise smoothing (fit separately / include regime covariates), (b) adaptive/variable-knot penalty methods — or fix the data issue upstream.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from scipy.interpolate import UnivariateSpline
+rng = np.random.default_rng(3)
+x = np.linspace(0, 1, 30)
+y_clean = x**2
+y = y_clean + rng.normal(0, 0.05, 30)
+s_int = UnivariateSpline(x, y, k=3, s=0)          # s=0: interpolates
+print("s=0 residual SD:", np.std(y - s_int(x)).round(12))
+print("spline at knots == data:", np.allclose(s_int(x), y))
+```
+
+```{pyodide}
+import numpy as np
+from scipy.interpolate import UnivariateSpline
+rng = np.random.default_rng(4)
+x = np.linspace(0, 10, 100)
+y = 3 + 2 * x + rng.normal(0, 1, 100)             # LINEAR truth
+big = UnivariateSpline(x, y, k=3, s=1e6)          # huge s: ~ straight line
+print("large-s fit vs OLS line: max diff =",
+      np.abs(big(x) - np.polyval(np.polyfit(x, y, 1), x)).max().round(4))
+print("(both ≈ least-squares line: the null space at work)")
+```
+
+```{pyodide}
+import numpy as np
+from scipy.interpolate import UnivariateSpline
+rng = np.random.default_rng(5)
+x = np.sort(rng.uniform(0, 1, 40))
+y = np.sin(2 * np.pi * x) + rng.normal(0, 0.3, x.size)
+for s_f in [0.001, 0.1, 0.5, 2.0, 10.0]:
+    spl = UnivariateSpline(x, y, k=3, s=s_f * len(x))
+    rss = np.sum((y - spl(x))**2)
+    tss = np.sum((y - y.mean())**2)
+    print(f"s={s_f:>5}.n: RSS = {rss:6.2f}  of TSS = {tss:.2f}")
+print("stiffening the penalty walks the fit from interpolation toward a straight line")
+```
+
+```{pyodide}
+import numpy as np
+from scipy.interpolate import UnivariateSpline
+rng = np.random.default_rng(6)
+x = np.sort(rng.uniform(0, 1, 50))
+y = np.sin(2 * np.pi * x) + rng.normal(0, 0.3, x.size)
+spl = UnivariateSpline(x, y, k=3, s=0.5 * len(x))
+second_deriv = spl.derivative(2)(x)
+print("max |f''|:", np.abs(second_deriv).max().round(3),
+      " <- roughness the penalty 'sees'")
+print("mean squared curvature:", round(float(np.mean(second_deriv**2)), 4))
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** The σ² connection, tested: for σ ∈ {0.1, 0.3, 1.0} (sinusoid, n = 80), tune the smoothing parameter by 5-fold CV and report the chosen `s` in units of nσ². Does the optimal s/n track σ²? Then verify the converse use: given a well-tuned fit, estimate σ² as RSS/n and check it against the truth.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy.interpolate import UnivariateSpline
+from sklearn.model_selection import KFold
+
+cv = KFold(5, shuffle=True, random_state=7)
+for sigma in [0.1, 0.3, 1.0]:
+    rng = np.random.default_rng(int(sigma * 100))
+    x = np.sort(rng.uniform(0, 10, 80))
+    y = np.sin(x) + rng.normal(0, sigma, x.size)
+    best_s, best_mse = None, np.inf
+    for s_f in 10.0 ** np.arange(-2, 1.5, 0.25):
+        mses = []
+        for tr, va in cv.split(x):
+            spl = UnivariateSpline(x[tr], y[tr], k=3, s=s_f * len(tr))
+            mses.append(np.mean((y[va] - spl(x[va]))**2))
+        if np.mean(mses) < best_mse:
+            best_s, best_mse = s_f, np.mean(mses)
+    print(f"sigma={sigma}: optimal s/n = {best_s:.3f}  (σ² = {sigma**2:.2f})")
+
+# converse: sigma-hat from a tuned fit
+x = np.sort(rng.uniform(0, 10, 80))
+y = np.sin(x) + rng.normal(0, 0.3, x.size)
+spl = UnivariateSpline(x, y, k=3, s=1.0 * len(x))
+sigma2_hat = np.sum((y - spl(x))**2) / len(x)
+print(f"sigma-hat^2 from residuals: {sigma2_hat:.3f} (truth 0.09; slight underestimate is expected)")
+```
+
+The optimal s/n rises roughly with σ² — noisier data tolerates (needs) rougher-penalized, smoother fits. And the tuned fit's residual variance estimates σ² (slightly downward — the smoother absorbs some noise, the classic df-shrunk underestimate; honest versions divide by n − df).
+</details>
+
+**Exercise 2.** Effective df, measured properly: compute the smoothing spline's hat matrix by evaluating fits at *fixed design points* across many y-draws (S_λ via covariance: E[ŷ] = S_λ f under fixed x, σ known) — or, cheaply, via `spl.get_coeffs()` and the B-spline basis. Simpler and rigorous: for 300 draws of y = f + ε at the *same* x, estimate df(λ) = Σᵢ Cov(ŷᵢ, yᵢ)/σ². Trace df against λ for λ ∈ {small, medium, large} and confirm the slide from n toward 2.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy.interpolate import UnivariateSpline
+
+rng = np.random.default_rng(8)
+x = np.sort(rng.uniform(0, 1, 50))
+f = np.sin(2 * np.pi * x)
+sigma = 0.3
+R = 4000
+
+for s_f in [0.02, 0.5, 10.0]:
+    preds = np.zeros((R, len(x)))
+    ys = np.zeros((R, len(x)))
+    for r in range(R):
+        y = f + rng.normal(0, sigma, len(x))
+        ys[r] = y
+        spl = UnivariateSpline(x, y, k=3, s=s_f * len(x))
+        preds[r] = spl(x)
+    cov_term = sum(np.cov(preds[:, i], ys[:, i])[0, 1] for i in range(len(x)))
+    df_eff = cov_term / sigma**2
+    print(f"s = {s_f:>5}·n: effective df = {df_eff:.1f}  (n = {len(x)}, min 2)")
+```
+
+The covariance estimator (the same E[df] = Σ Cov(ŷᵢ, yᵢ)/σ² used for the lasso in [5.3 Q2](../part-05-regularization-high-dimensions/05-3-lasso-regression.qmd)) slides smoothly from ≈ 50 down toward the linear model's 2 — smoothing splines genuinely *are* a continuous family of models between interpolation and the mean line, with df as the honest complexity meter.
+</details>
+
+**Exercise 3.** Confidence bands for the smooth: using the bootstrap (resample rows, refit at fixed λ, percentile bands — [4.5](../part-04-validation-model-selection/04-5-bootstrap.qmd)), build 95% bands for the smoothing-spline fit at σ = 0.3. Overlay the *pointwise* band and check its coverage of the truth across x (fraction of grid points where truth lies inside). Then explain why these are confidence bands for the *function* and not prediction intervals for new points — and widen one into the other.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy.interpolate import UnivariateSpline
+
+rng = np.random.default_rng(9)
+x = np.sort(rng.uniform(0, 10, 80))
+f = np.sin(x)
+y = f + rng.normal(0, 0.3, x.size)
+xg = np.linspace(0, 10, 200)
+
+boot = np.zeros((500, 200))
+for b in range(500):
+    idx = rng.integers(0, len(x), len(x))
+    xs = np.sort(x[idx])
+    spl = UnivariateSpline(xs, y[idx], k=3, s=1.0 * len(x))
+    boot[b] = spl(xg)
+
+lo, hi = np.percentile(boot, [2.5, 97.5], axis=0)
+truth_g = np.sin(xg)
+covered = np.mean((truth_g >= lo) & (truth_g <= hi))
+print(f"pointwise band coverage of truth: {covered:.2f}")
+
+sigma = 0.3
+pred_lo = lo - 1.96 * sigma
+pred_hi = hi + 1.96 * sigma
+new_y = truth_g + rng.normal(0, sigma, 200)
+print("new-point coverage:", round(float(np.mean((new_y >= pred_lo) & (new_y <= pred_hi))), 2))
+```
+
+The bootstrap band quantifies uncertainty of the *estimated curve* (mean response) — narrow, and its truth-coverage is the confidence-band claim. New observations add irreducible σ on top: the widened band is the prediction interval, the same mean-vs-new-point distinction as [2.2 Exercise 3](../part-02-linear-regression/02-2-simple-linear-regression.qmd), now for curves.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **`s` vs λ confusion** is the top `UnivariateSpline` trap: `s` bounds residual mass (so it scales with n and σ²), while the textbook λ multiplies roughness. Translate once, tune by CV, document which you report.
+- **Replicate x values**: smoothing splines assume unique x; with repeated x, average within duplicates or use weights (`w=`) — `UnivariateSpline` errors otherwise.
+- **Weights ≠ frequencies alone**: `w` multiplies each residual's penalty; for known heteroscedastic variances pass w = 1/σᵢ — the weighted criterion from [2.10](../part-02-linear-regression/02-10-regression-assumptions.qmd)'s repair menu.
+- **Effective df should accompany every smooth**: a fit is not described by λ/s alone; "smoothed with 7.3 df" is the reproducible statement.
+- **Boundary behavior**: natural-spline structure keeps tails linear, but tail estimates still lean on few points — report where the data actually supports the curve (or shade the bands honestly, Exercise 3).
+- **Multivariate smoothing splines** exist (thin-plate splines) but explode computationally with dimension — the practical route to multiple smooths is the additive model ([6.7](06-7-gam.qmd)).
+
+### Read & Refactor AI Code
+
+This AI-generated smoother has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from scipy.interpolate import UnivariateSpline
+
+rng = np.random.default_rng(10)
+x = np.sort(rng.uniform(0, 1, 100))
+x[5] = x[4]                                    # a duplicated design point
+y = np.sin(2 * np.pi * x) + rng.normal(0, 0.3, 100)
+
+# BUG 1: duplicated x with default call
+try:
+    spl = UnivariateSpline(x, y, k=3, s=1.0)
+    print("fit ok")
+except Exception as e:
+    print("crashed:", type(e).__name__)
+
+# BUG 2: s treated as lambda (absolute tiny value, n ignored)
+spl2 = UnivariateSpline(x, y, k=3, s=0.001)
+
+# BUG 3: w passed as raw variances instead of inverse-sd weights
+w = np.full(100, 0.09)
+try:
+    spl3 = UnivariateSpline(x, y, w=w, k=3, s=1.0)
+    print("weighted fit ok (but weights are inverted)")
+except Exception as e:
+    print("crashed:", type(e).__name__)
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Duplicate x**: the interpolating structure needs distinct abscissae. Average duplicates (with combined weight) or jitter-and-disclose.
+2. **s as λ**: s = 0.001 *allows almost no residual mass* → near-interpolation regardless of n; the allowance must scale like nσ² (then be tuned).
+3. **Weights inverted**: w multiplies each squared residual — high-variance points should get *small* w. Passing variances upweights the noisiest points, exactly backwards ([2.10](../part-02-linear-regression/02-10-regression-assumptions.qmd)'s WLS logic).
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy.interpolate import UnivariateSpline
+
+rng = np.random.default_rng(10)
+x = np.sort(rng.uniform(0, 1, 100))
+x[5] = x[4]
+y = np.sin(2 * np.pi * x) + rng.normal(0, 0.3, 100)
+
+# deduplicate: average y at tied x, weight 2 there
+xu, inverse = np.unique(x, return_inverse=True)
+yu = np.zeros(len(xu))
+wu = np.zeros(len(xu))
+for i in range(len(xu)):
+    m = inverse == i
+    yu[i] = y[m].mean()
+    wu[i] = m.sum()
+
+spl = UnivariateSpline(xu, yu, w=wu, k=3, s=len(xu) * 0.09)   # ~ n * sigma^2
+print("fit ok; residual SD =", round(float(np.std(yu - spl(xu))), 3))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Sketch the variational argument: among all twice-differentiable f minimizing RSS + λ∫f″², argue the minimizer must be a natural cubic spline with knots at the data points. (Hint: on any interval between consecutive x's, the Euler–Lagrange condition for the integrand (f″)² forces f⁗ = 0 — a cubic; the boundary conditions at the extreme data force naturality.) What role does λ play in this derivation, and what does the result *not* tell you (name one thing CV still must decide)?
+
+<details>
+<summary>Hint</summary>
+
+Variation f → f + εg vanishing at data points; integrate ∫f″g″ by parts twice; the ODE f⁗ = 0 emerges between knots with natural boundary conditions f″ = f‴ = 0 at the ends.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Perturbing f by smooth g with g(xᵢ) = 0 and setting the first variation to zero: ∫(f″g″)dx + λ∑-terms give, after integrating by parts, ∫f⁗g = 0 for all admissible g between consecutive data — hence f⁗ ≡ 0 there (cubic pieces). At the boundary intervals the natural conditions f″ = f‴ = 0 appear (no outside data to balance them), making the spline *natural*. λ scales the trade-off inside this fixed family — the family itself is λ-independent. What the derivation doesn't decide: σ² / the absolute scale of residual tolerance (where on the λ-path to stop) — that is CV's job, exactly as in Exercise 1; theory gives the shape of the model space, validation picks the point in it.
+</details>
+
+**Q2.** Reinsch/GCV without GCV: the generalized cross-validation score is $\text{GCV}(\lambda) = \frac{n\,\text{RSS}(\lambda)}{(n - \text{df}(\lambda))^2}$. Implement GCV for the smoothing spline using the covariance-based df estimator (Exercise 2, at reduced R for cost), sweep λ, and compare GCV-chosen s against 5-fold-CV-chosen s over 100 simulated datasets. Report agreement rates and which is cheaper. When do they disagree systematically (heteroscedastic data)?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy.interpolate import UnivariateSpline
+from sklearn.model_selection import KFold
+
+def gcv_choose(x, y, sigma=0.3, R=150):
+    best_s, best_score = None, np.inf
+    for s_f in 10.0 ** np.arange(-2, 1.1, 0.5):
+        preds, ys = np.zeros((R, len(x))), np.zeros((R, len(x)))
+        rr = np.random.default_rng(0)
+        for r in range(R):
+            yb = y + rr.normal(0, sigma, len(y))   # parametric bootstrap around y
+            spl = UnivariateSpline(x, yb, k=3, s=s_f * len(x))
+            preds[r] = spl(x)
+            ys[r] = yb
+        df = sum(np.cov(preds[:, i], ys[:, i])[0, 1] for i in range(len(x))) / sigma**2
+        rss = np.sum((y - UnivariateSpline(x, y, k=3, s=s_f * len(x))(x))**2)
+        score = len(x) * rss / (len(x) - df)**2
+        if score < best_score:
+            best_s, best_score = s_f, score
+    return best_s
+
+rng = np.random.default_rng(14)
+agree, cv_s_list, gcv_s_list = 0, [], []
+for rep in range(30):
+    x = np.sort(rng.uniform(0, 1, 60))
+    y = np.sin(2 * np.pi * x) + rng.normal(0, 0.3, x.size)
+    cv = KFold(5, shuffle=True, random_state=rep)
+    best_cv, best_m = None, np.inf
+    for s_f in 10.0 ** np.arange(-2, 1.1, 0.5):
+        mses = []
+        for tr, va in cv.split(x):
+            spl = UnivariateSpline(x[tr], y[tr], k=3, s=s_f * len(tr))
+            mses.append(np.mean((y[va] - spl(x[va]))**2))
+        if np.mean(mses) < best_m:
+            best_cv, best_m = s_f, np.mean(mses)
+    s_g = gcv_choose(x, y)
+    cv_s_list.append(best_cv); gcv_s_list.append(s_g)
+    agree += abs(np.log10(best_cv) - np.log10(s_g)) < 0.5
+
+print(f"GCV and 5-fold CV agree (within ~0.5 log10 s): {agree}/30")
+print("GCV needs no refit-per-fold, but assumes homoscedastic noise —")
+print("under heteroscedasticity, fold-based CV remains the trustworthy dial.")
+```
+
+GCV is the closed-form cousin of CV (cheaper: one fit per λ, not per fold) and typically lands within a notch of CV on homoscedastic data. Under heteroscedasticity GCV's implicit uniform-σ assumption biases the choice — the same fragility as every analytic criterion vs the empirical honesty of cross-validation.
+</details>
+
+## 6. Complex Questions
+
+**C1 (smoothing × [5.2 ridge](../part-05-regularization-high-dimensions/05-2-ridge-regression.qmd) × [6.4](06-4-regression-splines.qmd)).** Prove-by-construction the identity: a smoothing spline is ridge regression on a rich spline basis (fine knot grid) with a penalty tailored to the basis. Implement ridge-on-SplineTransformer (many knots), tune α by CV, and compare against UnivariateSpline tuned by CV: fitted curves, effective df, CV MSE. Where they differ, explain via the penalty's form (coefficient shrinkage vs derivative integral) and boundary handling.
+
+**C2 (smoothing × [3.6 GLM](../part-03-classification-glm/03-6-generalized-linear-models.qmd) × [6.7](06-7-gam.qmd) preview).** Smoothing for non-Gaussian responses: binary outcome with smooth logit truth logit(p(x)) = sin(2πx). Fit (a) a Gaussian-error smoothing spline to the 0/1 y (wrong likelihood), (b) a binned-response spline (bin x into 15 cells, smooth the empirical logits), (c) plain logistic with polynomial basis. Compare CV log-loss. This ad-hoc tour is exactly the problem generalized additive logistic models solve properly — write down what (b) gets right and where it still falls short of a true GAM.
+
+## 7. Summary
+
+- Smoothing splines: knots everywhere, roughness penalized — knot placement becomes one continuous dial.
+- The minimizer is a natural cubic spline through the data; λ slides df continuously from n to 2.
+- `s` (residual allowance ≈ nσ²) vs λ (roughness weight): know which your library exposes; tune by CV either way.
+- Report effective df — the honest complexity of a smooth.
+- Bands: bootstrap for the function; add σ for new points.
+- GCV is the cheap analytic dial; heteroscedasticity breaks it — CV stays the referee.
+- One smooth of one variable is a toy; real data has many x's: additive models — [6.7 GAMs](06-7-gam.qmd) — after the local-regression way station: [6.6 Local regression](06-6-local-regression.qmd).

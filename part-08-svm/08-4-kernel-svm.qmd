@@ -1,0 +1,424 @@
+---
+title: "8.4 Kernel SVM"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - matplotlib
+---
+
+The kernel trick is the SVM's superpower: replace every inner product xᵢᵀxⱼ with a kernel function k(xᵢ, xⱼ) that *implicitly* computes inner products in a vast expanded space — nonlinearity without ever building the features. Circles in, circles classified; dimensions infinite, cost unchanged.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+The dual's predictions depend only on inner products ([8.2](08-2-maximal-margin.qmd)): f(x) = Σαᵢyᵢ⟨xᵢ, x⟩ + b. Substitute any valid kernel k:
+
+$$f(x) = \sum_i \alpha_i y_i k(x_i, x) + b$$
+
+The **RBF (Gaussian) kernel** — the default workhorse:
+
+$$k(x_i, x) = \exp(-\gamma \|x_i - x\|^2)$$
+
+— implicitly an *infinite-dimensional* basis. The classic circle problem, solved:
+
+```{pyodide}
+#| fig-width: 6.5
+#| fig-height: 4
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.svm import SVC
+
+rng = np.random.default_rng(0)
+n = 150
+r = rng.uniform(0, 2.2, n)
+theta = rng.uniform(0, 2 * np.pi, n)
+X_in = np.c_[r * np.cos(theta), r * np.sin(theta)]
+r2 = rng.uniform(2.8, 4, n)
+X_out = np.c_[r2 * np.cos(theta), r2 * np.sin(theta)]
+X = np.vstack([X_in, X_out])
+y = np.r_[np.zeros(n), np.ones(n)].astype(int)
+
+linear = SVC(kernel="linear", C=10).fit(X, y)
+rbf = SVC(kernel="rbf", C=10, gamma=1.0).fit(X, y)
+print("linear accuracy:", round(linear.score(X, y), 3),
+      "| RBF accuracy:", round(rbf.score(X, y), 3))
+
+xx, yy = np.meshgrid(np.linspace(-4.5, 4.5, 250), np.linspace(-4.5, 4.5, 250))
+Z = rbf.predict(np.c_[xx.ravel(), yy.ravel()]).reshape(xx.shape)
+
+fig, ax = plt.subplots(figsize=(5.5, 4))
+ax.contourf(xx, yy, Z, levels=[-0.5, 0.5, 1.5], alpha=0.2,
+            colors=["steelblue", "salmon"])
+ax.scatter(X[y == 0, 0], X[y == 0, 1], s=10, c="steelblue")
+ax.scatter(X[y == 1, 0], X[y == 1, 1], s=10, c="salmon")
+ax.set(aspect="equal", title="RBF kernel: a circle, learned linearly (upstairs)")
+plt.show()
+```
+
+**The explicit feature map, once** — to demystify the trick, do it manually for the quadratic kernel:
+
+```{pyodide}
+import numpy as np
+from sklearn.svm import SVC
+
+rng = np.random.default_rng(1)
+n = 100
+x1 = rng.normal(0, 1, n)
+x2 = rng.normal(0, 1, n)
+y = (x1**2 + x2**2 > 2).astype(int) * 2 - 1
+X = np.c_[x1, x2]
+
+# explicit quadratic map: phi(x) = (x1^2, x2^2, sqrt(2) x1 x2)
+Phi = np.c_[X[:, 0]**2, X[:, 1]**2, np.sqrt(2) * X[:, 0] * X[:, 1]]
+
+poly_explicit = SVC(kernel="linear", C=100).fit(Phi, y)
+poly_kernel = SVC(kernel="poly", degree=2, coef0=1, gamma=1, C=100).fit(X, y)
+print("explicit-map accuracy:  ", round(poly_explicit.score(Phi, y), 3))
+print("poly-kernel accuracy:   ", round(poly_kernel.score(X, y), 3))
+print("same geometry, one built the room, the other charged rent invisibly")
+```
+
+## 2. Concept Questions
+
+1. State the kernel trick's two-part bargain: what must the algorithm never do, and what may it only use?
+2. Why does the RBF kernel create *closed, local* boundaries while polynomial kernels create open, global ones?
+3. γ in the RBF kernel: what does large γ do to each training point's influence, and which failure does extreme γ reproduce ([7.1](../part-07-trees-ensembles/07-1-decision-trees.qmd))?
+4. What makes a function a *valid* kernel (the Mercer condition, in one sentence), and name two practical consequences of validity.
+5. `SVC.support_vectors_` after an RBF fit: are these points in the original space or the expanded one — and how many coordinates does the expanded space have?
+
+<details>
+<summary>Answers</summary>
+
+1. Never: materialize φ(x) or use any property of features beyond inner products. Only: inner products ⟨xᵢ, xⱼ⟩ (and ⟨xᵢ, x⟩ at prediction) — replace with k(xᵢ, xⱼ) and everything stays valid *if* k is a real inner product in some space.
+2. RBF similarity decays with distance (Gaussian bump around every SV): boundaries are unions of local closed contours — a point's class is decided by nearby support vectors. Polynomials are global monomials: boundaries extend to infinity as open curves — decided by global orientation ([6.3](../part-06-nonlinear-regression/06-3-basis-functions.qmd)'s local-vs-global bases, kernel edition).
+3. Large γ → narrow bumps → each training point influences only its own micro-neighborhood → the fit approaches "memorize every point" — a 1-NN with kernels, the same overfitting endpoint ([7.1](../part-07-trees-ensembles/07-1-decision-trees.qmd)'s k = 1).
+4. Valid = positive semi-definite: Σcᵢcⱼk(xᵢ, xⱼ) ≥ 0 for all coefficients — i.e., it IS an inner product in some Hilbert space. Consequences: the optimization stays convex (a QP), and predictions are consistent geometry (no paradoxical "similar to both classes" pathologies).
+5. Original space — support vectors are training *points* (stored as-is); the expanded space has infinitely many coordinates for RBF (the map is infinite-dimensional), which is exactly why you never build it.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+# RBF kernel values: similarity decays with distance
+def rbf(a, b, gamma):
+    return np.exp(-gamma * np.sum((a - b) ** 2))
+a, b_far, b_near = np.array([0.0]), np.array([3.0]), np.array([0.3])
+for gamma in [0.1, 1.0, 10.0]:
+    print(f"gamma={gamma:>4}: k(near)={rbf(a, b_near, gamma):.3f}  "
+          f"k(far)={rbf(a, b_far, gamma):.6f}")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.svm import SVC
+rng = np.random.default_rng(2)
+X = rng.normal(0, 1, (100, 2))
+y = (X[:, 0] * X[:, 1] > 0).astype(int)
+for gamma in [0.1, 1.0, 20.0]:
+    acc = SVC(kernel="rbf", gamma=gamma, C=10).fit(X, y).score(X, y)
+    print(f"gamma={gamma:>5}: train acc {acc:.3f} (20 -> memorization)")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.svm import SVC
+rng = np.random.default_rng(3)
+X = rng.normal(0, 1, (100, 2))
+y = (X[:, 0] + X[:, 1] > 0).astype(int)        # linear truth!
+for kernel in ["linear", "rbf"]:
+    acc = SVC(kernel=kernel, C=10).fit(X, y).score(X, y)
+    print(f"{kernel:7s}: {acc:.3f}  (linear truth -> kernels buy nothing)")
+```
+
+```{pyodide}
+import numpy as np
+# kernel matrix PSD check (Mercer, empirically)
+rng = np.random.default_rng(4)
+X = rng.normal(0, 1, (30, 2))
+def rbf_gram(A, gamma=1.0):
+    D2 = ((A[:, None, :] - A[None, :, :]) ** 2).sum(axis=2)
+    return np.exp(-gamma * D2)
+K = rbf_gram(X)
+eigvals = np.linalg.eigvalsh(K)
+print("min eigenvalue of RBF Gram:", eigvals.min().round(6), "(>= 0: PSD)")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Implement the RBF-kernel SVM's *prediction function* by hand from a fitted `SVC`: extract `dual_coef_`, `support_vectors_`, `intercept_`; compute f(x) = Σ αᵢ k(xᵢ, x) + b yourself on a query grid; verify exact agreement with `decision_function`. Then confirm the kernel matrix your function implies (SVs × queries) matches `rbf_gram` — the whole model is these numbers.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.svm import SVC
+
+rng = np.random.default_rng(5)
+n = 60
+r = rng.uniform(0, 1.5, n)
+th = rng.uniform(0, 2 * np.pi, n)
+X = np.c_[r * np.cos(th), r * np.sin(th)]
+y = (r > 1).astype(int) * 2 - 1
+clf = SVC(kernel="rbf", C=10, gamma=1.0).fit(X, y)
+
+def my_decision(Xq):
+    K = np.exp(-np.linalg.norm(Xq[:, None, :] - clf.support_vectors_[None, :, :],
+                               axis=2) ** 2)
+    return K @ clf.dual_coef_[0] + clf.intercept_[0]
+
+Xq = rng.normal(0, 1.5, (40, 2))
+print("max |mine - sklearn|:", np.abs(my_decision(Xq) -
+                                       clf.decision_function(Xq)).max())
+```
+
+A fitted kernel SVM *is* its support vectors, their dual coefficients, and an intercept — everything else (γ, C) shaped those numbers. This representation is also the deployment format: store ~n_support vectors, evaluate kernels on demand.
+</details>
+
+**Exercise 2.** The γ × C landscape: for the circle dataset, grid-search (γ, C) over log grids with 5-fold CV; display the CV-accuracy heat map. Identify the three regimes visible in the map (underfit smooth / well-fit / memorize), and mark the CV optimum. Then state the two-dial tuning recipe — which knob acts like model complexity, which like the fit-price — and their interaction.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.model_selection import GridSearchCV, StratifiedKFold
+
+rng = np.random.default_rng(6)
+n = 120
+r = rng.uniform(0, 2.2, n)
+th = rng.uniform(0, 2 * np.pi, n)
+X = np.vstack([np.c_[r * np.cos(th), r * np.sin(th)],
+               np.c_[(r + 1.6) * np.cos(th), (r + 1.6) * np.sin(th)]])
+y = np.r_[np.zeros(n), np.ones(n)].astype(int)
+
+grid = GridSearchCV(
+    SVC(kernel="rbf"),
+    {"gamma": 10.0 ** np.arange(-2, 2.5, 0.5),
+     "C": 10.0 ** np.arange(-1, 3.5, 0.5)},
+    cv=StratifiedKFold(5, shuffle=True, random_state=7)).fit(X, y)
+
+print("best:", grid.best_params_, "CV acc:", round(grid.best_score_, 4))
+means = grid.cv_results_["mean_test_score"].reshape(len(grid.param_grid["gamma"]),
+                                                    len(grid.param_grid["C"]))
+gams = grid.param_grid["gamma"]; Cs = grid.param_grid["C"]
+print("\nCV accuracy map (rows = gamma, cols = C):")
+print("        " + "".join(f"C={c:<7.2g}" for c in Cs))
+for g, row in zip(gams, means):
+    print(f"g={g:<7.2g}" + "".join(f"{v:.3f}   " for v in row))
+```
+
+Reading: low γ or low C → underfit (smooth blob, ~50–70%); high γ AND high C → memorize (train-perfect, CV-crippled); the diagonal ridge between them is the operating zone — γ sets per-point locality (complexity), C sets how hard violations are chased (fit price), and jointly they trace the [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd) U-curve in 2-D.
+</details>
+
+**Exercise 3.** Kernel zoo, honestly compared: on three truths (linear, circle, XOR-corner), compare linear / poly(degree 2) / RBF kernels by CV accuracy — plus the "kernel + linear truth" sanity row. Report the 3(kernel) × 3(truth) table. Write the kernel-selection heuristic the table supports, including the role of the linear baseline as a *lower-bound guard* against needless kernels.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+
+rng = np.random.default_rng(8)
+def data(kind, n=250):
+    r = np.random.default_rng(abs(hash(kind)) % 10000)
+    if kind == "linear":
+        X = r.normal(0, 1, (n, 2))
+        y = (X[:, 0] + X[:, 1] > 0).astype(int)
+    elif kind == "circle":
+        rad = r.uniform(0, 2, n); th = r.uniform(0, 2 * np.pi, n)
+        X = np.c_[rad * np.cos(th), rad * np.sin(th)]
+        y = (rad > 1.2).astype(int)
+    else:  # xor-corner
+        X = r.uniform(-2, 2, (n, 2))
+        y = ((X[:, 0] > 0) ^ (X[:, 1] > 0)).astype(int)
+    return X, y
+
+cv = StratifiedKFold(5, shuffle=True, random_state=9)
+kernels = {
+    "linear": SVC(kernel="linear", C=10),
+    "poly2": SVC(kernel="poly", degree=2, coef0=1, gamma="scale", C=10),
+    "rbf": SVC(kernel="rbf", C=10),
+}
+print(f"{'':10s}" + "".join(f"{k:>10s}" for k in ["linear", "circle", "xor"]))
+for kname, _ in kernels.items():
+    row = f"{kname:10s}"
+    for tname in ["linear", "circle", "xor"]:
+        X, y = data(tname)
+        kernel_kind = {"linear": "linear", "poly2": "poly", "rbf": "rbf"}[kname]
+        acc = cross_val_score(SVC(kernel=kernel_kind, degree=2, coef0=1, C=10),
+                              X, y, cv=cv).mean()
+        row += f"{acc:10.3f}"
+    print(row)
+```
+
+Reads: linear kernel wins its own truth and never embarrasses elsewhere (the guard); poly2 takes XOR (its basis contains x₁x₂); RBF wins circles and corners (local freedom) but gains nothing on linear truths. Heuristic: always run the linear baseline; reach for RBF when validation says the boundary curves; try poly when domain theory names the interaction order. Kernels are hypotheses about geometry — test them like hypotheses.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **γ and C multiply each other's effect** — the same fit can be reached by (γ↓, C↑) or (γ↑, C↓) along the flat valley; tune jointly on log grids, never independently ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)).
+- **Scaling is non-negotiable**: RBF distance is Euclidean in raw units; unscaled features decide the geometry ([8.1](08-1-geometry.qmd)'s law, now with teeth — γ's meaning changes with scale too).
+- **SV count explodes with overlap**: RBF SVMs on noisy data can retain most of the training set as SVs — prediction cost and memory scale with it; `LinearSVC` or trees for huge n.
+- **`gamma="scale"` (default) is 1/(n·Var(X))** — data-dependent, sensible, but *changes between datasets*: never port γ across problems.
+- **Probabilities**: `SVC(probability=True)` fits Platt scaling post-hoc (internal CV) — calibrated-ish but slower and slightly different model; quote `decision_function` for ranking, probabilities only after this step ([3.7](../part-03-classification-glm/03-7-model-comparison.qmd)).
+- **Precomputed kernels**: you can pass your own Gram matrix (`kernel="precomputed"`) — the door to custom/domain-specific similarity functions (strings, graphs, alignments) — validity (PSD) is on you.
+
+### Read & Refactor AI Code
+
+This AI-generated kernel pipeline has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(13)
+n = 300
+r = rng.uniform(0, 3, n)
+X = np.c_[r * np.cos(rng.uniform(0, 6.28, n)),
+          r * np.sin(rng.uniform(0, 6.28, n))]
+y = (r > 1.8).astype(int)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=14)
+
+# BUG 1: RBF on unscaled features with a gamma copied from a blog
+clf = SVC(kernel="rbf", gamma=50, C=10).fit(X_tr, y_tr)
+print("train acc:", round(clf.score(X_tr, y_tr), 3),
+      "test acc:", round(clf.score(X_te, y_te), 3))
+
+# BUG 2: linear kernel declared dead after one loss
+lin = SVC(kernel="linear", C=10).fit(X_tr, y_tr)
+print("linear acc:", round(lin.score(X_te, y_te), 3), "-> 'kernels always win'")
+
+# BUG 3: decision_function quoted as probability
+print("probabilities:", clf.decision_function(X_te[:3]).round(3))
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **γ = 50 on unscaled data**: distance² of typical points is tens-to-hundreds → kernel values ≈ e^{-thousands} ≈ 0 — every point isolated, training memorizes (train ≫ test). Scale features; tune γ on a log grid.
+2. **One loss → verdict**: the linear baseline is a *guard*, not a rival; on a circle truth it *should* lose, and kernels don't "always win" — linear truths punish them (drill 3).
+3. **Scores ≠ probabilities**: decision_function is the unbounded margin; calibrate (Platt) if probabilities are needed downstream.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import GridSearchCV, StratifiedKFold, train_test_split
+
+rng = np.random.default_rng(13)
+n = 300
+r = rng.uniform(0, 3, n)
+th = rng.uniform(0, 6.28, n)
+X = np.c_[r * np.cos(th), r * np.sin(th)]
+y = (r > 1.8).astype(int)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, stratify=y, random_state=14)
+
+pipe = make_pipeline(StandardScaler(), SVC(kernel="rbf"))
+grid = GridSearchCV(pipe, {"svc__gamma": 10.0 ** np.arange(-2, 2, 0.5),
+                           "svc__C": 10.0 ** np.arange(-1, 3, 0.5)},
+                    cv=StratifiedKFold(5, shuffle=True, random_state=0)).fit(X_tr, y_tr)
+print("CV-chosen:", grid.best_params_)
+print("honest test acc:", round(grid.score(X_te, y_te), 4))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Verify the polynomial-kernel identity on a small case: for x, z ∈ R², k(x, z) = (xᵀz + 1)² equals ⟨φ(x), φ(z)⟩ for φ = (x₁², x₂², √2x₁x₂, √2x₁, √2x₂, 1). Check numerically across random pairs. Then explain why this equivalence means the explicit-map SVM and the kernel SVM are the *same model* — and construct (conceptually) the case where the explicit map is still preferable (name the resource that becomes the bottleneck).
+
+<details>
+<summary>Hint</summary>
+
+Expand (xᵀz + 1)² = (x₁z₁ + x₂z₂ + 1)² term by term; match coefficients to inner products of the φ coordinates.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+(xᵀz + 1)² = (x₁z₁)² + (x₂z₂)² + 2x₁z₁x₂z₂ + 2x₁z₁ + 2x₂z₂ + 1 = x₁²z₁² + x₂²z₂² + (√2x₁x₂)(√2z₁z₂) + (√2x₁)(√2z₁) + (√2x₂)(√2z₂) + 1·1 — exactly ⟨φ(x), φ(z)⟩ for the stated φ. Numerics:
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+x = rng = np.random.default_rng(18)
+x = rng.normal(0, 1, 2); z = rng.normal(0, 1, 2)
+
+kern = (x @ z + 1) ** 2
+phi_x = np.array([x[0]**2, x[1]**2, np.sqrt(2)*x[0]*x[1], np.sqrt(2)*x[0], np.sqrt(2)*x[1], 1.0])
+phi_z = np.array([z[0]**2, z[1]**2, np.sqrt(2)*z[0]*z[1], np.sqrt(2)*z[0], np.sqrt(2)*z[1], 1.0])
+print("kernel:", round(kern, 6), "| explicit inner product:",
+      round(float(phi_x @ phi_z), 6))
+```
+
+Same model: SVM-in-φ-space with a linear kernel ≡ SVM with (xᵀz+1)² — identical optimum, identical predictions. Explicit map preferred when φ is *low-dimensional and you predict millions of times* (basis evaluation beats SV-kernel sums) or need φ's coefficients for interpretation; the kernel wins when dim(φ) is huge (degree 10 → ~66+ dims; RBF → infinite).
+</details>
+
+**Q2.** The γ–distance reading: show that for the RBF kernel, the decision function is a signed *weighted sum of bumps* centered at support vectors, and that γ determines each bump's radius (∝ 1/√γ). Design and run the diagnostic: for a fitted RBF SVM, plot the decision function along a 1-D slice, mark SV locations, and show how the boundary interpolates between SV classes as γ varies over {0.2, 2, 20}. Write the "γ-as-resolution" sentence a practitioner should carry.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.svm import SVC
+
+rng = np.random.default_rng(19)
+n = 40
+x0 = rng.normal(0, .4, n)                      # centered: both classes present
+y = (x0 > 0).astype(int) * 2 - 1
+X = np.c_[x0, rng.normal(0, .2, n)]
+
+fig_data = {}
+for gamma in [0.2, 2.0, 20.0]:
+    m = SVC(kernel="rbf", gamma=gamma, C=10).fit(X, y)
+    xs = np.linspace(-2.5, 2.5, 400)
+    grid = np.c_[xs, np.zeros(400)]
+    fig_data[gamma] = (m.decision_function(grid), m.support_vectors_[:, 0])
+
+for gamma, (scores, svs) in fig_data.items():
+    xs = np.linspace(-2.5, 2.5, 400)
+    zero_x = xs[np.argmin(np.abs(scores))]
+    print(f"gamma={gamma:>5}: boundary near x = {zero_x:+.2f}, "
+          f"SV count = {len(svs)}")
+print("larger gamma -> tighter bumps -> boundary hugs individual points")
+```
+
+γ is the resolution dial of a bump-sum representation: 1/√γ is bump width. Low γ: one wide bump family — smooth, nearly-linear boundaries. High γ: a bump per point — the decision function reproduces training labels individually (memorization). Carry the sentence: "γ sets how far one training point's vote reaches; C sets how expensive it is to disagree — tune them together."
+</details>
+
+## 6. Complex Questions
+
+**C1 (kernels × [5.x high dimensions](../part-05-regularization-high-dimensions/05-6-high-dimensional.qmd) × [7.4 forests](../part-07-trees-ensembles/07-4-random-forests.qmd)).** The nonlinear tabular rematch: n = 200, p = 50, truth = 4 linear signals + 2 interaction signals + 1 radial signal. Compete RBF-SVM (tuned), random forest, and lasso ([5.3](../part-05-regularization-high-dimensions/05-3-lasso-regression.qmd)) by nested CV. Report test error *and* each method's capture of the three signal types (importances/coefficient paths). Which inductive bias wins when signals are heterogeneous — and what ensemble-of-diverse-models conclusion does the table support?
+
+**C2 (kernels × [8.2 support vectors](08-2-maximal-margin.qmd) × [12.x stability](../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.qmd) stub).** SV stability under resampling: fit RBF SVMs (CV-tuned γ, C) on 100 bootstrap resamples; measure (a) the Jaccard overlap of SV sets, (b) prediction agreement, (c) the overlap of top-importance features if any. Compare against a logistic model's selected-feature stability. Which model's "explanation artifact" (SV set vs coefficient signs) is more reproducible — and what does that imply about publishing SVM-derived SV analyses?
+
+## 7. Summary
+
+- Kernel trick: predictions need only inner products — swap in k(xᵢ, xⱼ), get the expanded space for free.
+- RBF = local bumps (closed boundaries, γ = resolution); poly = global monomials (open boundaries); linear = the guard.
+- Scale features; tune (γ, C) jointly on log grids; the flat valley between underfit and memorize is the target.
+- Fitted model = support vectors + dual coefficients + intercept — deployable, inspectable, kernel-generic.
+- Valid kernels are PSD: convexity preserved, geometry consistent, custom similarities welcome.
+- Nonlinearity now costs a kernel choice, not a basis build — but probabilities, scaling, and SV-cost caveats ride along.
+- Linear SVM vs logistic, margins vs likelihoods, side by side: [8.5 SVM vs logistic regression](08-5-svm-vs-logistic.qmd).

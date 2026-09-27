@@ -1,0 +1,432 @@
+---
+title: "6.1 Polynomial Regression — Beyond the Line"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - scikit-learn
+    - matplotlib
+---
+
+Part 2's line was a *choice*, not a law. Polynomial regression keeps the entire linear-model machinery — closed forms, t-tests, pipelines — but lets the fitted curve bend by replacing $x$ with powers of itself. This page is where "linear in the parameters, flexible in the features" becomes a design principle ([2.8](../part-02-linear-regression/02-8-nonlinear-transformations.qmd) revisited with modeling intent).
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+Replace $x$ with the basis $\phi(x) = (x, x^2, \ldots, x^d)$ and fit least squares on the expanded design. The model is still $\hat y = \phi(x)^\top\beta$ — linear in $\beta$, polynomial in $x$. Degree $d$ controls flexibility; everything from [4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd)'s U-curve applies with $d$ as the dial.
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+x = np.sort(rng.uniform(0, 1, 40))
+y = np.sin(2 * np.pi * x) + rng.normal(0, 0.25, 40)
+xg = np.linspace(0, 1, 300)
+
+fig, ax = plt.subplots(figsize=(7, 3.4))
+ax.scatter(x, y, s=18, alpha=0.6, label="data")
+for d in [1, 3, 11]:
+    c = np.polyfit(x, y, d)
+    ax.plot(xg, np.polyval(c, xg), lw=2, label=f"degree {d}")
+ax.set(ylim=(-1.8, 2), xlabel="x", ylabel="y", title="The dial: degree")
+ax.legend()
+plt.show()
+```
+
+A cleaner estimator than raw polyfit: `PolynomialFeatures` + standardization inside a pipeline (raw powers of large $x$ are numerically poisonous — [2.8](../part-02-linear-regression/02-8-nonlinear-transformations.qmd)):
+
+```{pyodide}
+import numpy as np
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import cross_val_score, KFold
+
+rng = np.random.default_rng(1)
+x = rng.uniform(0, 10, 80)
+y = 0.5 * x**2 - 3 * x + 2 + rng.normal(0, 3, 80)
+
+cv = KFold(5, shuffle=True, random_state=2)
+for d in [1, 2, 3, 4]:
+    pipe = make_pipeline(StandardScaler(),
+                         PolynomialFeatures(degree=d, include_bias=False),
+                         LinearRegression())
+    mse = -cross_val_score(pipe, x.reshape(-1, 1), y, cv=cv,
+                           scoring="neg_mean_squared_error").mean()
+    print(f"degree {d}: CV MSE = {mse:.3f}")
+```
+
+## 2. Concept Questions
+
+1. Your true function is cubic but you fit degree 7 with n = 20. Name the disease, its symptom in the coefficients, and its cure.
+2. Why does standardizing x before squaring change anything — isn't $x^2$ the same information as $(x/2)^2$ up to scaling?
+3. A polynomial fit looks perfect on [0, 1] and predicts −40 at x = 1.1. Which basis property makes polynomials uniquely catastrophic extrapolators?
+4. Orthogonal polynomials: what numerical problem do they solve, and do they change the fitted curve?
+5. You have two candidate degrees with CV MSE 8.1 and 8.3. Which two considerations decide, and what rule from [4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd) applies?
+
+<details>
+<summary>Answers</summary>
+
+1. **Overfitting** (variance-dominated). Symptom: huge, alternating-sign high-order coefficients (they encode noise wiggles). Cure: lower the degree, or regularize the expanded features (ridge on the basis — [5.2](../part-05-regularization-high-dimensions/05-2-ridge-regression.qmd)), or collect data.
+2. The *fit* is invariant (same column space) but the *penalty and numerics* are not: with raw scales, $x^2$'s column norm dwarfs $x$'s, so ridge shrinks them unequally and the normal equations are ill-conditioned. Standardization makes each basis column a fair citizen.
+3. Polynomials are **global** bases: a coefficient fitted to wiggle inside [0, 1] must express that wiggle via powers that explode outside it — the curve has nowhere to go but vertical. Local bases (steps, splines — [6.2](06-2-step-functions.qmd), [6.4](06-4-regression-splines.qmd)) keep misbehavior local.
+4. Ill-conditioning of the Vandermonde matrix $[1, x, x^2, \ldots]$: near-collinear columns make coefficient estimates numerically unstable. Orthogonal polynomials decorrelate the basis — same fitted *values*, far more stable *coefficients*.
+5. The gap is within noise (check the SE of the CV difference); prefer the simpler degree unless the extra flexibility earns its keep — the one-standard-error rule, plus interpretation cost.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+x = np.array([0., 1., 2., 3.])
+y = np.array([1., 2.1, 3.9, 6.2])
+c = np.polyfit(x, y, 2)
+print(c.round(3))                       # ≈ [0.5, 1.0, 1.0]-ish
+print(np.polyval(c, 4).round(2))
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.preprocessing import PolynomialFeatures
+X = np.array([[2.0], [3.0]])
+P = PolynomialFeatures(degree=3, include_bias=False)
+print(P.fit_transform(X))               # x, x^2, x^3
+P2 = PolynomialFeatures(degree=2, include_bias=True)
+print(P2.fit_transform(X))              # 1, x, x^2 — bias column for intercept
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(2)
+x = np.linspace(0, 5, 30)
+y = np.exp(0.5 * x) + rng.normal(0, 1, 30)
+# training RSS always falls with degree:
+for d in [1, 3, 7, 15]:
+    rss = np.sum((y - np.polyval(np.polyfit(x, y, d), x))**2)
+    print(f"degree {d:>2}: train RSS = {rss:8.3f}")
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(3)
+x = np.sort(rng.uniform(0, 1, 25))
+y = np.sin(2 * np.pi * x) + rng.normal(0, 0.2, 25)
+c = np.polyfit(x, y, 10)
+print("extrapolated at x=1.2:", np.polyval(c, 1.2).round(1))
+print("extrapolated at x=1.5:", np.polyval(c, 1.5).round(1))
+print("-> global bases explode outside the data; never extrapolate a high-degree fit")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Model-selection theater, then honesty: for the quartic truth $y = 1 - 2x + 0.5x^2 - 0.1x^3 + 0.01x^4 + \varepsilon$ (σ = 2, n = 50), fit degrees 1–10 and report (a) training MSE, (b) 5-fold CV MSE, (c) true test MSE on 20,000 fresh points. Identify the CV-argmin and the true-argmin; how often (over 200 data draws) does CV pick the exactly-optimal degree ±1?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import cross_val_score, KFold
+
+def true_f(x):
+    return 1 - 2 * x + 0.5 * x**2 - 0.1 * x**3 + 0.01 * x**4
+
+rng = np.random.default_rng(4)
+hits = 0
+true_errs, cv_errs = {}, {}
+xg = np.linspace(0, 10, 5000)
+for rep in range(200):
+    x = np.sort(rng.uniform(0, 10, 50))
+    y = true_f(x) + rng.normal(0, 2, 50)
+    cv_scores = []
+    for d in range(1, 11):
+        pipe = make_pipeline(StandardScaler(),
+                             PolynomialFeatures(d, include_bias=False),
+                             LinearRegression())
+        cv_scores.append(-cross_val_score(pipe, x.reshape(-1, 1), y,
+                           cv=KFold(5, shuffle=True, random_state=rep),
+                           scoring="neg_mean_squared_error").mean())
+    best_cv = int(np.argmin(cv_scores)) + 1
+    if abs(best_cv - 4) <= 1:
+        hits += 1
+    for d in [4, best_cv]:
+        pipe = make_pipeline(StandardScaler(),
+                             PolynomialFeatures(d, include_bias=False),
+                             LinearRegression()).fit(x.reshape(-1, 1), y)
+        errs = (true_f(xg) + rng.normal(0, 2, 5000)) - pipe.predict(xg.reshape(-1, 1))
+        (true_errs if d == 4 else cv_errs)[rep] = np.mean(errs**2)
+
+print(f"CV picked degree within ±1 of truth: {hits}/200 draws")
+print(f"mean true MSE, fixed degree 4:  {np.mean(list(true_errs.values())):.3f}")
+print(f"mean true MSE, CV-chosen:       {np.mean(list(cv_errs.values())):.3f}")
+```
+
+CV lands within ±1 of the true degree in most draws, and its chosen model's *true* error is statistically indistinguishable from the oracle's — degree selection is one of the friendlier hyperparameters. The residual gap between the two rows is selection noise, priced and familiar ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)).
+</details>
+
+**Exercise 2.** The conditioning autopsy: fit degree 8 on x ∈ [0, 100] with (a) raw powers via `np.polyfit`, (b) standardized powers via the pipeline. Compare the *leading* coefficients and the fitted values' SD across 100 bootstrap resamples of the training data. Which parameterization's coefficients are reproducible, and what does that mean for reporting "the x³ effect"?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(5)
+x_full = rng.uniform(0, 100, 60)
+y_full = 0.05 * x_full**2 - 0.3 * x_full + 10 + rng.normal(0, 20, 60)
+
+raw_lead, scaled_lead = [], []
+for b in range(100):
+    idx = rng.integers(0, 60, 60)
+    x, y = x_full[idx], y_full[idx]
+    raw_lead.append(np.polyfit(x, y, 8)[0])                 # x^8 coefficient
+    pipe = make_pipeline(PolynomialFeatures(8, include_bias=False),
+                         StandardScaler(), LinearRegression()).fit(x.reshape(-1, 1), y)
+    scaled_lead.append(pipe.named_steps["linearregression"].coef_[-1])
+
+print(f"raw x^8 coeff:  SD across bootstraps = {np.std(raw_lead):.3g}")
+print(f"scaled x^8 coeff: SD across bootstraps = {np.std(scaled_lead):.4f}")
+print("same fitted curve, wildly different coefficient stability")
+```
+
+The raw parameterization's leading coefficient wobbles by orders of magnitude — collinearity of powers makes each coefficient an unstable mixture of all others. The standardized basis (or orthogonal polynomials) spreads the work evenly, so coefficients — and any *story* attached to them — become reportable. Fitted values were never in danger; your interpretations were.
+</details>
+
+**Exercise 3.** Extrapolation guard-rail: build a `PolyModel` class wrapping the pipeline with (a) `predict(x_new)` that refuses (with an informative error) points outside the training range, (b) a `slope(x)` method returning the derivative $f'(x) = \sum k c_k x^{k-1}$ evaluated via the fitted coefficients. Fit on the sinusoid, verify the derivative against `np.gradient` at three points, and demonstrate the refusal at x beyond range.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.linear_model import LinearRegression
+
+class PolyModel:
+    def __init__(self, degree):
+        self.degree = degree
+        self.pipe = make_pipeline(StandardScaler(),
+                                  PolynomialFeatures(degree, include_bias=False),
+                                  LinearRegression())
+    def fit(self, x, y):
+        self.x_lo, self.x_hi = x.min(), x.max()
+        self.pipe.fit(x.reshape(-1, 1), y)
+        # recover standardized-basis coefficients -> raw-power coefficients
+        lin = self.pipe.named_steps["linearregression"]
+        scaler = self.pipe.named_steps["standardscaler"]
+        pf = self.pipe.named_steps["polynomialfeatures"]
+        mu, sd = x.mean(), x.std()
+        # chain: z = (T(x) - mu)/sd applied per power k: ((x^k - mu_k)/sd_k)
+        # slope in x: sum_k coef_k * k * x^(k-1) / sd_k
+        self.coef_std = lin.coef_
+        return self
+    def _check(self, x_new):
+        if np.any((x_new < self.x_lo) | (x_new > self.x_hi)):
+            raise ValueError(f"x outside training range [{self.x_lo:.2f}, {self.x_hi:.2f}]")
+    def predict(self, x_new):
+        x_new = np.atleast_1d(np.asarray(x_new, dtype=float))
+        self._check(x_new)
+        return self.pipe.predict(x_new.reshape(-1, 1))
+    def slope(self, x0):
+        self._check(np.atleast_1d(x0))
+        z = np.atleast_1d(np.asarray(x0, dtype=float))
+        powers = z[:, None] ** np.arange(1, self.degree + 1)[None, :]
+        powers = (powers - self.pipe.named_steps["standardscaler"].mean_) \
+                 / self.pipe.named_steps["standardscaler"].scale_
+        dstd = np.array([(k) * z ** (k - 1) for k in range(1, self.degree + 1)]).T
+        dstd = dstd / self.pipe.named_steps["standardscaler"].scale_
+        return dstd @ self.coef_std
+
+rng = np.random.default_rng(6)
+x = np.sort(rng.uniform(0, 1, 60))
+y = np.sin(2 * np.pi * x) + rng.normal(0, 0.2, 60)
+pm = PolyModel(6).fit(x, y)
+
+for x0 in [0.1, 0.5, 0.9]:
+    num = np.gradient(np.sin(2 * np.pi * np.linspace(x0 - 0.01, x0 + 0.01, 5)))
+    print(f"x={x0}: model slope {pm.slope(x0)[0]:+.3f}  numeric {num[2]:+.3f}")
+try:
+    pm.predict(1.2)
+except ValueError as e:
+    print("refused:", e)
+```
+
+The class turns two recurring lessons — range-policing ([2.1](../part-02-linear-regression/02-1-regression-setup.qmd)) and derivative-style interpretation — into reusable machinery. The slope check against a numerical derivative validates the standardized-coefficient chain rule.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **`np.polyfit`'s coefficient order** (highest first) versus `PolynomialFeatures`' (lowest first) — mixing the two conventions is a classic silent bug.
+- **`include_bias=True` adds the constant column**: pair it with `LinearRegression(fit_intercept=False)` or you get a redundant intercept (harmless with OLS, wasteful with penalized fits).
+- **Extrapolation is the polynomial's worst subject** — global basis, exploding tails; guard-rails or local bases ([6.4](06-4-regression-splines.qmd)).
+- **Degree ≠ complexity exactly**: a degree-9 fit with ridge (α tuned) can behave like a degree-3 fit — flexibility is jointly set by basis size *and* penalty ([5.2](../part-05-regularization-high-dimensions/05-2-ridge-regression.qmd)).
+- **Weights**: noisy heteroscedastic data wants weighted least squares on the basis (`LinearRegression` can't; use sample-weighted estimators) — otherwise high-variance regions dictate the global curve.
+- **Numerical creep**: degrees above ~15 on raw scales produce garbage even when predictions look fine — check `np.linalg.cond` of the design, or just standardize/orthogonalize.
+
+### Read & Refactor AI Code
+
+This AI-generated fit has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(7)
+x = np.sort(rng.uniform(0, 5, 80))
+y = 2 + 0.5 * x - 0.15 * x**2 + rng.normal(0, 1, 80)
+X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y, random_state=8)
+
+# BUG 1: bias column + intercept
+pf = PolynomialFeatures(degree=2)                    # include_bias=True default
+model = LinearRegression(fit_intercept=True).fit(pf.fit_transform(X_tr), y_tr)
+print("train R2:", round(model.score(pf.transform(X_tr), y_tr), 4))
+
+# BUG 2: score on DIFFERENT transform instance
+test_r2 = model.score(pf.fit_transform(X_te), y_te)
+print("test R2:", round(test_r2, 4))
+
+# BUG 3: cross_validation over a 1-D x without reshaping
+try:
+    from sklearn.model_selection import cross_val_score
+    s = cross_val_score(LinearRegression(), x, y, cv=5)
+    print("cv:", s.mean().round(3))
+except Exception as e:
+    print("crashed:", type(e).__name__)
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Bias column + intercept** double-counts the constant: OLS survives (pseudo-inverse absorbs it), but ridge would split the intercept across both — and the coefficient table now lies about which constant is which.
+2. **`pf.fit_transform(X_te)` re-fits the transformer on test data** — a different expansion than training used. Always `transform`, never `fit_transform`, on non-training data (or just use the pipeline).
+3. **1-D x into cross_val_score** — sklearn expects 2-D features; the explicit reshape (or pipeline over the original frame) is required.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split, cross_val_score, KFold
+
+rng = np.random.default_rng(7)
+x = np.sort(rng.uniform(0, 5, 80))
+y = 2 + 0.5 * x - 0.15 * x**2 + rng.normal(0, 1, 80)
+X_tr, X_te, y_tr, y_te = train_test_split(x.reshape(-1, 1), y, random_state=8)
+
+pipe = make_pipeline(StandardScaler(),
+                     PolynomialFeatures(degree=2, include_bias=False),
+                     LinearRegression()).fit(X_tr, y_tr)
+print("train R2:", round(pipe.score(X_tr, y_tr), 4))
+print("test R2: ", round(pipe.score(X_te, y_te), 4))
+cv = -cross_val_score(pipe, x.reshape(-1, 1), y, cv=KFold(5, shuffle=True, random_state=0),
+                      scoring="neg_mean_squared_error").mean()
+print("5-fold CV MSE:", round(cv, 3))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Show that fitting degree-d polynomials by OLS is a *linear smoother*: $\hat{y} = H^{(d)} y$ where $H^{(d)}$ is the hat matrix of the expanded design. Use this to (a) explain why training error strictly decreases in d, and (b) compute the effective degrees of freedom as tr($H^{(d)}$) = d + 1 — verifying both claims numerically on a small dataset.
+
+<details>
+<summary>Hint</summary>
+
+OLS fitted values are projections; nested column spaces give nested projections; trace of a projection = its rank.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+$\hat y = X_d (X_d^\top X_d)^{-1} X_d^\top y \equiv H^{(d)} y$; the column spaces are nested $span(X_1) \subset span(X_2) \subset \cdots$, and projections onto superspaces can only shrink residuals — training error is monotone down. $H^{(d)}$ is idempotent of rank d + 1, so tr = d + 1 — the effective df that Cp charges for ([5.1](05-1-features)`Cp` — same identity).
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(9)
+x = np.sort(rng.uniform(0, 1, 40))
+y = rng.normal(0, 1, 40)
+for d in [1, 4, 9]:
+    Xd = np.vander(x, d + 1, increasing=True)
+    H = Xd @ np.linalg.pinv(Xd)
+    resid = y - H @ y
+    print(f"degree {d:>2}: tr(H) = {np.trace(H):.1f}, train MSE = {np.mean(resid**2):.4f}")
+```
+
+This linear-smootherness is what lets polynomials, splines, and KNN be compared on one complexity axis ([2.9 Q1](../part-02-linear-regression/02-9-knn-regression.qmd)) — the tr(H) bookkeeping runs the whole show.
+</details>
+
+**Q2.** Chebyshev rebalancing: for x ∈ [−1, 1], compare the condition number of the Vandermonde matrix under (a) raw monomials $x^k$ and (b) Chebyshev polynomials $T_k(x)$, for d = 10. Then verify that OLS on the Chebyshev basis yields *identical fitted values* (up to tolerance) with far better-conditioned normal equations. What does this imply about the information content of the two bases — and about which part of the analysis (fit vs interpretation) benefits?
+
+<details>
+<summary>Hint</summary>
+
+Both bases span the same degree-d polynomial space; conditioning differs, span doesn't.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(10)
+x = np.sort(rng.uniform(-1, 1, 60))
+y = np.cos(3 * x) + rng.normal(0, 0.1, 60)
+d = 10
+
+V_raw = np.vander(x, d + 1, increasing=True)
+k = np.arange(d + 1)
+V_cheb = np.cos(k[None, :] * np.arccos(x)[:, None])     # T_k(x) = cos(k arccos x)
+
+print("cond(V_raw): ", f"{np.linalg.cond(V_raw):.3e}")
+print("cond(V_cheb):", f"{np.linalg.cond(V_cheb):.3e}")
+
+b_raw = np.linalg.lstsq(V_raw, y, rcond=None)[0]
+b_cheb = np.linalg.lstsq(V_cheb, y, rcond=None)[0]
+print("max |fitted-value difference|:", np.abs(V_raw @ b_raw - V_cheb @ b_cheb).max())
+```
+
+The condition number improves by orders of magnitude while fitted values coincide to float precision: the *span* is identical, only the coordinate system changed. Interpretation benefits most — coefficients on Chebyshev basis functions are stable, meaningful amplitudes of oscillation, whereas raw-monomial coefficients are numerically arbitrary mixtures. Same moral as [2.8](../part-02-linear-regression/02-8-nonlinear-transformations.qmd)'s standardization, taken to its mathematical conclusion.
+</details>
+
+## 6. Complex Questions
+
+**C1 (polynomials × [4.4 decomposition](../part-04-validation-model-selection/04-4-bias-variance.qmd)).** Produce the degree-wise bias²/variance decomposition (300 training sets, n = 30, sinusoid truth) *twice*: once for raw `polyfit`, once for ridge-on-standardized-basis with α chosen per training set by CV. Overlay both total-MSE curves. Where does regularization move the optimal flexibility, and what does that say about degree as a hyperparameter when a penalty is present?
+
+**C2 (polynomials × [5.6 high dimensions](../part-05-regularization-high-dimensions/05-6-high-dimensional.qmd)).** Multiply the basis: with p = 8 raw features expanded to all degree-2 monomials and interactions, you have p′ = 44 columns (count them via `PolynomialFeatures`). For n ∈ {30, 100, 400}: fit (a) OLS on the expanded basis, (b) lasso on the expanded basis, reporting nested test MSE and support size (counting interaction terms). At which n does the interaction term $x_1 x_2$ (built into the truth with coefficient 2) get selected reliably? What does this say about interaction hunting as a function of sample size — extending [2.7 C2](../part-02-linear-regression/02-7-interaction-terms.qmd)?
+
+## 7. Summary
+
+- Polynomials = linear models on a power basis: full inference machinery, one flexibility dial (degree).
+- Train error always falls with degree; test error U-curves; CV chooses — and usually lands near the truth.
+- Standardize (or orthogonalize) the basis: conditioning protects coefficients, penalties, and your interpretations.
+- Global bases extrapolate catastrophically; police the range or move to local bases.
+- tr(H) = d + 1: polynomials, splines, and KNN speak the same effective-df language.
+- Ridge-on-basis decouples flexibility from degree — the penalty is the modern dial.
+- The most local basis of all: cut x into intervals and fit constants — [6.2 Step functions](06-2-step-functions.qmd).

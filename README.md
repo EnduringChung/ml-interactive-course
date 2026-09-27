@@ -90,10 +90,33 @@ Status flow: **Draft → Drilled → Reviewed → Published**
 | 5.4 Elastic net | T1 | Published |
 | 5.5 PCR and PLS | T1 | Published |
 | 5.6 High-dimensional data | T1 | Published |
-| Part 6 — Nonlinear regression (7 pages) | T1 | Not started |
-| Part 7 — Trees & ensembles (7 pages) | T1 | Not started |
-| Part 8 — SVMs (6 pages) | T1 | Not started |
-| Part 9 — Unsupervised (9.1–9.6 T1; 9.7 T3) | mixed | Not started (stubs) |
+| 6.1 Polynomial regression | T1 | Published |
+| 6.2 Step functions | T1 | Published |
+| 6.3 Basis functions | T1 | Published |
+| 6.4 Regression splines | T1 | Published |
+| 6.5 Smoothing splines | T1 | Published |
+| 6.6 Local regression | T1 | Published |
+| 6.7 Generalized additive models | T1 | Published |
+| 7.1 Decision trees | T1 | Published |
+| 7.2 Advantages & limitations of trees | T1 | Published |
+| 7.3 Bagging | T1 | Published |
+| 7.4 Random forests | T1 | Published |
+| 7.5 Gradient boosting | T1 | Published |
+| 7.6 Modern boosting libraries | T1 | Published |
+| 7.7 Bayesian additive regression trees | T1 | Published |
+| 8.1 Geometry essentials | T1 | Published |
+| 8.2 Maximal-margin classifier | T1 | Published |
+| 8.3 Soft-margin classifier | T1 | Published |
+| 8.4 Kernel SVM | T1 | Published |
+| 8.5 SVM vs logistic regression | T1 | Published |
+| 8.6 Multiclass SVM | T1 | Published |
+| 9.1 The unsupervised mindset | T1 | Published |
+| 9.2 Principal component analysis | T1 | Published |
+| 9.3 Missing values & matrix completion | T1 | Published |
+| 9.4 K-means clustering | T1 | Published |
+| 9.5 Hierarchical clustering | T1 | Published |
+| 9.6 Practical clustering issues | T1 | Published |
+| 9.7 UMAP / t-SNE / autoencoders | T3 | Not started (T3 pass) |
 | Part 10 — Deep learning (10.x) | T3 | Not started |
 | Part 11 — Survival analysis (11.x) | T1 | Not started |
 | Part 12 — Multiple testing (12.1–12.5 T1; 12.6 T2) | mixed | Not started (stubs) |

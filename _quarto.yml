@@ -83,6 +83,40 @@ website:
             - part-05-regularization-high-dimensions/05-4-elastic-net.qmd
             - part-05-regularization-high-dimensions/05-5-pcr-pls.qmd
             - part-05-regularization-high-dimensions/05-6-high-dimensional.qmd
+        - section: "Part 6 — Nonlinear Regression"
+          contents:
+            - part-06-nonlinear-regression/06-1-polynomial-regression.qmd
+            - part-06-nonlinear-regression/06-2-step-functions.qmd
+            - part-06-nonlinear-regression/06-3-basis-functions.qmd
+            - part-06-nonlinear-regression/06-4-regression-splines.qmd
+            - part-06-nonlinear-regression/06-5-smoothing-splines.qmd
+            - part-06-nonlinear-regression/06-6-local-regression.qmd
+            - part-06-nonlinear-regression/06-7-gam.qmd
+        - section: "Part 7 — Trees & Ensembles"
+          contents:
+            - part-07-trees-ensembles/07-1-decision-trees.qmd
+            - part-07-trees-ensembles/07-2-advantages-limitations.qmd
+            - part-07-trees-ensembles/07-3-bagging.qmd
+            - part-07-trees-ensembles/07-4-random-forests.qmd
+            - part-07-trees-ensembles/07-5-gradient-boosting.qmd
+            - part-07-trees-ensembles/07-6-modern-boosting.qmd
+            - part-07-trees-ensembles/07-7-bart.qmd
+        - section: "Part 8 — Support Vector Machines"
+          contents:
+            - part-08-svm/08-1-geometry.qmd
+            - part-08-svm/08-2-maximal-margin.qmd
+            - part-08-svm/08-3-soft-margin.qmd
+            - part-08-svm/08-4-kernel-svm.qmd
+            - part-08-svm/08-5-svm-vs-logistic.qmd
+            - part-08-svm/08-6-multiclass-svm.qmd
+        - section: "Part 9 — Unsupervised Learning"
+          contents:
+            - part-09-unsupervised-learning/09-1-unsupervised-mindset.qmd
+            - part-09-unsupervised-learning/09-2-principal-component-analysis.qmd
+            - part-09-unsupervised-learning/09-3-missing-values.qmd
+            - part-09-unsupervised-learning/09-4-k-means.qmd
+            - part-09-unsupervised-learning/09-5-hierarchical-clustering.qmd
+            - part-09-unsupervised-learning/09-6-practical-clustering.qmd
 
 format:
   live-html:

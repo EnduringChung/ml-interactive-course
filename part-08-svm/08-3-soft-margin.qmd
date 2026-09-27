@@ -1,0 +1,416 @@
+---
+title: "8.3 The Soft-Margin Classifier"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - matplotlib
+---
+
+Real classes overlap. The soft margin keeps the maximal-margin idea but lets points pay a price ξᵢ to violate it — turning "impossible" into "tunable": C sets the exchange rate between a fat margin and a clean fit. It is the SVM you will actually use.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+$$\min_{w, b, \xi} \; \frac{1}{2}\|w\|^2 + C \sum_i \xi_i \quad \text{s.t.} \quad y_i(w^\top x_i + b) \ge 1 - \xi_i, \;\; \xi_i \ge 0$$
+
+ξᵢ = how far point i intrudes into (or crosses) the margin; C = the price per unit of intrusion. C → ∞ recovers the hard margin; C → 0 lets the boundary ignore everything.
+
+```{pyodide}
+#| fig-width: 8
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.svm import SVC
+
+rng = np.random.default_rng(0)
+n = 60
+X = np.vstack([rng.normal([-1, -1], 1.1, (n, 2)),
+               rng.normal([1, 1], 1.1, (n, 2))])
+y = np.r_[np.zeros(n), np.ones(n)].astype(int)      # overlapping classes
+
+fig, axes = plt.subplots(1, 3, figsize=(8, 3.4), sharey=True)
+for ax, C in zip(axes, [0.01, 1.0, 1e4]):
+    clf = SVC(kernel="linear", C=C).fit(X, y)
+    w, b = clf.coef_[0], clf.intercept_[0]
+    xg = np.linspace(-4, 4, 100)
+    ax.scatter(X[y == 0, 0], X[y == 0, 1], s=12, c="steelblue")
+    ax.scatter(X[y == 1, 0], X[y == 1, 1], s=12, c="salmon")
+    ax.plot(xg, (-b - w[0] * xg) / w[1], "k-")
+    ax.plot(xg, (1 - b - w[0] * xg) / w[1], "g--", lw=1)
+    ax.plot(xg, (-1 - b - w[0] * xg) / w[1], "r--", lw=1)
+    d = clf.decision_function(X)
+    ax.set_title(f"C={C}: {np.mean(y * d < 1):.0%} violate margin")
+fig.tight_layout()
+plt.show()
+```
+
+**Hinge loss** — the soft margin's loss in unconstrained clothing: ξᵢ = (1 − yᵢ(wᵀxᵢ + b))₊:
+
+```{pyodide}
+import numpy as np
+
+scores = np.array([-2.0, -0.5, 0.3, 1.0, 2.5])
+y = np.array([-1, 1, 1, 1, 1])                # note: x=-2 with y=+1 is badly wrong
+hinge = np.maximum(1 - y * scores, 0)
+print("scores:  ", scores)
+print("hinge:   ", hinge)
+print("zero iff correctly outside the margin; grows linearly when wrong")
+```
+
+C tuning, honestly ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)):
+
+```{pyodide}
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import GridSearchCV, StratifiedKFold
+
+rng = np.random.default_rng(1)
+n = 150
+X = np.vstack([rng.normal([-1, -1], 1.2, (n // 2, 2)),
+               rng.normal([1, 1], 1.2, (n // 2, 2))])
+y = np.r_[np.zeros(n // 2), np.ones(n // 2)].astype(int)
+
+pipe = make_pipeline(StandardScaler(), SVC(kernel="linear"))
+grid = GridSearchCV(pipe, {"svc__C": 10.0 ** np.arange(-3, 4)},
+                    cv=StratifiedKFold(5, shuffle=True, random_state=2)).fit(X, y)
+print("C by CV:", grid.best_params_["svc__C"],
+      "| CV acc:", round(grid.best_score_, 4))
+```
+
+## 2. Concept Questions
+
+1. A support vector in the soft-margin world: which points get αᵢ > 0 now? Are they all *on* the margin?
+2. C → ∞ and C → 0 endpoints: state both behaviors, including what the boundary does at C = 0.
+3. How does the hinge loss differ from logistic loss at (a) correctly-classified far points, (b) misclassified points — and what does each difference do to the fitted boundary?
+4. Your CV chooses C = 1000 on overlapping data. What is that telling you about the data — and is the resulting margin reportable?
+5. Why does the soft-margin SVM remain scale-sensitive, and which quantity does a feature-unit change distort — C, ξ, or both?
+
+<details>
+<summary>Answers</summary>
+
+1. In the hard margin, αᵢ > 0 ⟺ on the margin. Soft margin: αᵢ > 0 for points *on* the margin **and** all violators (ξᵢ > 0) — anything touching or crossing the band is load-bearing; far-correct points still don't matter.
+2. C → ∞: slacks become unaffordable → hard-margin behavior (infeasible if overlap exists — solver strains). C → 0: violations are free → ‖w‖ → 0 dominates, boundary collapses toward arbitrary/mean — practically untrained. C = 0 exactly is degenerate (w = 0 minimizes).
+3. (a) Hinge = 0 for far-correct points (no gradient, no influence — the margin geometry's parsimony); logistic loss never reaches zero — every point pulls forever (smoother, no sparsity of influence). (b) Misclassified: hinge is *linear* in the violation (bounded influence of any single point), logistic is exponential-ish in the margin distance (a single extreme point can dominate the fit). Net: SVM boundary = geometry of the frontier; logistic boundary = a weighted average view of all data.
+4. High C chosen on overlapping data says "the CV folds are (nearly) separable under heavy penalization" — i.e., few-but-real violations. The reported 2/‖w‖ is then a *nominal* margin with (100·violation%) of points inside it — report it together with the violation fraction, or not at all.
+5. Both, via ξᵢ: ξᵢ is measured in *score units* (wᵀx + b), whose scale depends on feature units — rescaling a feature changes each ξᵢ and thus the C-price of the same geometric situation. Standardize first, always (geometric law from [8.1](08-1-geometry.qmd)).
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.svm import SVC
+rng = np.random.default_rng(2)
+X = np.vstack([rng.normal([-1, -1], 1.0, (30, 2)),
+               rng.normal([1, 1], 1.0, (30, 2))])
+y = np.array([0] * 30 + [1] * 30)
+for C in [0.01, 1, 100]:
+    clf = SVC(kernel="linear", C=C).fit(X, y)
+    d = clf.decision_function(X)
+    print(f"C={C:>6}: margin violators {np.mean(y * d < 1):.0%}, "
+          f"||w|| = {np.linalg.norm(clf.coef_[0]):.3f}")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.svm import SVC
+rng = np.random.default_rng(3)
+X = np.vstack([rng.normal([-1, -1], 1.0, (30, 2)),
+               rng.normal([1, 1], 1.0, (30, 2))])
+y = np.array([0] * 30 + [1] * 30)
+clf = SVC(kernel="linear", C=1.0).fit(X, y)
+d = y * clf.decision_function(X)               # signed correctness
+sv = clf.support_
+print("alpha>0 points have y*f(x) <= 1:",
+      bool(np.all(d[clf.support_] <= 1 + 1e-6)))
+print("far-correct points are NOT support vectors:",
+      bool(np.all(d[clf.support_] > -2)))
+```
+
+```{pyodide}
+import numpy as np
+# hinge by hand vs logistic: influence of one far point
+scores = np.linspace(-4, 4, 9)
+y = np.ones(9)                                  # all truly +1
+hinge = np.maximum(1 - scores, 0)
+logistic = np.logaddexp(0, -scores)             # log(1 + e^-s)
+print("score:      ", scores)
+print("hinge:      ", hinge.round(2))
+print("logistic:   ", logistic.round(2), " <- never zero, explodes when wrong")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.svm import LinearSVC
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+rng = np.random.default_rng(4)
+X = np.c_[rng.normal(0, 1, 200), 1000 * rng.normal(0, 1, 200)]
+y = (X[:, 1] > 0).astype(int)                   # truth lives in the 1000-scale feature
+raw = make_pipeline(StandardScaler(), LinearSVC(C=1.0, max_iter=20000)).fit(X, y)
+noscale = LinearSVC(C=1.0, max_iter=20000).fit(X, y)
+print("scaled acc:", raw.score(X, y), "| raw acc:", noscale.score(X, y),
+      "(units tilt the margin price)")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Hinge-loss SVM from scratch: minimize (1/2)‖w‖² + C·Σ max(0, 1 − yᵢ(wᵀxᵢ + b)) by sub-gradient descent on a small dataset; compare the resulting (w, b) and predictions to `LinearSVC(C=C)` (normalize for the scale convention — compare decision signs and margin geometry, not raw coefficients). Report where your solution and sklearn's agree and where optimization details diverge.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.svm import LinearSVC
+from sklearn.preprocessing import StandardScaler
+
+rng = np.random.default_rng(5)
+n = 100
+X = np.vstack([rng.normal([-1, 0], .9, (n // 2, 2)),
+               rng.normal([1, 0], .9, (n // 2, 2))])
+y = np.r_[-np.ones(n // 2), np.ones(n // 2)]
+Xs = StandardScaler().fit_transform(X)
+C = 1.0
+
+w = np.zeros(2); b = 0.0
+lr, epochs = 0.01, 3000
+for e in range(epochs):
+    margins = y * (Xs @ w + b)
+    active = margins < 1                        # hinge-active points
+    grad_w = w - C * (Xs[active].T @ y[active])
+    grad_b = -C * y[active].sum()
+    w -= lr * grad_w
+    b -= lr * grad_b
+
+svc = LinearSVC(C=C, max_iter=50000).fit(Xs, y)
+cos = abs(w @ svc.coef_[0]) / (np.linalg.norm(w) * np.linalg.norm(svc.coef_[0]))
+print(f"direction agreement (cos): {cos:.4f}")
+print("train accuracy — scratch:", round(float(np.mean(np.sign(Xs @ w + b) == y)), 3),
+      "| sklearn:", round(svc.score(Xs, y), 3))
+```
+
+Sub-gradient descent on the hinge objective converges to the same margin geometry (same direction; coefficient scale conventions differ between formulations — that's why you compare normalized geometry). sklearn's solver is faster and smarter, but you've now implemented the objective the whole method optimizes.
+</details>
+
+**Exercise 2.** The C-frontier: on overlapping data, sweep C over 6 log-spaced values; for each record (a) training margin-violation fraction, (b) train accuracy, (c) test accuracy, (d) ‖w‖. Plot the panel. Identify the three regimes (underfit-all-slack / balanced / overfit-margin) and connect each to its bias–variance signature ([4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd)) — C is SVM's flexibility dial, running opposite to k in KNN or... specify the direction relative to ridge's λ.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(6)
+n = 200
+X = np.vstack([rng.normal([-1, -1], 1.2, (n // 2, 2)),
+               rng.normal([1, 1], 1.2, (n // 2, 2))])
+y = np.r_[np.zeros(n // 2), np.ones(n // 2)].astype(int)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=7)
+
+for C in [1e-3, 1e-2, 0.1, 1, 10, 1000]:
+    m = make_pipeline(StandardScaler(), SVC(kernel="linear", C=C)).fit(X_tr, y_tr)
+    d = y_tr * m.decision_function(X_tr)
+    viol = np.mean(d < 1)
+    tr_acc = m.score(X_tr, y_tr)
+    te_acc = m.score(X_te, y_te)
+    wn = np.linalg.norm(m.named_steps["svc"].coef_[0])
+    print(f"C={C:>7}: viol {viol:.0%} | train {tr_acc:.3f} | "
+          f"test {te_acc:.3f} | ||w|| {wn:.2f}")
+```
+
+Small C: everything is slack, ‖w‖ tiny — underfit (bias-dominated). Large C: margin tight, boundary chases the frontier points — variance-dominated. Balanced middle: few violations, stable boundary. Relative to ridge ([5.2](../part-05-regularization-high-dimensions/05-2-ridge-regression.qmd)): **C is 1/λ** — big C = weak regularization; the dial's direction is inverted, which trips everyone once.
+</details>
+
+**Exercise 3.** Soft margin under label noise: inject 8% label flips into separable data. Compare hard-margin-attempt (C = 1e5) vs CV-tuned soft margin: test accuracy, boundary angle between them, and the fraction of flipped points that became support vectors. Then explain why the tuned soft margin *absorbs* the noise while the hard attempt contorts around it — and which of the two would you trust under [3.2](../part-03-classification-glm/03-2-why-not-linear-regression.qmd)'s class-overlap realities.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import GridSearchCV, StratifiedKFold, train_test_split
+
+rng = np.random.default_rng(8)
+n = 200
+X = np.vstack([rng.normal([-1, -1], .8, (n // 2, 2)),
+               rng.normal([1, 1], .8, (n // 2, 2))])
+y = np.r_[np.zeros(n // 2), np.ones(n // 2)].astype(int)
+flip = rng.choice(n, size=int(0.08 * n), replace=False)
+y[flip] = 1 - y[flip]
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, stratify=y, random_state=9)
+
+hard = make_pipeline(StandardScaler(), SVC(kernel="linear", C=1e5)).fit(X_tr, y_tr)
+soft = make_pipeline(GridSearchCV(
+    SVC(kernel="linear"),
+    {"C": 10.0 ** np.arange(-2, 4)}, cv=StratifiedKFold(5, shuffle=True,
+    random_state=0))).fit(X_tr, y_tr)
+
+ang = lambda a, b: np.degrees(np.arccos(abs(
+    a @ b / (np.linalg.norm(a) * np.linalg.norm(b)))))
+print("test acc — hard(1e5):", round(hard.score(X_te, y_te), 3),
+      "| tuned soft:", round(soft.score(X_te, y_te), 3))
+print("boundary angle between them:",
+      round(float(ang(hard.named_steps["svc"].coef_[0],
+                      soft.named_steps["gridsearchcv"].best_estimator_.coef_[0])), 2),
+      "degrees")
+```
+
+Flipped labels sit deep in enemy territory; a hard margin bends the boundary extravagantly to accommodate them (or fails); a tuned soft margin prices them as ξ and lets them sit violated — boundary stays where the *clean mass* of evidence points. Trust the soft margin: label noise is precisely the violation-budget use case, and C is the honest knob declaring how much noise you'll tolerate.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **C's direction vs every other penalty**: C is 1/λ — larger = *less* regularized. Writing "higher C = more regularization" in a report is the classic tell of a rushed pipeline.
+- **Violating support vectors**: in soft-margin fits, αᵢ is capped at C; points with αᵢ = C are the ξᵢ > 0 violators. Reading `dual_coef_` magnitudes against C tells you which SVs are on-margin vs crossing.
+- **`LinearSVC` has no `predict_proba`** — probability-ish outputs need `SVC(probability=True)` (Platt scaling, internal CV) or a separate calibrator ([3.7](../part-03-classification-glm/03-7-model-comparison.qmd)); don't pretend decision_function values are probabilities.
+- **Class weights rescale C per class**: `class_weight={1: 5}` multiplies minority violations' price — the margin version of imbalance handling ([3.1](../part-03-classification-glm/03-1-classification-fundamentals.qmd)); evaluate with PR metrics.
+- **Hinge loss ⇒ no probabilities and non-smooth optimization**: that's the price of margin sparsity; the logistic comparison ([8.5](08-5-svm-vs-logistic.qmd)) is exactly hinge-vs-log.
+- **Multiclass**: SVC runs OvO internally ([8.6](08-6-multiclass-svm.qmd)) — C's meaning per binary subproblem, aggregated.
+
+### Read & Refactor AI Code
+
+This AI-generated soft-margin pipeline has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(13)
+n = 250
+X = np.vstack([rng.normal([-1, -1], 1.3, (n // 2, 2)),
+               rng.normal([1, 1], 1.3, (n // 2, 2))])
+y = np.r_[np.zeros(n // 2), np.ones(n // 2)].astype(int)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=14)
+
+# BUG 1: C grid read backwards ('small C = strong model')
+for C in [1000, 10, 0.1, 0.001]:
+    acc = SVC(kernel="linear", C=C).fit(X_tr, y_tr).score(X_tr, y_tr)
+    print(f"C={C}: train acc {acc:.3f}")
+
+# BUG 2: no scaling, mixed-unit features
+X2 = np.c_[X_tr[:, 0], 500 * X_tr[:, 1]]
+clf = SVC(kernel="linear", C=1.0).fit(X2, y_tr)
+
+# BUG 3: decision_function quoted as probability
+p = clf.decision_function(X_tr[:3])
+print("probabilities:", p.round(3))
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **C's direction flipped**: the commentary treats *large* C as the regularized end; C is the slack price — large C = weak regularization. Fix the narrative (and the grid's labels) before anyone copies it.
+2. **Mixed units, unscaled geometry**: the 500-scale feature prices margins in its units; the StandardScaler step is missing — with it, C's meaning is unit-free.
+3. **decision_function ≠ probability**: it's the signed margin score, unbounded both ways. Use `SVC(probability=True)` + calibration, or quote scores as scores.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import GridSearchCV, StratifiedKFold, train_test_split
+
+rng = np.random.default_rng(13)
+n = 250
+X = np.vstack([rng.normal([-1, -1], 1.3, (n // 2, 2)),
+               rng.normal([1, 1], 1.3, (n // 2, 2))])
+y = np.r_[np.zeros(n // 2), np.ones(n // 2)].astype(int)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, stratify=y, random_state=14)
+
+pipe = make_pipeline(StandardScaler(), SVC(kernel="linear", probability=True))
+grid = GridSearchCV(pipe, {"svc__C": 10.0 ** np.arange(-2, 4)},
+                    cv=StratifiedKFold(5, shuffle=True, random_state=0)).fit(X_tr, y_tr)
+print("CV-chosen C:", grid.best_params_["svc__C"],
+      "(large C = weak regularization)")
+print("calibrated probabilities:",
+      grid.predict_proba(X_te[:3]).round(3))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Connect the two formulations: show that the ξ-form (min ‖w‖²/2 + CΣξᵢ) is *identical* to unconstrained hinge minimization (1/2)‖w‖² + CΣmax(0, 1 − yᵢfᵢ) — by substituting ξᵢ = max(0, 1 − yᵢfᵢ) and checking the optimal ξᵢ given (w, b). Then verify numerically: solve both with scipy for a tiny problem and compare (w, b) up to solver tolerance. What does this equivalence buy conceptually (loss view vs constraint view)?
+
+<details>
+<summary>Hint</summary>
+
+For fixed (w, b), the constraint set forces ξᵢ ≥ 1 − yᵢfᵢ and ξᵢ ≥ 0; minimizing Cξᵢ picks exactly the hinge value.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Given (w, b), the smallest feasible ξᵢ is max(0, 1 − yᵢ(wᵀxᵢ + b)) — substituting and dropping ξ turns the constrained program into unconstrained hinge minimization. The views are dual lenses: the constraint view exposes geometry (margins, SVs, KKT); the loss view exposes optimization (subgradients, SGD, loss comparisons with logistic — [8.5](08-5-svm-vs-logistic.qmd)). Solvers like LinearSVC optimize the hinge directly; SVC optimizes the dual of the ξ-form — same optimum, different algebra.
+</details>
+
+**Q2.** C vs the bias–variance decomposition: estimate bias² and variance of the soft-margin SVM across C ∈ {0.01, 1, 100} using the multi-training-set protocol ([4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd)) on overlapping data. Which C minimizes variance, which minimizes bias², and does total error's minimum sit at the CV-chosen C? Write the sentence connecting C to the decomposition — the SVM's own bias–variance story.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+
+rng = np.random.default_rng(15)
+xg = np.column_stack([np.linspace(-3, 3, 200), np.linspace(3, -3, 200)])
+truth = (xg[:, 0] + xg[:, 1] > 0).astype(int) * 2 - 1
+
+for C in [0.01, 1.0, 100.0]:
+    preds = np.zeros((200, 200))
+    for s in range(200):
+        r = np.random.default_rng(s)
+        X = np.vstack([r.normal([-1, -1], 1.1, (50, 2)),
+                       r.normal([1, 1], 1.1, (50, 2))])
+        y = (X.sum(axis=1) > 0).astype(int) * 2 - 1
+        m = make_pipeline(StandardScaler(), SVC(kernel="linear", C=C)).fit(X, y)
+        preds[s] = m.predict(xg)
+    bias2 = np.mean((preds.mean(axis=0) - truth)**2)
+    var = preds.var(axis=0).mean()
+    print(f"C={C:>6}: bias^2 {bias2:.4f}  var {var:.4f}  total {bias2 + var:.4f}")
+```
+
+Small C: heavy slack tolerance → boundary drifts freely (high variance in *position* is capped, but bias rises as the fit under-commits). Large C: tight margins fit each sample's frontier (variance up), bias lower. The CV-chosen C typically sits at the decomposition's total-minimum — the SVM's C *is* its bias–variance dial, in constraint language.
+</details>
+
+## 6. Complex Questions
+
+**C1 (soft margin × [0.5 splitting](../part-00-python-foundations/00-5-data-splitting.qmd) × [12.x multiplicity](../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.qmd) stub).** C and feature selection interact: on p = 100 features with 3 relevant, compare (a) SelectKBest(k by CV) → SVC(C by CV), (b) SVC on all features (C by CV), both nested-CV'd. Report test accuracy and which relevant features survive in (a)'s filter (over folds). When does the SVM's implicit regularization make explicit filtering unnecessary — and when does filtering rescue it?
+
+**C2 (soft margin × [3.7 calibration](../part-03-classification-glm/03-7-model-comparison.qmd)).** The C–calibration interaction: fit SVMs at C ∈ {0.1, 1, 10} with `probability=True`; for each, produce reliability curves and Brier scores, before and after Platt-calibration on a validation split. Does larger C (tighter margins, fewer SVs) help or hurt calibration? Explain via the SV-vote smoothing mechanism ([7.3](../part-07-trees-ensembles/07-3-bagging.qmd)'s averaging intuition applied to support-vector votes) and state your deployment configuration.
+
+## 7. Summary
+
+- Soft margin = hard margin + slack budget: min ‖w‖²/2 + CΣξᵢ — the SVM for real, overlapping data.
+- Hinge loss is the same object unconstrained: zero for far-correct points, linear when wrong.
+- C is the slack price — **1/λ**: larger C = weaker regularization; the inverted direction trips everyone.
+- Support vectors now include violators; far-correct points still don't matter.
+- C is the SVM's bias–variance dial; CV picks it; margins reported alongside violation fractions.
+- No native probabilities — calibrate or quote scores as scores.
+- Linear soft margins in hand, the nonlinear leap costs one substitution: [8.4 Kernel SVM](08-4-kernel-svm.qmd).

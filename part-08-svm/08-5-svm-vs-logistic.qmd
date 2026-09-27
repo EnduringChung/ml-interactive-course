@@ -1,0 +1,426 @@
+---
+title: "8.5 SVM vs Logistic Regression"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - matplotlib
+---
+
+Two linear classifiers, one hinge loss, one log loss. They agree on most datasets and diverge in exactly the dimensions that matter for deployment: probabilities, outlier sensitivity, margin geometry, and scalability. This page makes the comparison a *decision procedure* rather than a preference.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+Same linear score f(x) = wᵀx + b, different training losses:
+
+$$\text{SVM: } \frac{1}{2}\|w\|^2 + C\sum_i \max(0,\, 1 - y_i f_i) \qquad \text{Logistic: } \frac{1}{2}\|w\|^2 + C\sum_i \log(1 + e^{-y_i f_i})$$
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+
+f = np.linspace(-4, 5, 300)
+y = 1
+hinge = np.maximum(1 - f, 0)
+logistic = np.logaddexp(0, -f)
+
+fig, ax = plt.subplots(figsize=(7, 3.2))
+ax.plot(f, hinge, lw=2, label="hinge (SVM)")
+ax.plot(f, logistic, lw=2, label="logistic")
+ax.axvline(1, color="gray", ls=":", label="margin boundary")
+ax.set(xlabel="score y·f(x)", ylabel="loss",
+       title="Hinge: zero past the margin, linear when wrong. Logistic: never zero.")
+ax.legend()
+plt.show()
+```
+
+The geometric consequence on overlapping data:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+
+rng = np.random.default_rng(0)
+n = 120
+X = np.vstack([rng.normal([-1, -1], 1.2, (n, 2)),
+               rng.normal([1, 1], 1.2, (n, 2))])
+y = np.r_[np.zeros(n), np.ones(n)].astype(int)
+
+svm = make_pipeline(StandardScaler(), SVC(kernel="linear", C=1)).fit(X, y)
+logit = make_pipeline(StandardScaler(), LogisticRegression(max_iter=4000)).fit(X, y)
+
+fig, axes = plt.subplots(1, 2, figsize=(7, 3.4), sharey=True)
+xx, yy = np.meshgrid(np.linspace(-4, 4, 200), np.linspace(-4, 4, 200))
+grid = np.c_[xx.ravel(), yy.ravel()]
+for ax, m, name in [(axes[0], svm, "SVM"), (axes[1], logit, "logistic")]:
+    Z = m.decision_function(grid).reshape(xx.shape)
+    ax.contourf(xx, yy, Z > 0, levels=[-0.5, 0.5, 1.5], alpha=0.15,
+                colors=["steelblue", "salmon"])
+    ax.contour(xx, yy, Z, levels=[-1, 0, 1], colors=["r", "k", "g"],
+               linestyles=["--", "-", "--"])
+    ax.scatter(X[y == 0, 0], X[y == 0, 1], s=8, c="steelblue")
+    ax.scatter(X[y == 1, 0], X[y == 1, 1], s=8, c="salmon")
+    ax.set_title(name)
+fig.tight_layout()
+plt.show()
+```
+
+## 2. Concept Questions
+
+1. State what each loss does with a far-correctly-classified point (score = 4, y = 1) — and the boundary consequence of the difference.
+2. Both models output a signed score. Which one can you interpret as a log-odds, and why not the other?
+3. Overlapping classes with heavy outliers: which method's boundary is more robust, and which loss property delivers that?
+4. Why does logistic regression *scale* to huge n more gracefully than SVC (two reasons — one statistical, one computational)?
+5. Your stakeholder needs "probability of disease." Which model, which step, and what must you check afterwards?
+
+<details>
+<summary>Answers</summary>
+
+1. Hinge: loss 0 — the point vanishes from the fit (no gradient). Logistic: loss log(1 + e⁻⁴) ≈ 0.018 — small but nonzero, still pulling. Consequence: SVM's boundary is set by frontier points only; logistic's by every point, weighted by their surprise.
+2. Logistic's f(x) *is* the fitted log-odds (by construction: p = σ(f)) — exponentiate coefficients for odds ratios. SVM's score is a margin distance in canonical units — no probability or odds semantics attached.
+3. SVM — hinge's linearity bounds any single outlier's influence (its contribution grows linearly however far it strays), while logistic's exponential tail lets extreme points dominate the gradient. (Robust variant: Huber/absolute-loss boosting, [7.5](../part-07-trees-ensembles/07-5-gradient-boosting.qmd).)
+4. Statistical: logistic is a smooth convex GLM — efficient IRLS/SGD variants, warm starts, and it doesn't need the dual's kernel trick to stay exact. Computational: hinge-SVM's dual scales with n (SV count grows with overlap); logistic's primal has no such n-dependence, and `SGDClassifier(loss="log_loss")` streams.
+5. Logistic regression, then *calibrate* it (reliability check on held-out data — [3.7](../part-03-classification-glm/03-7-model-comparison.qmd)): logistic is the right starting point (native probabilities, no Platt detour), but calibration is still a checked property, not an assumption.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+rng = np.random.default_rng(2)
+X = np.vstack([rng.normal(-1, 1, (80, 2)), rng.normal(1, 1, (80, 2))])
+y = np.array([0] * 80 + [1] * 80)
+svm = make_pipeline(StandardScaler(), SVC(kernel="linear", C=1)).fit(X, y)
+lr = make_pipeline(StandardScaler(), LogisticRegression(max_iter=4000)).fit(X, y)
+print("agreement on training predictions:",
+      round(float(np.mean(svm.predict(X) == lr.predict(X))), 3),
+      "(they usually agree on clearly-separated points)")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+rng = np.random.default_rng(3)
+x = np.sort(rng.uniform(0, 10, 120)).reshape(-1, 1)
+y = (x.ravel() > 5).astype(int)
+X = np.c_[x, x.ravel()**2 * 0]
+X[-1, 0] = 25                                   # one far outlier, correct label
+svm = make_pipeline(StandardScaler(), SVC(kernel="linear", C=1)).fit(X, y)
+lr = make_pipeline(StandardScaler(), LogisticRegression(max_iter=10000)).fit(X, y)
+print("boundary (SVM):   ", round(float(-svm.named_steps['svc'].intercept_[0]
+      / svm.named_steps['svc'].coef_[0][0]), 3))
+print("boundary (logit): ", round(float(-lr.named_steps['logisticregression'].intercept_[0]
+      / lr.named_steps['logisticregression'].coef_[0][0]), 3))
+print("truth: 5.0 — logistic's boundary chases the outlier's magnitude")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+rng = np.random.default_rng(4)
+X = np.vstack([rng.normal(-1, 1, (60, 2)), rng.normal(1, 1, (60, 2))])
+y = np.array([0] * 60 + [1] * 60)
+svm = make_pipeline(StandardScaler(), SVC(kernel="linear", probability=True,
+                                          random_state=0)).fit(X, y)
+lr = make_pipeline(StandardScaler(), LogisticRegression(max_iter=4000)).fit(X, y)
+p_svm = svm.predict_proba(X[:3])[:, 1]
+p_lr = lr.predict_proba(X[:3])[:, 1]
+print("SVM Platt probs:   ", p_svm.round(3))
+print("logistic probs:    ", p_lr.round(3), "(native log-odds)")
+```
+
+```{pyodide}
+import numpy as np
+import time
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+rng = np.random.default_rng(5)
+X = rng.normal(0, 1, (5000, 10))
+y = (X[:, 0] + rng.normal(0, 1, 5000) > 0).astype(int)
+t0 = time.perf_counter()
+LogisticRegression(max_iter=2000).fit(X, y)
+t_lr = time.perf_counter() - t0
+t0 = time.perf_counter()
+SVC(kernel="linear").fit(X, y)
+t_svm = time.perf_counter() - t0
+print(f"logistic: {t_lr:.2f}s | linear SVC: {t_svm:.2f}s (gap widens with n)")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** The outlier sensitivity dose-response: on separable data, add ONE mislabeled point at distance d ∈ {0.5, 1, 2, 4, 8} beyond the boundary. For each d, record the boundary *shift* (perpendicular displacement of the zero-set) for SVM (C = 1) and logistic. Plot shift vs d. Verify: SVM's shift saturates (linear-in-d influence), logistic's grows without bound. State the robustness rule this supports.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+
+def boundary_intercept(model, pipe_named):
+    est = model.named_steps[pipe_named]
+    return -est.intercept_[0] / est.coef_[0][0]
+
+rng = np.random.default_rng(6)
+x = np.sort(rng.uniform(0, 10, 150)).reshape(-1, 1)
+y = (x.ravel() > 5).astype(int)
+
+print(f"{'d':>5} {'SVM shift':>10} {'logit shift':>12}")
+for d in [0.5, 1, 2, 4, 8]:
+    X = np.c_[x, np.zeros_like(x)]
+    yb = y.copy(); yb[-1] = 1 - yb[-1]; X[-1, 0] = 5 + d   # mislabeled far point
+    svm = make_pipeline(StandardScaler(), SVC(kernel="linear", C=1)).fit(X, yb)
+    lr = make_pipeline(StandardScaler(), LogisticRegression(max_iter=10000)).fit(X, yb)
+    b_svm = boundary_intercept(svm, "svc")
+    b_lr = boundary_intercept(lr, "logisticregression")
+    print(f"{d:>5} {abs(b_svm - 5):>10.3f} {abs(b_lr - 5):>12.3f}")
+```
+
+The SVM's displacement grows only linearly (hinge's bounded tail — the point is "just another violator" once past the margin); logistic's grows steadily with d (exponential tail amplifies distance). Rule: mislabeled extremes in the data → prefer margin-based losses or clean them first; logistic assumes labels are trustworthy at any distance.
+</details>
+
+**Exercise 2.** Probability quality, head-to-head: on a moderately overlapping dataset, compare (a) logistic's native probabilities, (b) SVM + `probability=True` (Platt), (c) SVM's raw decision_function *rescaled* by naive min-max — by Brier score, reliability curves, and AUC. Which wins calibration, which wins ranking, and does the ranking winner match the calibration winner? Conclude with the "probabilities vs scores" deployment rule.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.calibration import calibration_curve
+from sklearn.metrics import brier_score_loss, roc_auc_score
+from sklearn.model_selection import train_test_split
+
+from sklearn.datasets import make_classification
+rng = np.random.default_rng(7)
+X, y = make_classification(n_samples=1200, n_features=8, weights=[0.7, 0.3],
+                           class_sep=0.9, random_state=8)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, stratify=y, random_state=9)
+
+lr = make_pipeline(StandardScaler(),
+                   LogisticRegression(max_iter=4000)).fit(X_tr, y_tr)
+svm = make_pipeline(StandardScaler(),
+                    SVC(kernel="linear", C=1, probability=True,
+                        random_state=0)).fit(X_tr, y_tr)
+
+p_lr = lr.predict_proba(X_te)[:, 1]
+p_svm = svm.predict_proba(X_te)[:, 1]
+raw = svm.named_steps["svc"].decision_function(
+    svm.named_steps["standardscaler"].transform(X_te))
+raw_scaled = (raw - raw.min()) / (raw.max() - raw.min())
+
+for name, p in [("logistic", p_lr), ("SVM+Platt", p_svm),
+                ("SVM raw min-max", raw_scaled)]:
+    print(f"{name:16s} AUC {roc_auc_score(y_te, p):.4f}  "
+          f"Brier {brier_score_loss(y_te, p):.4f}")
+```
+
+AUC: identical or near-identical (monotone recalibrations preserve ranking). Brier/calibration: logistic and Platt-SVM are close; naive min-max rescaled scores are *uncalibrated fiction*. Rule: rank with whichever margin you like; *probabilities* require a model that produces them honestly (logistic) or an explicit calibration step (Platt/isotonic) — never a linear rescale of a margin.
+</details>
+
+**Exercise 3.** The scale-of-n crossover: generate datasets at n ∈ {500, 5,000, 50,000} (p = 10) and compare training time *and* test accuracy for LogisticRegression (liblinear/lbfgs) vs LinearSVC vs SVC(kernel="linear"). Report the 3×3 table. Where does each become impractical, and what streaming/streaming-adjacent alternative (`SGDClassifier` with hinge/log losses) offers at 50k? Verify SGD's accuracy is within ~1% of the batch solution.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import time
+from sklearn.svm import SVC, LinearSVC
+from sklearn.linear_model import LogisticRegression, SGDClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+
+for n in [500, 5000, 50000]:
+    rng = np.random.default_rng(n)
+    X = rng.normal(0, 1, (n, 10))
+    y = (X[:, 0] + rng.normal(0, 1, n) > 0).astype(int)
+    row = f"n={n:>6}:"
+    for name, m in [("LogReg", LogisticRegression(max_iter=3000)),
+                    ("LinSVC", LinearSVC(max_iter=5000, dual="auto")),
+                    ("SGD-hinge", SGDClassifier(loss="hinge", random_state=0))]:
+        t0 = time.perf_counter()
+        pipe = make_pipeline(StandardScaler(), m).fit(X, y)
+        dt = time.perf_counter() - t0
+        row += f"  {name} {dt:.2f}s/{pipe.score(X, y):.3f}"
+    print(row)
+```
+
+Logistic and LinearSVC are both fast at these scales; SVC(kernel="linear") is the first to hurt (dual grows with n) — drop it for large n. SGD (hinge or log) trades a little accuracy for streaming-scale speed and stays within ~1% at 50k with a few passes. The scaling rule: probabilities + big n → logistic/SGD-log; pure decisions + big n → LinearSVC/SGD-hinge; SVC only when SVs themselves (or kernels) are the point.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Two regularizations, same λ-spirit**: both penalize ‖w‖²; C (SVM) and C (logistic) are both 1/λ-style slack/tail prices — but their *effects* differ because the losses differ. Tune each on its own grid ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)).
+- **Hinge's sparsity of influence** is a feature (robustness, SV parsimony) and a bug (no per-point probability pressure, uncalibrated scores). Decide which you need *before* choosing the loss ([3.1](../part-03-classification-glm/03-1-classification-fundamentals.qmd)).
+- **Logistic = canonical GLM**: coefficients are log-odds ratios, inference exists ([3.3](../part-03-classification-glm/03-3-logistic-regression.qmd)); SVM coefficients are margin geometry, inference doesn't (naively).
+- **Both are linear**: identical ceiling without feature engineering or kernels — the [6.3](../part-06-nonlinear-regression/06-3-basis-functions.qmd) dictionary, or [8.4](08-4-kernel-svm.qmd)'s trick, applies to both.
+- **Class weighting differs subtly**: SVM's `class_weight` rescales slack prices; logistic's resamples the loss — both fix imbalance directionally, verify with PR curves ([3.1.5](../part-03-classification-glm/03-1-5-auprc.qmd)).
+- **Multiclass paths differ**: SVC does OvO ([8.6](08-6-multiclass-svm.qmd)); LogisticRegression does multinomial (softmax) by default — another semantic difference between "equivalent" pipelines.
+
+### Read & Refactor AI Code
+
+This AI-generated comparison has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+
+from sklearn.datasets import make_classification
+rng = np.random.default_rng(9)
+X, y = make_classification(n_samples=800, n_features=6, weights=[0.92, 0.08],
+                           random_state=10)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=11)
+
+svm = SVC(kernel="linear", C=1).fit(X_tr, y_tr)
+lr = LogisticRegression(max_iter=4000).fit(X_tr, y_tr)
+
+# BUG 1: accuracy headline at 8% prevalence
+print("SVM acc:", round(svm.score(X_te, y_te), 3),
+      "| logit acc:", round(lr.score(X_te, y_te), 3))
+
+# BUG 2: SVM margins quoted as probabilities
+print("SVM 'probability':", svm.decision_function(X_te[:2]).round(3))
+
+# BUG 3: ranking metrics computed on hard predictions
+from sklearn.metrics import roc_auc_score
+auc_svm = roc_auc_score(y_te, svm.predict(X_te))
+print("AUC from hard predictions:", round(auc_svm, 3))
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Accuracy at 8% prevalence** is the prevalence in disguise ([3.1](../part-03-classification-glm/03-1-classification-fundamentals.qmd)); report AUC + AP/PR.
+2. **Margins ≠ probabilities**: decision_function is unbounded geometry; Platt-calibrate if probabilities are needed (and validate the calibration).
+3. **AUC from hard predictions** throws away ranking resolution (ties everywhere) — feed continuous scores: decision_function for SVM, predict_proba for logistic.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score, average_precision_score
+from sklearn.datasets import make_classification
+
+X, y = make_classification(n_samples=800, n_features=6, weights=[0.92, 0.08],
+                           random_state=10)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, stratify=y, random_state=11)
+
+svm = SVC(kernel="linear", C=1).fit(X_tr, y_tr)
+lr = LogisticRegression(max_iter=4000).fit(X_tr, y_tr)
+
+for name, score in [("SVM", svm.decision_function(X_te)),
+                    ("logistic", lr.predict_proba(X_te)[:, 1])]:
+    print(f"{name:8s} AUC {roc_auc_score(y_te, score):.4f}  "
+          f"AP {average_precision_score(y_te, score):.4f}")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** The regularized-loss unification: write both SVM and logistic as penalized ERM with the *same* L2 penalty and different losses. Show formally that as C → ∞ (no regularization), both maximize the margin-like quantity in their own metric, and that the *only* difference is the loss's tail behavior past the margin. Then construct a dataset where the two fits produce *orthogonal* boundaries (hint: one dominant outlier vs clean data — reuse the geometry of [8.2 Exercise 2](08-2-maximal-margin.qmd)).
+
+<details>
+<summary>Hint</summary>
+
+ hinge'(f) = −y·1(yf < 1) — bounded support; logistic'(f) = −y·σ(−yf) — unbounded, decaying. Construct: two clean clusters + one mislabeled point at extreme distance; crank the loss weights and watch which boundary moves.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Both minimize (1/2)‖w‖² + CΣL(yᵢfᵢ): the tail past the margin is hinge = 0 vs logistic = e⁻^{|f|}-decaying-but-alive. A single extreme mislabeled point contributes zero SVM-gradient once outside the margin (boundary pinned by the rest) but a persistent logistic-gradient proportional to its distance (boundary dragged). Clean data: both boundaries converge to within a few degrees (the losses agree near the frontier). The construction demonstrates "loss tails = influence tails": choose the tail you can defend given your labeling process — the entire [8.5](#) decision in one sentence.
+</details>
+
+**Q2.** Decision-theoretic selection: a screening program (1% prevalence, FN cost 50× FP) needs (i) a ranked list for follow-up budget and (ii) per-patient risk estimates audited by regulators. Design the model comparison: which metrics for (i) and (ii) ([3.1](../part-03-classification-glm/03-1-classification-fundamentals.qmd), [3.1.5](../part-03-classification-glm/03-1-5-auprc.qmd)), which two models to compete, what calibration step the winner needs, and how the cost ratio enters threshold choice *after* modeling ([3.1 Exercise 2](../part-03-classification-glm/03-1-classification-fundamentals.qmd)). Implement the comparison on simulated data and report the decision.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import (roc_auc_score, average_precision_score,
+                             brier_score_loss)
+
+X, y = None, None
+from sklearn.datasets import make_classification
+X, y = make_classification(n_samples=2000, n_features=8, weights=[0.99, 0.01],
+                           class_sep=1.1, random_state=21)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, stratify=y, random_state=22)
+
+lr = make_pipeline(StandardScaler(),
+                   LogisticRegression(max_iter=4000)).fit(X_tr, y_tr)
+svm = make_pipeline(StandardScaler(),
+                    SVC(kernel="linear", C=1, probability=True,
+                        random_state=0)).fit(X_tr, y_tr)
+
+for name, m in [("logistic", lr), ("svm", svm)]:
+    p = m.predict_proba(X_te)[:, 1]
+    print(f"{name:8s} AUC {roc_auc_score(y_te, p):.4f}  "
+          f"AP {average_precision_score(y_te, p):.4f}  "
+          f"Brier {brier_score_loss(y_te, p):.4f}")
+```
+
+(i) Ranking for budget: AP/AUC on continuous scores — both models compete (SVM margins rank fine). (ii) Audited risks: logistic's native probabilities + calibration check win (SVM needs Platt and still needs verification). Threshold: with FN:FP = 50:1, choose the cutoff from the *cost-minimizing* point of the chosen model's ROC/PR trade — after modeling, on validation data, and reported with the confusion matrix it implies. Decision: logistic for the deployed risk model, SVM kept as the margin-consistency check.
+</details>
+
+## 6. Complex Questions
+
+**C1 (SVM × logistic × [5.x](../part-05-regularization-high-dimensions/05-6-high-dimensional.qmd) × [6.7 GAM](../part-06-nonlinear-regression/06-7-gam.qmd)).** The four-way boundary study: on a dataset with 3 linear signals + 1 smooth nonlinear signal + 1 interaction, compare logistic-linear, SVM-linear, GAM-logistic (additive splines — [6.7](../part-06-nonlinear-regression/06-7-gam.qmd)), and RBF-SVM, all nested-CV'd. Report test AUC and each model's recovery of the linear signals (coefficient/importance comparison). Which model *when* — write the routing rule a team should paste above their modeling notebook.
+
+**C2 (SVM × [0.5 leakage](../part-00-python-foundations/00-5-data-splitting.qmd) × [4.6 tuning](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)).** The optimistic-pipeline autopsy: a colleague reports "SVM (C, γ tuned) beats logistic 0.94 vs 0.91." Audit: re-run their probable pipeline (scaler fit on all data, (C, γ) tuned on test) vs the honest nested version; quantify the inflation attributable to each bug separately. Then write the two-sentence review response you'd file — the reusable text for the next paper you review with this flaw.
+
+## 7. Summary
+
+- Same linear score, different loss tails: hinge (zero past margin, linear when wrong) vs log (never zero, exponential when wrong).
+- Probabilities: logistic native and interpretable; SVM via Platt — calibrate either way.
+- Robustness: hinge bounds outlier influence; logistic's tail lets extremes pull — labeling quality decides.
+- Scale: logistic/LinearSVC/SGD for big n; SVC when SVs or kernels are the point.
+- Both are linear without engineering; both need scaling, honest tuning, and prevalence-aware metrics.
+- Multiclass paths differ (OvO vs multinomial) — see [8.6](08-6-multiclass-svm.qmd) next.
+- One family remains: SVMs for many classes at once — [8.6 Multiclass SVM](08-6-multiclass-svm.qmd).

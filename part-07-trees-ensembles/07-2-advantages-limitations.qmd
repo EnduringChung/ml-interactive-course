@@ -1,0 +1,394 @@
+---
+title: "7.2 Advantages and Limitations of Trees"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - scikit-learn
+    - matplotlib
+---
+
+Before averaging trees into powerhouses, inventory what a single tree gives and costs — because the ensembles of [7.3–7.6](07-3-bagging.qmd) inherit *every item on this list*, transformed. Knowing which properties survive averaging (and which don't) is the difference between using forests well and misreading them.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+The ledger, demonstrated rather than asserted:
+
+```{pyodide}
+#| fig-width: 8
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+
+rng = np.random.default_rng(0)
+n = 300
+# linear truth
+X_lin = rng.normal(0, 1, (n, 2))
+y_lin = (X_lin @ [1.5, -1] + rng.normal(0, .4, n) > 0).astype(int)
+# kinked truth (interactions + discontinuity)
+X_k = rng.uniform(-2, 2, (n, 2))
+y_k = ((X_k[:, 0] > 0) ^ (X_k[:, 1] > 0)).astype(int)
+
+tree_lin = DecisionTreeClassifier(max_depth=4).fit(X_lin, y_lin).score(X_lin, y_lin)
+logit_lin = make_pipeline(StandardScaler(), LogisticRegression(max_iter=3000)) \
+    .fit(X_lin, y_lin).score(X_lin, y_lin)
+tree_k = DecisionTreeClassifier(max_depth=4).fit(X_k, y_k).score(X_k, y_k)
+logit_k = make_pipeline(StandardScaler(), LogisticRegression(max_iter=3000)) \
+    .fit(X_k, y_k).score(X_k, y_k)
+
+fig, ax = plt.subplots(figsize=(6, 3))
+x = np.arange(2)
+ax.bar(x - 0.18, [tree_lin, tree_k], 0.36, label="tree (depth 4)")
+ax.bar(x + 0.18, [logit_lin, logit_k], 0.36, label="logistic")
+ax.set_xticks(x, ["linear truth", "XOR truth"])
+ax.set(ylabel="training accuracy", title="Each model shines on its own geometry")
+ax.legend()
+plt.show()
+print(f"linear truth  — tree {tree_lin:.3f} vs logistic {logit_lin:.3f}")
+print(f"XOR truth     — tree {tree_k:.3f} vs logistic {logit_k:.3f}")
+```
+
+The **data-type flexibility** advantage — mixed scales, missing-value tolerance via surrogates, monotone transforms invariance:
+
+```{pyodide}
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+
+rng = np.random.default_rng(1)
+n = 200
+age = rng.uniform(20, 80, n)                    # years
+counts = rng.lognormal(3, 1, n)                 # skewed counts
+y = 0.5 * (age > 50) + 0.02 * np.log(counts) + rng.normal(0, .2, n)
+X = np.c_[age, counts]
+
+t = DecisionTreeRegressor(max_depth=3).fit(X, y)
+X_shift = np.c_[age, np.log(counts)]            # log-transform a feature
+t_shift = DecisionTreeRegressor(max_depth=3).fit(X_shift, y)
+print("raw features R2:       ", round(t.score(X, y), 4))
+print("log-transformed R2:    ", round(t_shift.score(X_shift, y), 4),
+      "(monotone transforms don't change tree splits)")
+```
+
+## 2. Concept Questions
+
+1. List four tree properties that *survive* bagging/boosting, and two that are transformed or lost.
+2. Why is "trees capture interactions automatically" only half-true in shallow trees?
+3. Trees are insensitive to outliers in y for classification but not for regression — explain precisely.
+4. Name a setting where a single small tree is the *right* deliverable, and what you sacrifice.
+5. Which limitation is fixed by averaging many trees, and which is merely *hidden* by it?
+
+<details>
+<summary>Answers</summary>
+
+1. Survive: scale-invariance, mixed/unnormalized data handling, axis-parallel boundary bias, automatic interaction handling (given depth), no extrapolation (flat leaves). Transformed/lost: single-tree interpretability (a forest is not readable), instability (averaged away — the point), piecewise-constant roughness (averaging smooths it).
+2. Interactions require *depth*: an interaction between x₁ and x₂ needs splits on both — reachable at depth 2 only in the best case, and greedy search may not find the pair at all ([7.1 Q1](07-1-decision-trees.qmd)). "Automatically" = "reachable given depth and data volume," not "guaranteed."
+3. Classification: a huge y-outlier is just another correctly-classified point — impurity measures don't see magnitude. Regression: leaf means are arithmetic averages, so one enormous y in a leaf drags every prediction in it ([1.1](../part-01-statistics-bridge/01-1-descriptive-statistics.qmd)'s mean-vs-median story; robust leaves exist but aren't default).
+4. Clinical/policy triage rules, credit-decline reasons, A/B guardrail rules — anywhere a human must *read and apply* the rule verbatim. Sacrificed: accuracy vs ensembles/linear models on smooth truths, and stability of the exact thresholds.
+5. *Fixed* by averaging: variance/instability (and much of the jaggedness). *Hidden, not fixed*: axis-parallel bias (all trees in the ensemble share it — ensembles approximate diagonal boundaries as finer and finer staircases, not lines), and no-extrapolation.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+rng = np.random.default_rng(2)
+x = np.linspace(0, 1, 100)
+y = 2 * x + rng.normal(0, .2, 100)              # true trend
+t = DecisionTreeRegressor(max_depth=3).fit(x.reshape(-1, 1), y)
+print("predict at x=1.5 (outside):", round(float(t.predict([[1.5]])[0]), 3),
+      "| max train y ≈ 2:", round(float(y.max()), 3))
+print("-> flat extrapolation: the tree never says 'more'")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+rng = np.random.default_rng(3)
+x = np.sort(rng.uniform(0, 1, 60))
+y = np.sin(2 * np.pi * x) + rng.normal(0, .3, 60)
+fits = []
+for b in range(50):
+    idx = rng.integers(0, 60, 60)
+    fits.append(DecisionTreeRegressor(max_depth=3).fit(x[idx].reshape(-1, 1),
+                                                       y[idx]).predict(np.linspace(0, 1, 200).reshape(-1, 1)))
+fits = np.array(fits)
+print("mean SD of single-tree fits across the domain:", round(float(fits.std(axis=0).mean()), 4))
+print("(instability: the raw material of bagging)")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.datasets import make_classification
+X, y = make_classification(n_samples=300, n_features=8, n_informative=3, random_state=4)
+t = DecisionTreeClassifier(max_depth=3, random_state=0).fit(X, y)
+from sklearn.tree import export_text
+print(export_text(t, feature_names=[f"f{j}" for j in range(8)], max_depth=2))
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+rng = np.random.default_rng(5)
+X = rng.normal(0, 1, (200, 3))
+y = X[:, 0] + rng.normal(0, 1, 200)
+y[7] += 500                                     # one wild y (regression outlier)
+t = DecisionTreeRegressor(max_depth=3).fit(X, y)
+leaf = t.apply(X[[7]])[0]
+mask = t.apply(X) == leaf
+print("outlier's leaf mean with it:    ", round(float(y[mask].mean()), 2))
+print("outlier's leaf mean without it: ", round(float(y[mask][y[mask] < 100].mean()), 2))
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** The stability experiment, quantified: for 100 bootstrap resamples of one dataset, fit (a) a depth-3 tree, (b) depth-3 tree with `max_features=1` (random split choice), (c) a linear regression. Measure prediction SD at fixed test points and the disagreement rate between fits (fraction of test points where two fits differ by > 0.5·noise). Rank the three by instability and connect to why [7.3](07-3-bagging.qmd)'s averaging works best on the unstable ones.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(6)
+n = 100
+x = rng.uniform(0, 1, (n, 3))
+y = np.sin(2 * np.pi * x[:, 0]) + 0.5 * x[:, 1] + rng.normal(0, .3, n)
+xg = rng.uniform(0, 1, (200, 3))
+
+def fits(model_ctor, B=100):
+    out = []
+    for b in range(B):
+        idx = rng.integers(0, n, n)
+        out.append(model_ctor().fit(x[idx], y[idx]).predict(xg))
+    return np.array(out)
+
+tree = fits(lambda: DecisionTreeRegressor(max_depth=3, random_state=b))
+rTree = fits(lambda: DecisionTreeRegressor(max_depth=3, max_features=1,
+                                           random_state=b))
+lin = fits(lambda: LinearRegression())
+
+for name, F in [("tree", tree), ("tree(mf=1)", rTree), ("linear", lin)]:
+    print(f"{name:11s}: mean prediction SD = {F.std(axis=0).mean():.4f}")
+```
+
+Linear regression barely moves (stable learner — averaging buys ~nothing, as [7.3 Q2](07-3-bagging.qmd) will show formally); random-split trees wobble most; plain trees sit between. Bagging's payoff is a function of instability — that's the entire design logic of the next two pages.
+</details>
+
+**Exercise 2.** Interpretability deliverable: fit a depth-3 classification tree on the cohort-style data below and produce (a) the text rules, (b) a one-paragraph "policy explanation" a non-statistician could follow, (c) the *same* explanation from a 200-leaf tree — then reflect on what "interpretable" means operationally. Verify the small tree's predictions on 3 hand-traced patients.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.tree import DecisionTreeClassifier, export_text
+
+rng = np.random.default_rng(7)
+n = 300
+age = rng.uniform(30, 80, n)
+marker = rng.normal(10, 2, n)
+y = ((marker > 11) & (age > 55)).astype(int)   # readable rule + noise
+X = np.c_[age, marker]
+
+t = DecisionTreeClassifier(max_depth=3, random_state=0).fit(X, y)
+print(export_text(t, feature_names=["age", "marker"]))
+
+for pat in [(60, 12), (40, 12), (60, 9)]:
+    print("patient", pat, "->", t.predict([[pat[0], pat[1]]])[0])
+```
+
+The depth-3 tree's rules are literally readable ("marker above ~11 AND age above ~55 → positive"), each prediction traceable by hand — the deliverable in clinical/policy settings. The 200-leaf tree's "explanation" is a document no human reads; interpretability is a *property of the fitted size*, not the class. That's why small trees remain legitimate tools despite inferior accuracy — and why ensembles export *separate* explanations (importances, partial dependence) rather than rules.
+</details>
+
+**Exercise 3.** Limitation stress-test: three data pathologies — (a) smooth trend with time (y = 0.5t + noise), (b) linear boundary at 45°, (c) heavy-tailed y in regression — each evaluated for a pruned tree vs its natural rival (linear model / logistic / median-regression-style robust tree via `criterion="absolute_error"`). Report the paired test-MSE/accuracy gaps and write the "when not to use a tree" checklist.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor, DecisionTreeClassifier
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(8)
+
+# (a) trend
+t = np.linspace(0, 10, 300).reshape(-1, 1)
+yt = 0.5 * t.ravel() + rng.normal(0, .3, 300)
+tr, te = train_test_split(np.arange(300), random_state=9)
+treeA = DecisionTreeRegressor(max_depth=4).fit(t[tr], yt[tr])
+linA = LinearRegression().fit(t[tr], yt[tr])
+mseT = np.mean((yt[te] - treeA.predict(t[te]))**2)
+mseL = np.mean((yt[te] - linA.predict(t[te]))**2)
+print(f"(a) trend: tree {mseT:.3f} vs linear {mseL:.3f}")
+
+# (b) diagonal boundary
+Xb = rng.normal(0, 1, (300, 2))
+yb = (Xb[:, 0] + Xb[:, 1] > 0).astype(int)
+tr, te = train_test_split(np.arange(300), random_state=9)
+accT = DecisionTreeClassifier(max_depth=5).fit(Xb[tr], yb[tr]).score(Xb[te], yb[te])
+accL = LogisticRegression(max_iter=3000).fit(Xb[tr], yb[tr]).score(Xb[te], yb[te])
+print(f"(b) diagonal: tree {accT:.3f} vs logistic {accL:.3f}")
+
+# (c) heavy tail
+Xc = rng.normal(0, 1, (300, 2))
+yc = Xc[:, 0] + rng.standard_t(2, 300)
+tr, te = train_test_split(np.arange(300), random_state=9)
+treeC = DecisionTreeRegressor(max_depth=4).fit(Xc[tr], yc[tr])
+robustC = DecisionTreeRegressor(max_depth=4, criterion="absolute_error",
+                                random_state=0).fit(Xc[tr], yc[tr])
+mseT = np.mean((yc[te] - treeC.predict(Xc[te]))**2)
+mseR = np.mean((yc[te] - robustC.predict(Xc[te]))**2)
+print(f"(c) heavy tail: squared-loss tree {mseT:.2f} vs absolute-loss tree {mseR:.2f}")
+```
+
+Checklist: *don't* reach for a single tree when (i) the signal is smooth/linear/trending — linear models interpolate it for free while trees staircase and flatline; (ii) the boundary is oblique — axis-parallel greediness pays a staircase tax; (iii) regression y is heavy-tailed — squared-error leaf means chase outliers (the absolute-criterion tree is the in-class remedy); (iv) the deliverable is calibrated probability or extrapolation — neither is native. Each limitation has an ensemble-level patch, but patches work on the *ensemble*, not the story you tell about a single tree.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Bias list (survives ensembling)**: axis-parallel splits; no extrapolation; leaf-mean predictions; greedy (not optimal) split search. Variance list (averaging fixes): instability to resamples, threshold jitter, jaggedness.
+- **"Nonparametric" ≠ "assumption-free"**: trees assume piecewise-constant regions and axis alignment — smooth diagonal truths violate both, and ensembles only approximate the violation at computational cost.
+- **Categorical levels**: high-cardinality categoricals get greedy advantage in impurity ranking (many ways to split); group rare levels first ([5.1](../part-05-regularization-high-dimensions/05-1-feature-selection.qmd) instability note).
+- **`min_samples_leaf` as uncertainty honesty**: leaf means from 3 observations are noise; set it to keep every prediction defensibly backed — or report leaf sizes alongside predictions.
+- **Missing values**: sklearn's trees don't accept NaN (except HistGradientBoosting, [7.6](07-6-modern-boosting.qmd)); imputation choices interact with splits — keep them inside the pipeline ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd)).
+- **The reading trap**: `export_text` on a deep tree *looks* interpretable (it's just rules) but no human tracks 200 nested conditions — interpretation budget is a function of size, not syntax.
+
+### Read & Refactor AI Code
+
+This AI-generated "interpretable model" has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(10)
+n = 400
+age = rng.uniform(20, 90, n)
+score = rng.normal(50, 15, n)
+y = ((score > 55) | (age > 80)).astype(int)
+X = np.c_[age, score]
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=11)
+
+# BUG 1: unconstrained tree sold as 'interpretable'
+t = DecisionTreeClassifier(random_state=0).fit(X_tr, y_tr)
+print("leaves:", t.get_n_leaves(), "-> 'the rules are readable'")
+
+# BUG 2: report training accuracy as the model's performance
+print("accuracy:", round(t.score(X_tr, y_tr), 3))
+
+# BUG 3: probabilities from leaves quoted as calibrated risks
+p = t.predict_proba([[45, 50]])[0, 1]
+print(f"risk for (45, 50): {p:.2f}")
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Unconstrained "interpretable"**: hundreds of leaves — syntax readable, semantics impossible. Constrain to the size a reader can actually verify (`max_depth=3`, `min_samples_leaf`), and quantify what the constraint costs in accuracy.
+2. **Training accuracy as performance**: the full tree memorized — report held-out.
+3. **Leaf fractions as calibrated risks**: a leaf's class fraction with 8 samples is a crude estimate, uncalibrated across leaves; if risks matter, calibrate ([3.7](../part-03-classification-glm/03-7-model-comparison.qmd)) or use a model with smoother probability output.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.tree import DecisionTreeClassifier, export_text
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(10)
+n = 400
+age = rng.uniform(20, 90, n)
+score = rng.normal(50, 15, n)
+y = ((score > 55) | (age > 80)).astype(int)
+X = np.c_[age, score]
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=11)
+
+t = DecisionTreeClassifier(max_depth=3, min_samples_leaf=20,
+                           random_state=0).fit(X_tr, y_tr)
+print(export_text(t, feature_names=["age", "score"]))
+print("held-out accuracy:", round(t.score(X_te, y_te), 3))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Formalize scale-invariance: prove that applying any strictly increasing transform to feature j changes neither the set of possible splits on j nor any impurity computation — hence the fitted tree (up to threshold relabeling) is identical. Contrast with ridge/PCA/KNN, citing the specific mechanism each uses magnitudes for. What residual role does scaling play in tree pipelines (name one real reason you might still standardize)?
+
+<details>
+<summary>Hint</summary>
+
+Splits are thresholds x_j > c; a monotone transform maps thresholds bijectively and preserves orderings — sorting is all the algorithm uses.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Trees sort feature j and evaluate candidate cuts between consecutive values; g monotone increasing permutes nothing in that order and maps cut c to g(c), preserving both partitions and impurity sums — the tree is invariant. Ridge penalizes β_j (unit-dependent), PCA ranks variance (scale-dependent), KNN distances (scale-dependent): all magnitude-users, all scale-sensitive. Residual reason to standardize trees: numerical reproducibility of tie-breaking, and pipeline uniformity when tree ensembles sit beside linear members (stacking) — never for the tree's own benefit.
+</details>
+
+**Q2.** Tree stability as a function of n: for n ∈ {30, 100, 400}, fit depth-3 trees on 200 bootstrap resamples each and record (a) the SD of predictions at fixed test points, (b) the probability that the *root* feature is the same across resamples. Sketch both against n and connect the root-stability curve to the sampling-variability of a correlation estimate ([1.2 Exercise 3](../part-01-statistics-bridge/01-2-relationships.qmd)) — why does the root stabilize faster than the full tree's predictions?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.tree import DecisionTreeRegressor
+
+rng = np.random.default_rng(12)
+def run(n, B=200):
+    x = rng.uniform(0, 1, (n, 3))
+    roots, sds = [], []
+    xg = rng.uniform(0, 1, (300, 3))
+    for b in range(B):
+        idx = rng.integers(0, n, n)
+        t = DecisionTreeRegressor(max_depth=3, random_state=b).fit(x[idx], np.sin(2*x[idx][:,0]) + rng.normal(0,.3,n))
+        roots.append(t.tree_.feature[0])
+        sds.append(t.predict(xg).std())
+    return (np.mean(np.array(roots) == 0), np.mean(sds))
+
+for n in [30, 100, 400]:
+    p_root, sd = run(n)
+    print(f"n={n:>3}: P(same root feature) = {p_root:.2f}, mean fit SD = {sd:.4f}")
+```
+
+Root-feature agreement climbs quickly with n (the dominant signal asserts itself — like a correlation estimate whose *sign* stabilizes faster than its value), while prediction SD declines much more slowly (every leaf threshold keeps wobbling). The asymmetry explains a practical pattern: trees agree on *which* drivers matter long before they agree on *what they predict* — a distinction to respect when reporting importances vs predictions.
+</details>
+
+## 6. Complex Questions
+
+**C1 (limitations × [7.3–7.6](07-3-bagging.qmd) preview).** Build the "inheritance table": for each property (scale-invariance, axis-parallel bias, no extrapolation, interaction reach, instability, single-model interpretability), mark whether bagging, random forests, and boosting preserve, hide, or transform it — justifying each cell from the algorithm's mechanics (you may peek at the next pages' docs). This table is the conceptual map of Part 7; revisit it after each page and revise.
+
+**C2 (limitations × [6.x smoothness](../part-06-nonlinear-regression/06-1-polynomial-regression.qmd)).** Smoothness repair options compared: on a smooth 1-D truth, approximate with (a) a depth-6 tree, (b) the same tree's leaves refit with *linear* models (piecewise-linear tree — implement manually), (c) bagged depth-6 trees ([7.3](07-3-bagging.qmd)), (d) a cubic spline ([6.4](../part-06-nonlinear-regression/06-4-regression-splines.qmd)). Report CV MSE and plot fits. Rank the repairs of the staircase artifact by MSE-per-interpretability, and note which repairs are available to ensembles but not single trees.
+
+## 7. Summary
+
+- Assets: scale-invariance, mixed data, automatic interactions (with depth), interpretable when small, robustness in classification.
+- Liabilities: instability, axis-parallel bias, no extrapolation, jagged regression fits, poor calibrated probabilities.
+- Bagging/boosting transform the liability sheet — but axis-parallel bias and flat extrapolation are inherited, not cured.
+- "Interpretable" is a statement about the fitted size; export_text on a maze is not interpretability.
+- Classification is outlier-blind; regression leaf means are outlier-sensitive — pick criteria accordingly.
+- Single trees remain the right deliverable when a human must execute the rule.
+- The instability that plagues single trees is exactly what averaging consumes: [7.3 Bagging](07-3-bagging.qmd).

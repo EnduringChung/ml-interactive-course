@@ -1,0 +1,445 @@
+---
+title: "8.6 Multiclass SVM"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - matplotlib
+---
+
+Binary SVMs answer "this class or that one?" — real problems ask "which of k?" Two standard extensions compose binary machines into multiclass classifiers: **one-vs-rest** (OvR: k machines, each against everyone) and **one-vs-one** (OvO: k(k−1)/2 machines, each on a pair). SVC runs OvO internally; knowing what that means for scores, calibration, and imbalance is this page's job.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+**OvR**: train fₖ(x) = "class k vs not-k" for each k; predict argmaxₖ fₖ(x). **OvO**: train f_{kl} on classes k and l only; predict by pairwise-vote majority (decision_function returns the k(k−1)/2 vote margins).
+
+```{pyodide}
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.multiclass import OneVsRestClassifier, OneVsOneClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+
+rng = np.random.default_rng(0)
+n = 80
+X = np.vstack([rng.normal([0, 0], 1, (n, 2)),
+               rng.normal([3, 0], 1, (n, 2)),
+               rng.normal([1.5, 3], 1, (n, 2))])
+y = np.repeat([0, 1, 2], n)
+
+ovr = OneVsRestClassifier(make_pipeline(StandardScaler(),
+                                        SVC(kernel="linear", C=1))).fit(X, y)
+ovo = OneVsOneClassifier(make_pipeline(StandardScaler(),
+                                       SVC(kernel="linear", C=1))).fit(X, y)
+print("OvR: ", ovr.n_classes_ if hasattr(ovr, "n_classes_") else "", 
+      "estimators:", len(ovr.estimators_))
+print("OvO:  estimators:", len(ovo.estimators_), "(= 3*2/2)")
+print("agreement:", round(float(np.mean(ovr.predict(X) == ovo.predict(X))), 3))
+```
+
+SVC's built-in OvO and its decision-function shape:
+
+```{pyodide}
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+
+rng = np.random.default_rng(1)
+n = 60
+X = np.vstack([rng.normal([0, 0], 1, (n, 2)),
+               rng.normal([3, 0], 1, (n, 2)),
+               rng.normal([1.5, 3], 1, (n, 2))])
+y = np.repeat([0, 1, 2], n)
+
+clf = make_pipeline(StandardScaler(), SVC(kernel="linear", C=1)).fit(X, y)
+d = clf.decision_function(X[:3])
+print("decision_function shape:", d.shape, " = k(k-1)/2 = 3 vote scores per row")
+print(np.round(d, 2))
+print("predictions:", clf.predict(X[:3]))
+```
+
+## 2. Concept Questions
+
+1. OvR with 1% positive class: what happens to each rest-vs-one machine's training balance, and which page's remedy applies to *each* binary subproblem?
+2. OvO trains on only 2/nᵏ-ish of the data per machine. Why is that *fine* for SVC specifically (name the scaling behavior it dodges)?
+3. `decision_function` for SVC multiclass returns 3 scores for 3 classes. Are these probabilities? Are they comparable *across* rows?
+4. When do OvR and OvO disagree most, and give one dataset property favoring each.
+5. Your 10-class problem needs calibrated probabilities for downstream cost decisions. What is the two-step pipeline, and which model class makes it trivial?
+
+<details>
+<summary>Answers</summary>
+
+1. Each OvR machine sees ~1% positives vs 99% rest — the imbalanced binary problem k times over. Apply class weights / stratified folds / PR-metric evaluation per machine ([3.1](../part-03-classification-glm/03-1-classification-fundamentals.qmd)); the argmax across machines then compares scores trained on different balances — a known OvR wart.
+2. SVC's dual training scales roughly between n² and n³; restricting each machine to 2·(2n/k) rows slashes total cost for large k — OvO is the scaling-friendly choice for kernel-SVC multiclass (sklearn's default for exactly this reason).
+3. No and no. They're pairwise vote margins in arbitrary per-machine scales (each pair's SVM has its own w‖); comparable *within* a row for voting, not calibrated probabilities across rows or samples ([8.5](08-5-svm-vs-logistic.qmd)'s probability caveat, k-fold worse).
+4. Disagreement peaks near class boundaries and under imbalance (OvR's rest-class dominates its machine; OvO's votes fragment). Favor OvO: large k with kernel-SVC (compute); favor OvR: few classes, per-class interpretability ("class k's own machine"), or sparse outputs.
+5. Model that emits real per-class probabilities (multinomial logistic — softmax, [3.3](../part-03-classification-glm/03-3-logistic-regression.qmd) extension) then calibrate + apply costs ([3.7](../part-03-classification-glm/03-7-model-comparison.qmd)); SVM route: OvR/OvO scores → probability calibration (extra layer, extra caution).
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.multiclass import OneVsRestClassifier, OneVsOneClassifier
+from sklearn.svm import LinearSVC
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+rng = np.random.default_rng(2)
+X = np.vstack([rng.normal([0, 0], 1, (50, 2)) for _ in range(4)]) + \
+    np.repeat([[0, 0], [3, 0], [0, 3], [3, 3]], 50, axis=0)
+y = np.repeat(range(4), 50)
+for name, wrap in [("OvR", OneVsRestClassifier), ("OvO", OneVsOneClassifier)]:
+    m = wrap(make_pipeline(StandardScaler(), LinearSVC(max_iter=20000))).fit(X, y)
+    print(name, "estimators:", len(m.estimators_))
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.svm import SVC
+rng = np.random.default_rng(3)
+X = np.vstack([rng.normal([0, 0], 1, (40, 2)),
+               rng.normal([3, 0], 1, (40, 2)),
+               rng.normal([1.5, 3], 1, (40, 2))])
+y = np.repeat([0, 1, 2], 40)
+clf = SVC(kernel="linear", C=1).fit(X, y)
+print("classes_:", clf.classes_)
+print("n_support per class:", clf.n_support_)
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.svm import SVC
+rng = np.random.default_rng(4)
+X = np.vstack([rng.normal([0, 0], 1, (40, 2)),
+               rng.normal([3, 0], 1, (40, 2)),
+               rng.normal([1.5, 3], 1, (40, 2))])
+y = np.repeat([0, 1, 2], 40)
+clf = SVC(kernel="linear", C=1).fit(X, y)
+votes = clf.decision_function(X[:2])
+pred = clf.predict(X[:2])
+import numpy as np
+pairwise = [(0, 1), (0, 2), (1, 2)]
+manual = []
+for row in votes:
+    wins = np.zeros(3, dtype=int)
+    for s, (k, l) in zip(row, pairwise):
+        wins[k if s > 0 else l] += 1
+    manual.append(wins.argmax())
+print("manual vote predictions:", manual, "| sklearn:", pred.tolist())
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.svm import LinearSVC
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+rng = np.random.default_rng(5)
+X = np.vstack([rng.normal([0, 0], 1, (30, 2)),
+               rng.normal([3, 0], 1, (30, 2)),
+               rng.normal([1.5, 3], 1, (30, 2))])
+y = np.repeat([0, 1, 2], 30)
+m = make_pipeline(StandardScaler(), LinearSVC(max_iter=20000)).fit(X, y)
+d = m.decision_function(X[:2])          # LinearSVC default is OvR
+print("LinearSVC decision shape:", d.shape, "(k scores = one-vs-rest)")
+print("argmax == predict:", bool(np.all(d.argmax(axis=1) == m.predict(X[:2]))))
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** OvR vs OvO vs multinomial, three ways: fit LinearSVC(OvR), SVC(OvO), and LogisticRegression(multinomial softmax) on a 5-class Gaussian problem; compare CV accuracy, fit time, and prediction agreement rates. Then answer: where do OvR and softmax disagree most — and which disagreement is "probability-shaped" vs "margin-shaped"?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import time
+from sklearn.svm import LinearSVC, SVC
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+
+rng = np.random.default_rng(6)
+n_class, k = 120, 5
+centers = np.column_stack([np.cos(np.linspace(0, 2*np.pi, k, endpoint=False)),
+                           np.sin(np.linspace(0, 2*np.pi, k, endpoint=False))]) * 4
+X = np.vstack([rng.normal(c, 1.2, (n_class, 2)) for c in centers])
+y = np.repeat(range(k), n_class)
+cv = StratifiedKFold(5, shuffle=True, random_state=7)
+
+for name, m in [
+    ("LinearSVC (OvR)", make_pipeline(StandardScaler(), LinearSVC(max_iter=20000))),
+    ("SVC (OvO)", make_pipeline(StandardScaler(), SVC(kernel="linear", C=1))),
+    ("Logistic (softmax)", make_pipeline(StandardScaler(),
+                                         LogisticRegression(max_iter=4000))),
+]:
+    t0 = time.perf_counter()
+    acc = cross_val_score(m, X, y, cv=cv).mean()
+    dt = time.perf_counter() - t0
+    print(f"{name:20s} CV acc {acc:.4f} ({dt:.2f}s)")
+```
+
+Softmax differs from the SVMs on *confidence geometry*: it's the one producing comparable per-class probabilities, so its "disagreements" with margin models concentrate where probabilities (not margins) would rank classes differently — near boundaries between close pairs. Margins answer "which side," softmax answers "how much of each" — related questions, different answers, choose per downstream need.
+</details>
+
+**Exercise 2.** Imbalance across 4 classes (1%, 4%, 15%, 80%): compare SVC-OvO *with and without* per-pair `class_weight="balanced"` by macro-F1 and per-class recall ([3.1](../part-03-classification-glm/03-1-classification-fundamentals.qmd)). Which classes get sacrificed by default, and does balancing fix every class or shift the sacrifice? Write the deployment rule for imbalanced multiclass problems.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import StratifiedKFold, cross_val_predict
+from sklearn.metrics import f1_score, recall_score, classification_report
+
+rng = np.random.default_rng(8)
+sizes = [8, 30, 120, 600]
+centers = [[0, 0], [3, 0], [0, 3], [3, 3]]
+X = np.vstack([rng.normal(c, 1.0, (s, 2)) for c, s in zip(centers, sizes)])
+y = np.repeat(range(4), sizes)
+
+for weight in [None, "balanced"]:
+    clf = make_pipeline(StandardScaler(),
+                        SVC(kernel="linear", C=1, class_weight=weight))
+    pred = cross_val_predict(clf, X, y,
+                             cv=StratifiedKFold(5, shuffle=True, random_state=9))
+    print(f"class_weight={weight}: macro-F1 = "
+          f"{f1_score(y, pred, average='macro'):.3f}")
+    print("  per-class recall:", recall_score(y, pred, average=None).round(2))
+```
+
+Unweighted OvO sacrifices the 1% class almost entirely (recall ≈ 0) and leans on the 80% class; `class_weight="balanced"` rescales each pair's penalties, rescuing rare-class recall *at the cost* of the majority's precision — recall mass moves, it doesn't appear. Deployment rule: imbalanced multiclass needs per-class recall targets set by the *costs of missing each class*, encoded via class weights (or resampling), and evaluated by macro-averaged metrics — never by accuracy or micro-F1 alone.
+</details>
+
+**Exercise 3.** Codebook features vs native multiclass: build a 6-class problem where classes sit on a *hierarchy* (2 supergroups × 3 subclasses). Compare (a) flat 6-class SVC, (b) a two-level strategy: supergroup SVM → subclass SVC within predicted supergroup. Report flat vs hierarchical accuracy (overall and per-subclass). When does the hierarchy help (signal lives at the top level), when does it double-punish (early error propagates), and what does this preview about structured prediction?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(10)
+n = 100
+sup = rng.integers(0, 2, 6 * n)
+sub = rng.integers(0, 3, 6 * n)
+angle = (sup * 2 + sub) * (np.pi / 3)
+X = np.c_[np.cos(angle), np.sin(angle)] * (2 + sup)[:, None] + rng.normal(0, .35, (6 * n, 2))
+y = sup * 3 + sub
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, stratify=y, random_state=11)
+
+flat = make_pipeline(StandardScaler(), SVC(kernel="rbf", C=10)).fit(X_tr, y_tr)
+print("flat 6-class accuracy:", round(flat.score(X_te, y_te), 3))
+
+sup_clf = make_pipeline(StandardScaler(), SVC(kernel="rbf", C=10)).fit(
+    X_tr, y_tr // 3)
+sub_clfs = [make_pipeline(StandardScaler(), SVC(kernel="rbf", C=10)).fit(
+    X_tr[y_tr // 3 == g], y_tr[y_tr // 3 == g] % 3) for g in range(2)]
+sup_pred = sup_clf.predict(X_te)
+hier_pred = np.array([sub_clfs[g].predict(X_te[i:i+1])[0] + 3 * g
+                      for i, g in enumerate(sup_pred)])
+print("hierarchical accuracy:", round(float(np.mean(hier_pred == y_te)), 3),
+      "(pays 1/3 of early supergroup errors)")
+```
+
+The hierarchy helps when the top split is real and clean (supergroups well separated) — each subproblem becomes easier; it hurts when supergroups overlap, because one wrong top-level call *guarantees* a wrong subclass — error compounding. Same trade as any structured/sequential prediction: decompose only along genuinely strong boundaries, and measure the top level's accuracy before trusting the cascade.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **`decision_function` shape is the tell**: (n, k) → OvR scores (LinearSVC, LogisticRegression); (n, k(k−1)/2) → OvO votes (SVC). Code that assumes k columns breaks silently when swapping SVC/LinearSVC.
+- **OvR's scale non-comparability**: each rest-machine has its own w scale; argmax compares apples to slightly different apples — probability calibration or shared-margin formulations fix it if scores must travel.
+- **OvO's vote ties**: with even class counts, votes can tie; sklearn breaks them by a deterministic rule — for audit-sensitive applications, inspect `decision_function` rather than trusting the tiebreak.
+- **Compute crossover**: LinearSVC OvR ≈ k fast primal fits (scales to big n); SVC OvO = k(k−1)/2 dual fits on small pairs (scales to big k with kernels) — the reason SVC defaults to OvO.
+- **`class_weight` semantics per strategy**: OvR applies it per binary machine; OvO per pair — the *effective* weighting of rare classes differs; verify with per-class recalls, not the API name.
+- **Calibration multiclass**: calibrating k OvR machines independently doesn't calibrate the argmax distribution — use proper multiclass calibration if probabilities matter ([3.7](../part-03-classification-glm/03-7-model-comparison.qmd)).
+
+### Read & Refactor AI Code
+
+This AI-generated multiclass pipeline has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(12)
+n = 60
+X = np.vstack([rng.normal([0, 0], 1, (n, 2)),
+               rng.normal([3, 0], 1, (n, 2)),
+               rng.normal([1.5, 3], 1, (n, 2))])
+y = np.repeat([0, 1, 2], n)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=13)
+
+clf = SVC(kernel="linear", C=1, probability=True, random_state=0).fit(X_tr, y_tr)
+
+# BUG 1: decision_function treated as per-class probabilities
+d = clf.decision_function(X_te[:2])
+print("scores:", d.shape, "-> 'class probabilities':", d.round(3))
+
+# BUG 2: accuracy across severely imbalanced classes reported flat
+sizes = [200, 40, 8]
+X2 = np.vstack([rng.normal([0, 0], 1, (s, 2)) for s in sizes]) + \
+     np.repeat([[0, 0], [3, 0], [1.5, 3]], sizes, axis=0)
+y2 = np.repeat([0, 1, 2], sizes)
+X2_tr, X2_te, y2_tr, y2_te = train_test_split(X2, y2, random_state=14)
+clf2 = SVC(kernel="linear", C=1).fit(X2_tr, y2_tr)
+print("accuracy:", round(clf2.score(X2_te, y2_te), 3))
+
+# BUG 3: argmax over OvO votes compared across rows as confidence
+conf = clf.decision_function(X_te[:3]).max(axis=1)
+print("comparable confidences:", conf.round(3))
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Vote margins ≠ probabilities**: SVC's decision_function returns k(k−1)/2 pairwise scores; calling them class probabilities misstates both count and meaning. Use `probability=True` (Platt) — or a softmax model.
+2. **Flat accuracy on 25:5:1 imbalance** hides total sacrifice of class 2 — macro-F1 + per-class recall ([Exercise 2](#)).
+3. **Vote margins aren't cross-row comparable confidence**: each pair-machine normalizes differently. Calibrated probabilities (or per-row softmax-style rescaling with validation) are the comparable currency.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.svm import SVC
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import f1_score, recall_score, classification_report
+
+rng = np.random.default_rng(12)
+n = 60
+X = np.vstack([rng.normal([0, 0], 1, (n, 2)),
+               rng.normal([3, 0], 1, (n, 2)),
+               rng.normal([1.5, 3], 1, (n, 2))])
+y = np.repeat([0, 1, 2], n)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, stratify=y, random_state=13)
+clf = SVC(kernel="linear", C=1, probability=True,
+          random_state=0).fit(X_tr, y_tr)
+print("probabilities:", clf.predict_proba(X_te[:2]).round(3))
+
+sizes = [200, 40, 8]
+X2 = np.vstack([rng.normal([0, 0], 1, (s, 2)) for s in sizes]) + \
+     np.repeat([[0, 0], [3, 0], [1.5, 3]], sizes, axis=0)
+y2 = np.repeat([0, 1, 2], sizes)
+X2_tr, X2_te, y2_tr, y2_te = train_test_split(X2, y2, stratify=y2, random_state=14)
+clf2 = SVC(kernel="linear", C=1, class_weight="balanced").fit(X2_tr, y2_tr)
+print(classification_report(y2_te, clf2.predict(X2_te)))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Count and compare the training cost of OvR vs OvO for k classes, n rows, kernel-SVC at ~n²-per-fit: derive O(k·n²) vs O(k²·(2n/k)²) = O(4n²) — OvO is *constant* in k while OvR grows linearly! Verify empirically for k ∈ {3, 6, 12} on fixed-size data, then explain why OvO's advantage strengthens exactly when n per class also grows (and when OvR's simplicity wins anyway).
+
+<details>
+<summary>Hint</summary>
+
+OvO: k(k−1)/2 machines, each on 2n/k rows → cost per machine ∝ (2n/k)²; multiply out.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+OvR: k machines on n rows → k·n²-scale. OvO: k(k−1)/2 ≈ k²/2 machines on 2n/k rows each → (k²/2)·(2n/k)² = 2n²·(k²/k²)·... = O(4n²) — *independent of k*.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import time
+from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+
+for k in [3, 6, 12]:
+    rng = np.random.default_rng(k)
+    centers = np.column_stack([np.cos(np.linspace(0, 2*np.pi, k, endpoint=False)),
+                               np.sin(np.linspace(0, 2*np.pi, k, endpoint=False))]) * 4
+    n_pc = 150
+    X = np.vstack([rng.normal(c, 1, (n_pc, 2)) for c in centers])
+    y = np.repeat(range(k), n_pc)
+    t0 = time.perf_counter()
+    SVC(kernel="linear").fit(StandardScaler().fit_transform(X), y)
+    print(f"k={k:>2}: SVC(OvO) fit time {time.perf_counter() - t0:.2f}s")
+```
+
+Fit time grows mildly with k (more machines, smaller each) — the flat-in-k prediction holding. OvO's advantage strengthens when n is large (n² dominates everything) and kernels make dual training unavoidable; OvR wins when interpretability of per-class machines matters, when using linear primal solvers (already linear in n), or when k is small enough that the difference is noise.
+</details>
+
+**Q2.** Design multiclass calibration properly: you have OvR scores from a 4-class SVM and need probabilities for a cost matrix (misclassification costs differ per class pair). (a) Show why independently calibrating each OvR machine breaks (probabilities needn't sum to 1). (b) Implement a fix: normalize (softmax over calibrated scores) or use a validation-set multiclass calibration, and evaluate proper multiclass calibration via log-loss before/after. (c) State which confusion-matrix entries the cost matrix should reweight, and where the thresholds live now (not in the model — in the decision layer).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.svm import LinearSVC
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(21)
+X = np.vstack([rng.normal([0, 0], 1, (100, 2)),
+               rng.normal([3, 0], 1, (100, 2)),
+               rng.normal([0, 3], 1, (100, 2)),
+               rng.normal([3, 3], 1, (100, 2))])
+y = np.repeat(range(4), 100)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, stratify=y, random_state=22)
+X_ca, X_va, y_ca, y_va = train_test_split(X_tr, y_tr, stratify=y_tr,
+                                          random_state=23)
+
+m = make_pipeline(StandardScaler(), LinearSVC(max_iter=20000)).fit(X_ca, y_ca)
+raw = m.decision_function(X_va)
+
+def softmax(z):
+    z = z - z.max(axis=1, keepdims=True)
+    e = np.exp(z)
+    return e / e.sum(axis=1, keepdims=True)
+
+from sklearn.linear_model import LogisticRegression
+calib = LogisticRegression(max_iter=3000).fit(raw, y_va)
+probs = calib.predict_proba(raw)
+
+print("raw OvR score row sums:", raw.sum(axis=1).round(2).tolist(), "(not 1!)")
+print("softmax-normalized row sums:", probs.sum(axis=1).round(2).tolist())
+print("log-loss on validation after calibration:",
+      round(float(-np.log(probs[np.arange(len(y_va)), y_va]).mean()), 4))
+```
+
+(a) Independent per-class calibrators produce k numbers with arbitrary sums — "probabilities" that violate the probability simplex. (b) A downstream softmax (or a validation-fitted multiclass calibrator) restores the simplex and measurably improves log-loss. (c) The cost matrix lives in the *decision layer*: given calibrated p, choose the class minimizing Σⱼ C(predicted j, true k)·pⱼ — thresholds become cost-weighted argmax rules, tunable without refitting the SVM. This separation — calibrated model + explicit decision layer — is the clean architecture for any cost-sensitive deployment.
+</details>
+
+## 6. Complex Questions
+
+**C1 (multiclass × [3.7 comparison](../part-03-classification-glm/03-7-model-comparison.qmd) × [7.4 forest](../part-07-trees-ensembles/07-4-random-forests.qmd)).** The k-way bake-off: 6-class problem with per-class different geometries (one linear, one radial, one XOR-ish, three Gaussian). Compete SVC-OvO (tuned), LinearSVC-OvR, multinomial logistic, and random forest by macro-F1 (nested CV) plus per-class recall. Which classes does each method sacrifice, and what does the per-class pattern tell you about matching model geometry to class geometry rather than picking one global winner?
+
+**C2 (multiclass × [9.4 K-means](../part-09-unsupervised-learning/09-4-k-means.qmd) preview).** Clusters as pseudo-labels: run K-means with k = 6 on unlabeled data, then treat cluster IDs as classes for an SVC-OvR. Compare (a) supervised accuracy against true labels, (b) the stability of cluster-to-class mappings across seeds. What breaks when clusters ≠ classes (split/merged clusters), and what does this thought experiment teach about the unsupervised→supervised handoff coming in Part 9?
+
+## 7. Summary
+
+- Two compositions: OvR (k machines vs the rest; argmax scores) and OvO (k(k−1)/2 pairwise machines; vote majority — SVC's default).
+- decision_function shapes differ ((n,k) vs (n,k(k−1)/2)); neither is probability — calibrate for that.
+- Compute: OvO is flat-in-k for kernel-SVC; OvR is simple and interpretable; LinearSVC makes OvR scale.
+- Imbalance: per-machine/per-pair class weights, macro metrics, per-class recall — accuracy lies at k > 2 too.
+- Hierarchical/structured decompositions help only when the top boundary is real; early errors compound.
+- Probabilities and cost-sensitive decisions live in the calibration + decision layer, not the SVM.
+- Part 8's geometry chapter is done. Everything so far had labels — Part 9 removes them: [9.1 The unsupervised mindset](../part-09-unsupervised-learning/09-1-unsupervised-mindset.qmd).
