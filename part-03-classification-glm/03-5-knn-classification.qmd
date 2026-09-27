@@ -1,0 +1,475 @@
+---
+title: "3.5 KNN Classification"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - matplotlib
+---
+
+K-nearest-neighbors classification votes: a query's class is the majority class among its k nearest training points. No assumptions about distributions or boundaries — the data *is* the model. Combined with [2.9](../part-02-linear-regression/02-9-knn-regression.qmd)'s regression twin, this page completes the neighborhood-methods toolkit and its biases.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+**The algorithm** at query $x_0$:
+
+1. Find the k nearest training points (any distance metric — Euclidean by default).
+2. Output the majority class (or, usefully, the **vote fraction** as a probability estimate).
+
+k is the flexibility dial: k = 1 draws maximal boundaries around every point (train accuracy 100%); k = n predicts the majority class everywhere.
+
+```{pyodide}
+#| fig-width: 8
+#| fig-height: 3.6
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.neighbors import KNeighborsClassifier
+
+rng = np.random.default_rng(0)
+n = 100
+X = np.vstack([rng.normal([0, 0], 1.0, (n, 2)),
+               rng.normal([2, 1.5], 1.0, (n, 2))])
+y = np.r_[np.zeros(n), np.ones(n)].astype(int)
+
+xx, yy = np.meshgrid(np.linspace(-4, 6, 220), np.linspace(-4, 6, 220))
+grid = np.c_[xx.ravel(), yy.ravel()]
+
+fig, axes = plt.subplots(1, 3, figsize=(8, 3.6), sharey=True)
+for ax, k in zip(axes, [1, 7, 50]):
+    clf = KNeighborsClassifier(n_neighbors=k).fit(X, y)
+    Z = clf.predict(grid).reshape(xx.shape)
+    ax.contourf(xx, yy, Z, levels=[-0.5, 0.5, 1.5], alpha=0.25,
+                colors=["steelblue", "salmon"])
+    ax.scatter(X[y == 0, 0], X[y == 0, 1], s=8, c="steelblue")
+    ax.scatter(X[y == 1, 0], X[y == 1, 1], s=8, c="salmon")
+    ax.set_title(f"k={k}: train acc {clf.score(X, y):.2f}")
+fig.tight_layout()
+plt.show()
+```
+
+The vote fraction doubles as a (crude) probability estimate — coarser as k grows:
+
+```{pyodide}
+#| fig-width: 6.5
+#| fig-height: 3
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.neighbors import KNeighborsClassifier
+
+rng = np.random.default_rng(1)
+x = np.sort(rng.uniform(0, 10, 120))
+y = (np.sin(1.2 * x) > 0).astype(int)          # alternating bands
+X = x.reshape(-1, 1)
+
+fig, ax = plt.subplots(figsize=(6.5, 3))
+ax.scatter(x, y, s=10, alpha=0.3, c=y, cmap="bwr")
+xg = np.linspace(0, 10, 500).reshape(-1, 1)
+for k, c in [(3, "green"), (25, "purple")]:
+    p = KNeighborsClassifier(k).fit(X, y).predict_proba(xg)[:, 1]
+    ax.plot(xg, p, lw=2, color=c, label=f"k={k} vote fraction")
+ax.set(xlabel="x", ylabel="P(y=1)", title="Neighborhood votes as probability estimates")
+ax.legend()
+plt.show()
+```
+
+**Vote by hand once:**
+
+```{pyodide}
+import numpy as np
+from sklearn.neighbors import KNeighborsClassifier
+
+rng = np.random.default_rng(2)
+X = rng.uniform(0, 10, (30, 2))
+y = rng.integers(0, 2, 30)
+
+def knn_vote(x0, X, y, k):
+    d = np.sqrt(((X - x0)**2).sum(axis=1))
+    idx = np.argsort(d)[:k]
+    return np.bincount(y[idx]).argmax(), y[idx]      # majority + the voters
+
+pred, voters = knn_vote([5.0, 5.0], X, y, 7)
+sk = KNeighborsClassifier(7).fit(X, y).predict([[5.0, 5.0]])[0]
+print("hand prediction:", pred, "| sklearn:", sk, "| voters:", voters)
+```
+
+## 2. Concept Questions
+
+1. Why is k = 1's training accuracy always 100%, and what is the *only* thing its test performance demonstrates?
+2. KNN "probabilities" from vote fractions take k+1 distinct values. What are the consequences for (a) calibration curves, (b) threshold tuning granularity?
+3. Which KNN failure mode is shared with every distance-based method ([2.9](../part-02-linear-regression/02-9-knn-regression.qmd)) and fixed identically?
+4. In a 3-class problem with k = 4, what happens on ties, and name two resolutions.
+5. Odd k is folk-wisdom for binary problems. Why does it not fully protect against ties in practice?
+
+<details>
+<summary>Answers</summary>
+
+1. Each point is its own nearest neighbor, so training predictions are the training labels verbatim. Zero training error demonstrates *memorization capacity* — nothing about generalization; only held-out performance means anything ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd)).
+2. (a) Calibration plots show ≤ k+1 distinct predicted values — a step function, no fine calibration possible; (b) thresholds between adjacent vote levels do nothing — decision granularity is coarse (with k = 5, you cannot build a 60%-threshold classifier). Use larger k for finer probability resolution, or distance weighting.
+3. **Feature scaling** — distance domination by large-range features. Fix identically: StandardScaler inside a pipeline, fitted per-fold ([2.9](../part-02-linear-regression/02-9-knn-regression.qmd), [0.5](../part-00-python-foundations/00-5-data-splitting.qmd)).
+4. With k = 4, a 2–2 vote tie is possible (and 1–1–2 in 3 classes). Resolutions: use odd k; break ties by distance-weighted votes, by the closer class-sum, or by sklearn's default (order/prior-based choice — check the docs, don't assume).
+5. Distances can tie exactly (identical/duplicated points, integer coordinates), and multiclass problems create majority-less splits at any k. Odd k reduces, not eliminates, ambiguity — know your library's tie rule.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.neighbors import KNeighborsClassifier
+rng = np.random.default_rng(3)
+X = rng.uniform(0, 1, (50, 2))
+y = rng.integers(0, 2, 50)
+k1 = KNeighborsClassifier(1).fit(X, y)
+print("k=1 train acc:", k1.score(X, y))          # 1.0, always
+print("k=1 train acc on k=1 self-check:", (k1.predict(X) == y).mean())
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.neighbors import KNeighborsClassifier
+rng = np.random.default_rng(4)
+# distance domination: feature 2 is 1000x the range
+X = np.c_[rng.normal(0, 1, 200), rng.normal(0, 1000, 200)]
+y = (X[:, 0] > 0).astype(int)                    # truth lives in feature 1!
+knn = KNeighborsClassifier(5).fit(X, y)
+print("unscaled acc:", round(knn.score(X, y), 3)) # ≈ 0.5 — blind to the truth
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+scaled = make_pipeline(StandardScaler(), KNeighborsClassifier(5)).fit(X, y)
+print("scaled acc:  ", round(scaled.score(X, y), 3))
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.neighbors import KNeighborsClassifier
+rng = np.random.default_rng(5)
+# vote fractions: coarse probability ladder
+x = np.linspace(0, 10, 60)
+y = (x > 5).astype(int)
+knn = KNeighborsClassifier(9).fit(x.reshape(-1, 1), y)
+p = knn.predict_proba(np.array([[2.0], [5.0], [8.0]]))
+print(p.round(3))                                 # only {0/9,...,9/9} values appear
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.neighbors import KNeighborsClassifier
+# distance weighting smooths the vote
+rng = np.random.default_rng(6)
+x = np.linspace(0, 10, 60); y = (x > 5).astype(int)
+for w in ["uniform", "distance"]:
+    knn = KNeighborsClassifier(9, weights=w).fit(x.reshape(-1, 1), y)
+    print(w, knn.predict_proba([[5.5]]).round(3))
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Implement multiclass KNN by hand with (a) majority vote, (b) distance-weighted vote (weights 1/d, aggregate per class, argmax), and verify both against sklearn on 25 random queries. Report one query where the two methods disagree and explain the neighborhood geometry that caused it.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.neighbors import KNeighborsClassifier
+
+rng = np.random.default_rng(7)
+X = rng.uniform(0, 10, (80, 2))
+y = rng.choice([0, 1, 2], 80)
+
+def knn_hard(x0, X, y, k):
+    d = np.sqrt(((X - x0)**2).sum(axis=1))
+    return np.bincount(y[np.argsort(d)[:k]]).argmax()
+
+def knn_weighted(x0, X, y, k):
+    d = np.sqrt(((X - x0)**2).sum(axis=1))
+    idx = np.argsort(d)[:k]
+    dk = d[idx]
+    dk[dk == 0] = 1e-12
+    w = 1 / dk
+    scores = np.bincount(y[idx], weights=w, minlength=3)
+    return scores.argmax()
+
+clf_u = KNeighborsClassifier(7).fit(X, y)
+clf_w = KNeighborsClassifier(7, weights="distance").fit(X, y)
+qs = rng.uniform(0, 10, (25, 2))
+
+agree_hard = np.mean([knn_hard(q, X, y, 7) == clf_u.predict(q.reshape(1, -1))[0] for q in qs])
+agree_w = np.mean([knn_weighted(q, X, y, 7) == clf_w.predict(q.reshape(1, -1))[0] for q in qs])
+print("hand vs sklearn — uniform:", agree_hard, " distance:", agree_w)
+
+disagree = [i for i, q in enumerate(qs)
+            if knn_hard(q, X, y, 7) != knn_weighted(q, X, y, 7)]
+if disagree:
+    i = disagree[0]
+    d = np.sqrt(((X - qs[i])**2).sum(axis=1))
+    voters = np.argsort(d)[:7]
+    print("disagreement at query", i, "— voter classes:",
+          y[voters], "distances:", d[voters].round(2))
+```
+
+Disagreements happen when the majority class sits marginally farther on average: uniform vote follows the count, weighted vote follows the *close* points. Both are defensible; the choice is part of the model.
+</details>
+
+**Exercise 2.** Boundary-artifact tour: for two Gaussian classes, plot k = 1, 3, 15 decision boundaries; then report *test* accuracy for each on a large fresh sample, together with train accuracy. Produce the k-vs-error table (train, test) and identify the overfitting/underfitting regions — then argue from the table which k you'd ship, and what extra experiment would firm that up.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.neighbors import KNeighborsClassifier
+
+rng = np.random.default_rng(8)
+n = 60
+X = np.vstack([rng.normal([0, 0], 1.2, (n, 2)), rng.normal([2, 1.5], 1.2, (n, 2))])
+y = np.r_[np.zeros(n), np.ones(n)].astype(int)
+Xte = np.vstack([rng.normal([0, 0], 1.2, (3000, 2)),
+                 rng.normal([2, 1.5], 1.2, (3000, 2))])
+yte = np.r_[np.zeros(3000), np.ones(3000)].astype(int)
+
+xx, yy = np.meshgrid(np.linspace(-5, 7, 200), np.linspace(-5, 7, 200))
+grid = np.c_[xx.ravel(), yy.ravel()]
+
+fig, axes = plt.subplots(1, 3, figsize=(7, 3.2))
+for ax, k in zip(axes, [1, 3, 15]):
+    clf = KNeighborsClassifier(k).fit(X, y)
+    Z = clf.predict(grid).reshape(xx.shape)
+    ax.contourf(xx, yy, Z, levels=[-0.5, 0.5, 1.5], alpha=0.25,
+                colors=["steelblue", "salmon"])
+    ax.scatter(X[:, 0], X[:, 1], s=6, c=y, cmap="bwr")
+    ax.set_title(f"k={k}")
+fig.tight_layout()
+plt.show()
+
+for k in [1, 3, 7, 15, 31, 61]:
+    clf = KNeighborsClassifier(k).fit(X, y)
+    print(f"k={k:>2}: train {clf.score(X, y):.3f}  test {clf.score(Xte, yte):.3f}")
+```
+
+k = 1: perfect train, visibly worse test (islands around single points). Test error bottoms in the mid-k range then climbs as neighborhoods straddle the true boundary. To ship a k: repeat across splits/CV and pick by mean test (or CV) error — the table from one split is indicative, not decisive ([4.3](../part-04-validation-model-selection/04-3-cross-validation.qmd)).
+</details>
+
+**Exercise 3.** Curse-of-dimensionality face-off: signal in 3 of d dimensions (d = 3, 30, 300), n = 400 training points, KNN (CV-tuned k) vs penalized logistic regression; report CV-chosen k and test accuracies. Explain the k-trend with d and the reason logistic degrades gracefully — then state the dimension threshold past which you'd stop considering plain KNN for this data shape.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import cross_val_score, KFold
+
+rng = np.random.default_rng(9)
+def make_data(d, n=400):
+    latent = rng.normal(0, 1, n)
+    X = rng.normal(0, 1, (n, d))
+    X[:, 0] = latent
+    X[:, 1] = 0.5 * latent + rng.normal(0, 1, n)
+    X[:, 2] = -0.5 * latent + rng.normal(0, 1, n)
+    y = (rng.uniform(0, 1, n) < 1 / (1 + np.exp(-2 * latent))).astype(int)
+    return X, y
+
+for d in [3, 30, 300]:
+    X, y = make_data(d)
+    best_k, best = None, -1
+    for k in [3, 7, 15, 31, 61]:
+        pipe = make_pipeline(StandardScaler(), KNeighborsClassifier(k))
+        acc = cross_val_score(pipe, X, y, cv=KFold(5, shuffle=True, random_state=0)).mean()
+        if acc > best:
+            best_k, best = k, acc
+    logit = make_pipeline(StandardScaler(),
+                          LogisticRegression(max_iter=4000))
+    acc_lr = cross_val_score(logit, X, y, cv=KFold(5, shuffle=True, random_state=0)).mean()
+    print(f"d={d:>3}: KNN best k={best_k:>2} (CV acc {best:.3f}) | "
+          f"logistic CV acc {acc_lr:.3f}")
+```
+
+CV-chosen k grows with d (the only useful neighborhoods are huge), and KNN's accuracy sags as neighborhoods stop being local; logistic's linear score ignores the junk dimensions' *distances* entirely and loses only mild precision from estimating extra coefficients. Threshold judgment call: for this linear-signal shape, KNN stops competing around d ≈ tens-to-hundreds — the exact number depends on signal strength and n, which is why the honest answer is "measure it by CV," not folklore.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Evaluate with `predict_proba`, decide with costs**: vote fractions are the model's probability surrogate; their coarseness ([Concept Question 2](#)) makes fine thresholding impossible — a reason to prefer logistic when calibrated probabilities matter.
+- **Scaling, always, inside the pipeline** — the single most common KNN bug in the wild, shared with [2.9](../part-02-linear-regression/02-9-knn-regression.qmd).
+- **Multiclass ties**: sklearn breaks count ties deterministically (order-dependent); make k odd per problem, prefer distance weighting, or aggregate with `weights="distance"` for smoother ties.
+- **Duplicated points** make distance ties and destabilize neighbor identity — deduplicate or add tiny jitter; also watch duplicated rows leaking across train/test ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd) bug #3).
+- **Prediction cost scales with training size** (no model compression); KD-tree/ball-tree speedups decay in high d — for deployment-sized training sets, KNN is a service, not a function.
+- **KNN's boundary is not learnable features** — nothing interpretable comes out; if a stakeholder asks "why classified so?", the answer is a list of neighbor cases (which is sometimes exactly the right answer — case-based reasoning).
+
+### Read & Refactor AI Code
+
+This AI-generated classifier has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.neighbors import KNeighborsClassifier
+
+rng = np.random.default_rng(10)
+n = 300
+X = np.c_[rng.uniform(0, 100, n),            # age
+          rng.uniform(0, 1, n),              # biomarker
+          rng.uniform(0, 50000, n)]          # read count
+y = (rng.uniform(0, 1, n) < 1 / (1 + np.exp(-(X[:, 1] - 0.5) * 6))).astype(int)
+
+# BUG 1: fit on everything, evaluate on everything
+knn = KNeighborsClassifier(3).fit(X, y)
+print("accuracy:", round(knn.score(X, y), 3))
+
+# BUG 2: k chosen by training accuracy sweep
+best_k, best_acc = None, 0
+for k in range(1, 21):
+    acc = KNeighborsClassifier(k).fit(X, y).score(X, y)
+    if acc > best_acc:
+        best_k, best_acc = k, acc
+print("best k:", best_k, "acc:", round(best_acc, 3))
+
+# BUG 3: probabilities quoted as risks
+p = knn.predict_proba(X[:5])[:, 1]
+print("risk scores:", p.round(2))
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Train = test evaluation**: k = 3 on its own training data reports memorization-flattered accuracy. Split first ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd)).
+2. **k tuned on training accuracy**: k = 1 (or small) always wins that sweep — tune by CV within training.
+3. **Unscaled features**: distances dominated by read counts (0–50,000); biomarker (the true signal, 0–1) is invisible. StandardScaler inside a pipeline.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import train_test_split, cross_val_score, KFold
+
+rng = np.random.default_rng(10)
+n = 300
+X = np.c_[rng.uniform(0, 100, n), rng.uniform(0, 1, n), rng.uniform(0, 50000, n)]
+y = (rng.uniform(0, 1, n) < 1 / (1 + np.exp(-(X[:, 1] - 0.5) * 6))).astype(int)
+
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, stratify=y, random_state=0)
+
+results = {}
+for k in range(1, 22, 2):
+    pipe = make_pipeline(StandardScaler(), KNeighborsClassifier(k))
+    results[k] = cross_val_score(pipe, X_tr, y_tr,
+                                 cv=KFold(5, shuffle=True, random_state=1)).mean()
+best_k = max(results, key=results.get)
+print("CV-chosen k:", best_k)
+
+final = make_pipeline(StandardScaler(), KNeighborsClassifier(best_k)).fit(X_tr, y_tr)
+print("test accuracy:", round(final.score(X_te, y_te), 3))
+print("test vote-fraction range:",
+      final.predict_proba(X_te)[:, 1].min().round(2), "to",
+      final.predict_proba(X_te)[:, 1].max().round(2), "(coarse ladder, not calibrated risks)")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Show that KNN's training-set leave-one-out (LOO) error can be computed *without refitting* for every k simultaneously: sort each point's distances once, then for each k count label agreement with the k-th neighbor set. Implement it and verify against `cross_val_score(KNeighborsClassifier(k), cv=KFold(n_splits=n))`-style LOO for k = 1..15 on a small dataset. Why does the naive LOO shortcut *not* apply to logistic regression?
+
+<details>
+<summary>Hint</summary>
+
+Removing a training point changes the neighbor sets only for queries near it; for the *left-out point itself*, its k neighbors are found among the remaining n−1 regardless of k.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+For point i left out: its neighbors are drawn from the other n−1 points, and the k-NN prediction for i is determined by i's distance ranks among those n−1 — computable from one sort of row i. Sweep k along the sorted row and tally agreement; one O(n²) pass yields LOO errors for every k. Verification:
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import LeaveOneOut, cross_val_score
+
+rng = np.random.default_rng(11)
+X = rng.uniform(0, 1, (60, 2))
+y = rng.integers(0, 2, 60)
+
+D = np.sqrt(((X[:, None, :] - X[None, :, :])**2).sum(axis=2))
+np.fill_diagonal(D, np.inf)
+order = np.argsort(D, axis=1)
+
+loo_fast = {}
+for k in range(1, 16):
+    errs = (y[order[:, :k]].mean(axis=1) >= 0.5).astype(int) != y
+    loo_fast[k] = errs.mean()
+
+loo_sk = {}
+for k in [1, 3, 5, 7, 9, 11, 13, 15]:
+    loo_sk[k] = 1 - cross_val_score(KNeighborsClassifier(k), X, y,
+                                    cv=LeaveOneOut()).mean()
+for k in [1, 3, 5, 7, 9, 11, 13, 15]:
+    print(f"k={k:>2}: fast {loo_fast[k]:.3f}  sklearn {loo_sk[k]:.3f}")
+```
+
+Logistic refits coefficients on every LOO fold — leave-one-out changes the *global fit*, so no per-row shortcut exists. KNN's locality (each prediction touches k points) is exactly what makes its LOO cheap; parametric fits are global and must be redone.
+</details>
+
+**Q2.** KNN's vote fraction estimates P(y=1|x) with variance ≈ p(1−p)/k and *bias* whenever the class probability varies within the neighborhood. For 1-D data with a sharp probability transition at x = 5, quantify both effects empirically: for k ∈ {5, 25, 125}, estimate the bias of the vote-fraction estimate at x = 4.9 (true p ≈ 0.72) and its Monte-Carlo variance across 2,000 training sets. State the k that minimizes MSE at that point and how it shifts with the transition's sharpness.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.neighbors import KNeighborsClassifier
+
+rng = np.random.default_rng(12)
+x0, true_p = 4.9, 1 / (1 + np.exp(-(4.9 - 5) * 5))   # sharp sigmoid
+
+for k in [5, 25, 125]:
+    votes = []
+    for _ in range(2000):
+        x = np.sort(rng.uniform(0, 10, 250))
+        y = (rng.uniform(0, 1, 250) < 1 / (1 + np.exp(-(x - 5) * 5))).astype(int)
+        d = np.abs(x - x0)
+        votes.append(y[np.argsort(d)[:k]].mean())
+    votes = np.array(votes)
+    bias = votes.mean() - true_p
+    print(f"k={k:>3}: bias = {bias:+.3f}  var = {votes.var():.4f}  "
+          f"MSE = {bias**2 + votes.var():.4f}")
+print("true p at x=4.9:", round(true_p, 3))
+```
+
+Small k: near-zero bias (neighborhood stays on one side of the transition), high variance. Large k: variance shrinks but bias grows as the neighborhood averages across the transition. The MSE-optimal k sits where the two curves cross — and as the transition sharpens (larger slope in the sigmoid), the bias term grows for every k, pushing the optimal k *smaller*. This local bias–variance diagram is the pointwise version of the global picture in [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd).
+</details>
+
+## 6. Complex Questions
+
+**C1 (KNN × [3.1 metrics](03-1-classification-fundamentals.qmd) × [3.7](03-7-model-comparison.qmd) preview).** On a moderately imbalanced two-Gaussian problem, compare KNN (CV-tuned k), logistic, and LDA on *both* ROC-AUC and PR-AP, and plot both curve families on one figure per model. Which model's advantage shrinks the most under the PR lens, and how does the coarse vote-fraction ladder of KNN explain its curve's shape?
+
+**C2 (KNN × [4.6 tuning](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd) × [2.9](../part-02-linear-regression/02-9-knn-regression.qmd)).** Jointly tune k *and* the distance-weighting scheme (uniform/distance) with GridSearchCV over a pipeline, then compare against tuning k alone at fixed uniform weights — honest nested estimates both times. Quantify the extra optimism the wider grid buys and state when the extra hyperparameter is worth its selection cost (connect to the selection-inflation experiments of [4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)).
+
+## 7. Summary
+
+- KNN classifies by neighborhood vote; k sets the smoothness, vote fractions are coarse probability estimates.
+- k = 1 memorizes (train acc 1.0); k = n = majority class; test error is U-shaped in k.
+- Scaling inside a pipeline is non-negotiable; ties, duplicates, and even-k quirks need explicit policy.
+- The curse of dimensionality caps KNN's reach; linear/penalized models degrade more gracefully in high d.
+- LOO errors for all k come free from one distance sort — locality has computational perks.
+- Pointwise, vote-fraction MSE balances bias (wide neighborhoods across transitions) against variance (few voters).
+- Several classifiers now produce scores; the question becomes *comparing and calibrating* them: [3.7 Classification model comparison](03-7-model-comparison.qmd).

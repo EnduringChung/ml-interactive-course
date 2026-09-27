@@ -1,0 +1,432 @@
+---
+title: "2.8 Nonlinear Feature Transformations"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - statsmodels
+    - patsy
+    - scikit-learn
+    - matplotlib
+---
+
+Linear models fit straight lines in their **parameters** — but the *features* can be any transform of x you like: polynomials, logs, splines, binned indicators. This buys curvature inside the same least-squares machinery, at the price of the same old dangers (overfitting, extrapolation) in sharper form.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+"Linear" in $X\beta$ refers to the **coefficients**. Replace $x$ by any derived columns and the model stays linear-in-parameters:
+
+$$y = \beta_0 + \beta_1 x + \beta_2 x^2 + \varepsilon \qquad \text{or} \qquad \log y = \beta_0 + \beta_1 \log x + \varepsilon$$
+
+Polynomial regression of degree d is just OLS on the design matrix $[1, x, x^2, \ldots, x^d]$:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.5
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+x = np.sort(rng.uniform(0, 10, 60))
+y = 2 - 0.7 * x + 0.08 * x**2 + rng.normal(0, 1, 60)     # quadratic truth
+
+fig, ax = plt.subplots(figsize=(7, 3.5))
+ax.scatter(x, y, s=20, alpha=0.6, label="data")
+xg = np.linspace(0, 10, 300)
+for d in [1, 2, 9]:
+    c = np.polyfit(x, y, d)
+    ax.plot(xg, np.polyval(c, xg), lw=2, label=f"degree {d}")
+ax.set(xlabel="x", ylabel="y", title="Same machine, different feature spaces")
+ax.legend()
+plt.show()
+```
+
+Degree 2 wins here because the *truth* is quadratic. Degree 9 chases noise — same lesson the U-curve will make quantitative in [4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd).
+
+**Log transforms** linearize power laws and stabilize multiplicative noise ([0.4](../part-00-python-foundations/00-4-visualization-eda.qmd)):
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(1)
+n = 120
+x = np.sort(rng.uniform(1, 100, n))                # e.g., drug dose
+y = 3 * x**0.6 * np.exp(rng.normal(0, 0.15, n))    # power law with lognoise
+
+b_log = np.polyfit(np.log10(x), np.log10(y), 1)     # slope = power exponent!
+print(f"log-log fit:  exponent = {b_log[0]:.3f}  (truth 0.6),  "
+      f"prefactor = {10**b_log[1]:.3f}  (truth 3)")
+
+fig, axes = plt.subplots(1, 2, figsize=(7, 3.2))
+axes[0].scatter(x, y, s=12); axes[0].set_title("raw: curved funnel")
+axes[1].scatter(np.log10(x), np.log10(y), s=12); axes[1].set_title("log-log: straight")
+fig.tight_layout()
+plt.show()
+```
+
+**Binning** (step features) is the crudest nonlinearity — cut x into ranges, dummy them ([2.6](02-6-categorical-predictors.qmd)):
+
+```{pyodide}
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+
+rng = np.random.default_rng(2)
+n = 200
+df = pd.DataFrame({"x": rng.uniform(0, 10, n)})
+df["y"] = 1 + 3 * np.sin(df["x"]) + rng.normal(0, 0.5, n)
+
+df["x_bin"] = pd.cut(df["x"], bins=[0, 2.5, 5, 7.5, 10], include_lowest=True)
+fit = smf.ols("y ~ C(x_bin)", data=df).fit()
+print(fit.params.round(3).to_dict())
+print(f"R² = {fit.rsquared:.3f} — four flat steps approximating a wave")
+```
+
+## 2. Concept Questions
+
+1. Why is polynomial regression still a "linear model"? What precisely is linear?
+2. Degree 12 polynomial through 60 points: fitted values look perfect, predictions on new data are wild. Name the two quantities whose divergence you are witnessing.
+3. Your y spans decades of magnitude with constant *relative* error. Which transform, and what does the slope mean if you regress $\log_{10} y$ on $\log_{10} x$?
+4. Extrapolation danger: compare a linear fit and a degree-9 polynomial fit extended 20% beyond the data. Which fails more catastrophically, and why — what does the polynomial do outside the data's support?
+5. `log(y)` model gives RMSE(log-scale) = 0.2. A colleague multiplies by exp to report "RMSE = 1.22" on the raw scale. What did they actually compute, and what is the right comparison?
+
+<details>
+<summary>Answers</summary>
+
+1. Linear in the **coefficients** $\beta$: the model is $\beta^\top \phi(x)$ for basis functions $\phi$ (powers, logs of x — transforms of features, not of parameters). Estimation is still OLS on a design matrix.
+2. **In-sample error** (falls as degree rises — more flexibility always fits training better) vs **out-of-sample error** (rises once curvature fits noise). The gap is overfitting; Part 4 measures it, Part 5 penalizes it.
+3. **log–log** (power-law) transform; slope = the power exponent (y ∝ x^slope), intercept gives the multiplicative prefactor. Only after confirming constant *relative* scatter — the log makes multiplicative errors additive ([0.4 Q2](../part-00-python-foundations/00-4-visualization-eda.qmd)).
+4. The polynomial. A line continues its slope; a degree-9 fit's leading coefficient (estimated from noise) dominates outside the data, swinging to ±astronomical values. Polynomials are *global* basis functions — a wiggle fitted inside must resolve into a violent curve outside. Local bases (splines, Part 6) behave far better.
+5. exp(0.2) = 1.22 is a *median-level multiplicative* miss (the error of a typical log-residual), not an RMSE in y-units — RMSE is not transform-invertible (Jensen: E[y − ŷ] ≠ exp(E[log-residual])). The honest comparison back-transforms predictions (accepting median-level bias, or smearing-correcting) and computes RMSE on the raw scale.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(3)
+x = np.linspace(-2, 2, 50)
+y = 1 + 0.5 * x - 0.3 * x**2 + rng.normal(0, 0.3, 50)
+c = np.polyfit(x, y, 2)
+print(c.round(3))                       # ≈ [-0.3, 0.5, 1] (highest power first)
+print(np.polyval(c, 1.0).round(3))      # evaluate the parabola at x=1
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.preprocessing import PolynomialFeatures
+X = np.array([[1.], [2.], [3.]])
+P = PolynomialFeatures(degree=3, include_bias=False)
+print(P.fit_transform(X))               # x, x², x³ — the design matrix builder
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(4)
+x = rng.uniform(1, 10, 40)
+y = 2 * x + rng.normal(0, 1, 40)
+for d in [1, 4, 15]:
+    rss = np.sum((y - np.polyval(np.polyfit(x, y, d), x))**2)
+    print(f"degree {d:>2}: training RSS = {rss:.3f}")    # monotone ↓ — always
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(5)
+# extrapolation: quadratic fit vs degree-9 fit beyond the data
+x = np.sort(rng.uniform(0, 5, 30))
+y = 3 - 0.5*x + 0.1*x**2 + rng.normal(0, .3, 30)
+xg = np.array([6.0, 8.0])
+for d in [2, 9]:
+    pred = np.polyval(np.polyfit(x, y, d), xg)
+    print(f"degree {d} at x=6, 8: {pred.round(1)}")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** For the quadratic-truth data below, fit degrees 1–7 and collect **training MSE** and **test MSE** (fresh points from the same process). Plot both against degree. Mark the argmin of test MSE, then repeat the whole experiment with n = 300 — how does the curve's shape change and what does that tell you about "more data vs simpler model"?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7
+#| fig-height: 3.5
+import numpy as np
+import matplotlib.pyplot as plt
+
+def experiment(n, seed=0):
+    rng = np.random.default_rng(seed)
+    x = np.sort(rng.uniform(0, 10, n))
+    y = 2 - 0.7 * x + 0.08 * x**2 + rng.normal(0, 1, n)
+    xte = rng.uniform(0, 10, 5000)
+    yte = 2 - 0.7 * xte + 0.08 * xte**2 + rng.normal(0, 1, 5000)
+    tr, te = [], []
+    for d in range(1, 8):
+        c = np.polyfit(x, y, d)
+        tr.append(np.mean((y - np.polyval(c, x))**2))
+        te.append(np.mean((yte - np.polyval(c, xte))**2))
+    return tr, te
+
+fig, axes = plt.subplots(1, 2, figsize=(7, 3.2), sharey=True)
+for ax, n in zip(axes, [30, 300]):
+    tr, te = experiment(n)
+    ax.plot(range(1, 8), tr, marker="o", ms=3, label="train")
+    ax.plot(range(1, 8), te, marker="s", ms=3, label="test")
+    ax.axvline(int(np.argmin(te)) + 1, color="gray", ls=":")
+    ax.set_title(f"n = {n}"); ax.set_xlabel("degree")
+axes[0].legend(); axes[0].set_ylabel("MSE")
+fig.tight_layout()
+plt.show()
+```
+
+At n = 30 the test curve is jagged — degree choice is nearly a coin flip among low degrees. At n = 300 the minimum sharpens around the true degree 2 *and* high degrees hurt less (more data tames the variance term). Data volume substitutes for model restraint — the trade [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd) will formalize.
+</details>
+
+**Exercise 2.** Linearize a real-ish process: enzyme velocity follows $v = \frac{V_{max} s}{K_m + s}$ (Michaelis–Menten) with $V_{max} = 2$, $K_m = 0.4$. Fit (a) a *direct* polynomial of degree 2 on (s, v), and (b) the classic **Lineweaver–Burk linearization** ($1/v$ vs $1/s$, whose slope = $K_m/V_{max}$, intercept = $1/V_{max}$) using OLS. Recover $V_{max}$ and $K_m$ from each. Which recovers the truth better under noise, and what famous statistical vice does Lineweaver–Burk have?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(6)
+s = np.sort(rng.uniform(0.05, 5, 50))
+v = 2 * s / (0.4 + s) + rng.normal(0, 0.02, 50)
+
+# (a) direct polynomial
+c = np.polyfit(s, v, 2)
+xs = np.linspace(0.05, 5, 4000)
+v_pred = np.polyval(c, xs)
+Vmax_poly = v_pred.max()
+print(f"poly:    Vmax ≈ {Vmax_poly:.3f} (truth 2.0)")
+
+# (b) Lineweaver–Burk
+b = np.polyfit(1/s, 1/v, 1)
+Vmax_lb = 1 / b[1]                 # intercept = 1/Vmax
+Km_lb = b[0] * Vmax_lb             # slope = Km/Vmax
+print(f"L-B:     Vmax = {Vmax_lb:.3f},  Km = {Km_lb:.3f} (truth 0.4)")
+
+# diagnose L-B's vice: which points dominate its fit?
+print("1/s weights the SMALLEST s (weakest-signal, noisiest-transformed) points most")
+```
+
+The reciprocal transform converts multiplicative-ish errors into *heteroscedastic* ones and hands all the leverage to the smallest s — the few noisiest points steer the line. The polynomial dodges that trap but estimates $V_{max}$ as a plateau asymptote. Modern practice: fit the nonlinear model directly with least squares (Part 6 territory) — linearizations are history's workaround, not a virtue.
+</details>
+
+**Exercise 3.** Build `poly_cv(x, y, max_degree, k=5)` returning mean CV MSE per degree using a `Pipeline(StandardScaler-with-PolynomialFeatures, LinearRegression)` — scaling before polynomial expansion to keep raw powers numerically sane. Run it on data with a cubic truth; report the chosen degree and the CV curve. Then explain why the pipeline (transform *inside* each fold) matters — connect to the leakage rule of [0.5](../part-00-python-foundations/00-5-data-splitting.qmd).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import cross_val_score, KFold
+
+def poly_cv(x, y, max_degree, k=5, seed=0):
+    X = np.asarray(x).reshape(-1, 1)
+    out = {}
+    for d in range(1, max_degree + 1):
+        pipe = make_pipeline(
+            PolynomialFeatures(degree=d, include_bias=False),
+            StandardScaler(),
+            LinearRegression(),
+        )
+        scores = cross_val_score(pipe, X, y, cv=KFold(k, shuffle=True, random_state=seed),
+                                 scoring="neg_mean_squared_error")
+        out[d] = -scores.mean()
+    return out
+
+rng = np.random.default_rng(7)
+x = rng.uniform(-3, 3, 80)
+y = 1 - 2 * x + 0.5 * x**3 + rng.normal(0, 2, 80)      # cubic truth
+
+res = poly_cv(x, y, max_degree=7)
+for d, m in res.items():
+    print(f"degree {d}: CV MSE = {m:.3f}")
+print("chosen degree:", min(res, key=res.get))
+```
+
+If you scaled/expanded *before* splitting, each fold's training statistics (means, SDs) leak test-fold information into training — mild here, systematic everywhere. The pipeline runs the transform per-fold inside `cross_val_score`, guaranteeing the validation fold is touched only by the fitted-for-that-fold transform. The 0.5 rule — "fit preprocessing inside the training fold" — generalizes to every transformer you will ever use.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Global vs local bases**: polynomial features are global — every observation informs every coefficient, so one leverage point reshapes the whole curve. Splines/step functions are local ([Part 6](#) covers them properly; the binned drill is a preview).
+- **Numerical conditioning**: raw powers of x (say x ∈ [0, 1000], degree 6) make columns nearly collinear and ill-conditioned — coefficients become garbage even when predictions look fine. Standardize x first, or use orthogonal polynomials (`np.polynomial.legendre.legvander`, or sklearn's scaled pipeline).
+- **The polynomial tail kills**: never report extrapolated polynomial predictions; if you must extrapolate, extrapolate the *physics* (a fitted asymptote, a log-linearized regime), not the polynomial.
+- **Transforming y changes the error model**: `log y` regression minimizes log-scale squared error — predictions are medians on the raw scale and need smearing if means are wanted; RMSE comparisons across scales are meaningless ([2.4](02-4-accuracy-of-model.qmd)).
+- **Binning throws away information** and induces boundary artifacts; it's a quick diagnostic (is there structure?) rather than an endpoint. Smooth bases or splines dominate it for inference and prediction alike.
+- **Degree choice is a hyperparameter** — choosing it by looking at the same data you report performance on is the classic optimism; route the choice through CV now, formally in [4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd).
+
+### Read & Refactor AI Code
+
+This AI-generated curve-fit has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+
+rng = np.random.default_rng(8)
+x = np.sort(rng.uniform(0, 100, 40))       # e.g., concentration in µM
+y = 50 + 2 * x + rng.normal(0, 10, 40)
+
+# BUG 1: raw high-degree powers, no scaling
+c = np.polyfit(x, y, 8)
+print("coefficients:", c.round(4))
+
+# BUG 2: evaluate far outside range
+for x_new in [110, 200, 500]:
+    print(f"y({x_new}) = {np.polyval(c, x_new):.1f}")
+
+# BUG 3: compare ' goodness' across scales
+c2 = np.polyfit(x, np.log(y), 3)
+rmse_raw = np.sqrt(np.mean((y - np.polyval(c, x))**2))
+rmse_log = np.sqrt(np.mean((np.log(y) - np.polyval(c2, x))**2))
+print("RMSE raw:", round(rmse_raw, 3), " RMSE log:", round(rmse_log, 4),
+      "-> 'log model 100x better!'")
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **Raw powers of x up to 100⁸** — the design matrix has condition number ~10¹⁶; coefficients are numerically meaningless (look at their wild magnitudes). Fix: standardize x before expanding (or orthogonal polynomials).
+2. **Extrapolating a degree-8 fit** to x = 500 (5× beyond data): the leading noise-driven coefficient explodes — "predictions" of ±billions. Fix: police the range; extrapolate with theory-bounded models only.
+3. **RMSEs on different scales** (y vs log y) — not comparable ([2.4](02-4-accuracy-of-model.qmd)). Fix: back-transform log predictions and compare on one scale.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(8)
+x = np.sort(rng.uniform(0, 100, 40))
+y = 50 + 2 * x + rng.normal(0, 10, 40)
+
+pipe = make_pipeline(PolynomialFeatures(8, include_bias=False),
+                     StandardScaler(), LinearRegression())
+pipe.fit(x.reshape(-1, 1), y)
+
+in_range = pipe.predict(np.array([[90.0]]))
+print("in-range prediction y(90):", in_range.round(1))
+
+x_new = 110.0
+if x_new > x.max():
+    print(f"y({x_new}): REFUSED — {x_new} is outside the training range "
+          f"[{x.min():.0f}, {x.max():.0f}]; extrapolation of a degree-8 fit is meaningless.")
+
+pred_raw = pipe.predict(x.reshape(-1, 1))
+rmse_raw = np.sqrt(np.mean((y - pred_raw)**2))
+print("RMSE (y-scale, honest):", round(float(rmse_raw), 3))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Show that adding any column $g(x)$ to a linear model's design matrix can only decrease training RSS, and quantify the *minimum* decrease in terms of the residual regression: if $g$'s component orthogonal to the current columns explains RSS reduction $\Delta$, write the updated fit. Use this to explain why degree-9 training RSS < degree-2 training RSS *even when truth is quadratic*, and what determines whether the test RSS follows.
+
+<details>
+<summary>Hint</summary>
+
+Projection geometry from [2.4 Q1](02-4-accuracy-of-model.qmd): OLS projects y onto the column space; a bigger space projects further.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+OLS fit = orthogonal projection of y onto span(columns). Adding a column enlarges the span, and projections onto supersets are never worse: new RSS = old RSS − ‖proj of y onto g⊥(old columns)‖² = old RSS − Δ, with Δ ≥ 0. For the noise-only extra powers, Δ = the squared length of the *chance* alignment of the noise with those directions — positive in every sample, growing with the number of added columns. Test RSS follows only if the true f has a component in the new directions that outweighs the variance those directions import (each extra coefficient costs ~σ²·(df) of variance in predictions — the arithmetic [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd) makes explicit). In-sample improvement is therefore *guaranteed*, meaningful only if structural.
+</details>
+
+**Q2.** You must model $y = f(x)$ where f is believed smooth and you have n = 40 points. Compare, in one experiment, (a) global polynomial degree chosen by CV, (b) 10-bin step function, (c) the "transformed linear" model $\beta_0 + \beta_1 x + \beta_2 \sin(x)$ when the truth is $3\sin(x)$. Report test MSEs and state the general lesson about *basis choice informed by mechanism* vs *generic flexible bases*.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.model_selection import cross_val_score, KFold
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(9)
+n = 40
+x = np.sort(rng.uniform(0, 10, n))
+y = 3 * np.sin(x) + rng.normal(0, 0.5, n)
+xte = np.sort(rng.uniform(0, 10, 4000))
+yte = 3 * np.sin(xte) + rng.normal(0, 0.5, 4000)
+X = x.reshape(-1, 1)
+
+# (a) CV-chosen polynomial
+cvs = []
+for d in range(1, 12):
+    pipe = make_pipeline(PolynomialFeatures(d, include_bias=False), StandardScaler(),
+                         LinearRegression())
+    cvs.append((-cross_val_score(pipe, X, y, cv=5,
+               scoring="neg_mean_squared_error")).mean())
+best_d = int(np.argmin(cvs)) + 1
+poly = make_pipeline(PolynomialFeatures(best_d, include_bias=False), StandardScaler(),
+                     LinearRegression()).fit(X, y)
+
+# (b) 10-bin step function
+import pandas as pd
+import statsmodels.api as sm
+
+edges = np.linspace(0, 10, 11)
+
+def step_design(xv):
+    b = np.digitize(xv, edges)
+    cols = pd.DataFrame({f"bin_{i}": (b == i).astype(float) for i in range(2, 11)})
+    return sm.add_constant(cols, has_constant="add")
+
+step_fit = sm.OLS(y, step_design(x)).fit()
+
+# (c) mechanistic basis
+mech = sm.OLS(y, sm.add_constant(np.c_[x, np.sin(x)])).fit()
+
+for name, pred in [
+    (f"poly deg {best_d}", poly.predict(xte.reshape(-1, 1))),
+    ("10-bin steps", np.asarray(step_fit.predict(step_design(xte)))),
+    ("x + sin(x)", mech.params[0] + mech.params[1]*xte + mech.params[2]*np.sin(xte)),
+]:
+    print(f"{name:15s} test MSE = {np.mean((yte - pred)**2):.4f}")
+```
+
+The mechanistic two-column model usually wins outright (right basis, 3 parameters); CV-polynomials get close with 5–8 parameters; steps are worst (boundary steps, step noise). Lesson: a small basis derived from *how the system works* beats generic flexibility at small n — save the flexible machinery for when mechanism is unknown and n is large.
+</details>
+
+## 6. Complex Questions
+
+**C1 (transforms × [2.10 Assumptions](02-10-regression-assumptions.qmd) preview).** Generate multiplicative-noise data ($y = 2x\,e^{\varepsilon}$). Fit (a) y ~ x, (b) log y ~ log x, and diagnose each with residuals-vs-fitted and QQ plots. State which assumption each fit violates and how the diagnostic revealed it — then connect the funnel and the skewed residuals to [0.4 Q2](../part-00-python-foundations/00-4-visualization-eda.qmd)'s log-scale advice.
+
+**C2 (transforms × [4.1 Generalization](../part-04-validation-model-selection/04-1-generalization-problem.qmd) preview).** Using the degree-sweep experiment from Exercise 1, decompose test MSE at each degree into bias² and variance by simulating 300 training sets (evaluate each degree's fitted curve on a fixed grid, average across training sets). Plot the three curves (bias², variance, total) against degree. You have built the bias–variance picture before the theory page — bring the plot to [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd) and check it against the decomposition there.
+
+## 7. Summary
+
+- "Linear" means linear in coefficients; polynomials, logs, bins, sin — any derived columns — stay in OLS-land.
+- Higher degree always improves training fit and eventually wrecks test fit; degree is a hyperparameter, chosen by CV.
+- Log transforms linearize power laws (slope = exponent) and convert multiplicative noise to additive; back-transform carefully (medians, not means).
+- Polynomials are global bases: numerically fragile raw, catastrophic in extrapolation; standardize before expanding.
+- Transforming y changes the error model and the meaning of every metric; compare models on one scale.
+- Mechanism-informed small bases beat generic flexible bases at small n.
+- The residual from a transformed fit must still be inspected — the full diagnostic toolkit is next: [2.10 Regression assumptions](02-10-regression-assumptions.qmd), after a nonparametric detour in [2.9 KNN regression](02-9-knn-regression.qmd).

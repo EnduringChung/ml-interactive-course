@@ -1,0 +1,398 @@
+---
+title: "3.2 Why Not Linear Regression for Categories?"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - statsmodels
+    - patsy
+    - matplotlib
+    - scikit-learn
+---
+
+The laziest classifier is tempting: encode the classes as numbers (0/1) and run the Part 2 machinery. This page shows precisely *what breaks* — and the surprisingly defensible uses of the resulting "linear probability model" — so that logistic regression's logit link ([3.3](03-3-logistic-regression.qmd)) earns its complexity honestly.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+Fit $p(x) = \beta_0 + \beta_1 x$ by OLS on 0/1 outcomes. Three structural problems, none fixable by more data:
+
+1. **Out-of-range predictions**: a line is unbounded; probabilities must live in [0, 1]. Near the data's edges (where decisions matter!) the line exits the unit interval.
+2. **Heteroscedasticity by construction**: with y ∈ {0,1} and mean p(x), $\text{Var}(\varepsilon \mid x) = p(x)(1 - p(x))$ — variance *maximal* at p = 0.5, vanishing at the extremes ([2.10 Q1](../part-02-linear-regression/02-10-regression-assumptions.qmd)). Every classical SE is wrong, automatically.
+3. **Wrong error family**: Gaussian errors on 0/1 outcomes is a category error; the Bernoulli likelihood is the honest one.
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.5
+import numpy as np
+import statsmodels.api as sm
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+n = 100
+x = rng.uniform(0, 10, n)
+p_true = 1 / (1 + np.exp(-(x - 5) * 0.8))
+y = (rng.uniform(0, 1, n) < p_true).astype(int)
+
+ols = sm.OLS(y, sm.add_constant(x)).fit()
+
+xg = np.linspace(0, 10, 300)
+pred = ols.params[0] + ols.params[1] * xg
+
+fig, ax = plt.subplots(figsize=(7, 3.5))
+ax.scatter(x, y, s=14, alpha=0.4, label="data (0/1)")
+ax.plot(xg, pred, lw=2, label="OLS line (linear probability model)")
+ax.axhline(0, color="gray", lw=0.8); ax.axhline(1, color="gray", lw=0.8)
+out_lo = (pred < 0).mean(); out_hi = (pred > 1).mean()
+ax.fill_between(xg, -0.15, 0, where=pred < 0, color="red", alpha=0.3)
+ax.fill_between(xg, 1, 1.15, where=pred > 1, color="red", alpha=0.3)
+ax.set(ylim=(-0.15, 1.15), xlabel="x", ylabel="P(y=1)")
+ax.set_title(f"OLS exits [0,1] on {100*(out_lo+out_hi):.0f}% of the x-range")
+ax.legend()
+plt.show()
+```
+
+The **heteroscedasticity signature**, live:
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(1)
+n = 400
+x = rng.uniform(0, 10, n)
+p_true = 1 / (1 + np.exp(-(x - 5) * 0.8))
+y = (rng.uniform(0, 1, n) < p_true).astype(int)
+ols = sm.OLS(y, sm.add_constant(x)).fit()
+
+fitted = ols.fittedvalues
+mid = np.abs(fitted - 0.5) < 0.15        # near p ≈ 0.5
+extreme = (fitted < 0.2) | (fitted > 0.8)
+print(f"residual SD near p=0.5:        {ols.resid[mid].std():.3f}")
+print(f"residual SD at p extremes:     {ols.resid[extreme].std():.3f}")
+print("theory p(1-p):  0.25 at the center, →0 at extremes")
+```
+
+## 2. Concept Questions
+
+1. Why is a predicted probability of −0.2 or 1.3 not merely "slightly wrong" but *unusable* for decisions built on probabilities?
+2. The heteroscedasticity of the linear probability model is *structural*. Why can't a variance-stabilizing transform of y fix it?
+3. For multi-class data encoded 0, 1, 2, what *extra* assumption does OLS smuggle in beyond the binary case's problems?
+4. Despite everything, econometricians use linear probability models. Name two properties that make them tolerable in their niche.
+5. Your LPM gives slope 0.06 for a binary predictor. Translate that into the sentence a stakeholder understands.
+
+<details>
+<summary>Answers</summary>
+
+1. Decisions multiply probabilities: expected cost = p × cost; posterior updating; risk thresholds ("treat if p > 0.2"). Negative probability or probability > 1 breaks the arithmetic that decisions are made of — it's not a small inaccuracy, it's a type error.
+2. y is 0 or 1; there is nothing to transform (log of 0, arcsine of a constant...). The variance is a function of the *mean's* position — only a model whose variance follows the mean (Bernoulli GLM) or robust SEs can cope; no y-transform exists.
+3. **Ordinal spacing**: coding {control=0, drugA=1, drugB=2} forces the mean response to be linear in the codes — asserting drugB's effect is exactly double drugA's and that the categories are ordered at all. Nominal labels have no arithmetic; OLS invents one.
+4. (a) The coefficient is directly interpretable as a *percentage-point* change in probability per unit x — no odds-ratio translation needed. (b) With mid-range probabilities (0.2–0.8) and modest extrapolation, the line is a decent local approximation, and OLS's robustness/diagnostics ecosystem applies. (Plus: interaction effects and panel-data fixed-effects machinery are simple in LPM.)
+5. "Moving from the predictor's 0 to 1 raises the probability of the outcome by 6 percentage points, on average." (For small probabilities, odds ratios would say something different — this honesty about *which* summary you're quoting is the whole game.)
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+rng = np.random.default_rng(2)
+x = rng.uniform(0, 10, 200)
+p = 1 / (1 + np.exp(-(x - 5)))
+y = (rng.uniform(0, 1, 200) < p).astype(int)
+fit = sm.OLS(y, sm.add_constant(x)).fit()
+xg = np.linspace(0, 10, 100)
+pred = fit.params[0] + fit.params[1] * xg
+print(f"predictions below 0: {(pred < 0).sum()}/100 grid points")
+print(f"predictions above 1: {(pred > 1).sum()}/100 grid points")
+print(f"mean absolute miss vs p_true: {np.mean(np.abs(pred - 1/(1+np.exp(-(xg-5))))):.4f}")
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(3)
+# empirical variance function: p(1-p)
+n_per_bin = 2000
+bins = np.linspace(0, 1, 9)
+for lo, hi in [(0.1, 0.2), (0.4, 0.5), (0.8, 0.9)]:
+    p = rng.uniform(lo, hi, n_per_bin)
+    y = (rng.uniform(0, 1, n_per_bin) < p).astype(int)
+    resid = y - p
+    print(f"p in [{lo},{hi}): residual SD = {resid.std():.3f}  theory sqrt(p(1-p)) ≈ {np.sqrt(np.mean(p*(1-p))):.3f}")
+```
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+# LPM vs robust SEs: inference partially rescued
+rng = np.random.default_rng(4)
+x = rng.uniform(0, 10, 500)
+y = (rng.uniform(0, 1, 500) < 0.3 + 0.05 * x).astype(int)
+fit = sm.OLS(y, sm.add_constant(x)).fit()
+rob = fit.get_robustcov_results(cov_type="HC3")
+print(f"classical SE: {fit.bse[1]:.4f}   HC3 SE: {rob.bse[1]:.4f}")
+print("slope estimates identical:", np.allclose(fit.params[1], rob.params[1]))
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Quantify the damage: for the simulation below (steep truth), compute (a) the fraction of the x-range where the LPM predicts outside [0, 1]; (b) the classification error rate of thresholding the LPM at 0 vs 0.5 vs 1 (treating clipped values); (c) the same for clipping predictions into [0,1]. Where does clipping help, where does it silently distort?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(5)
+x = rng.uniform(0, 10, 300)
+p = 1 / (1 + np.exp(-(x - 5) * 1.2))
+y = (rng.uniform(0, 1, 300) < p).astype(int)
+fit = sm.OLS(y, sm.add_constant(x)).fit()
+
+xg = np.linspace(0, 10, 1000)
+pred = fit.params[0] + fit.params[1] * xg
+print(f"(a) out-of-range share of x-range: {100 * ((pred < 0) | (pred > 1)).mean():.1f}%")
+
+def err(preds, thr):
+    return ((preds >= thr).astype(int) != y).mean()
+
+print(f"(b) threshold 0.0: err = {err(fit.fittedvalues, 0.001):.3f}")
+print(f"    threshold 0.5: err = {err(fit.fittedvalues, 0.5):.3f}")
+print(f"    threshold 1.0: err = {err(fit.fittedvalues, 0.999):.3f}")
+
+clipped = np.clip(fit.fittedvalues, 0, 1)
+print(f"(c) clipped 0.5-threshold err = {( (clipped >= 0.5).astype(int) != y).mean():.3f}")
+print("clipping rescues *classification*, not the probability values themselves")
+```
+
+Clipping rescues hard decisions but keeps lying about probabilities — any downstream cost arithmetic (Exercise 2 of [3.1](03-1-classification-fundamentals.qmd)) still consumes nonsense. Classification hides LPM's sin; probability uses expose it.
+</details>
+
+**Exercise 2.** The LPM's one honest superpower — **marginal effects**: simulate a logistic truth with modest slope, fit (a) logistic regression and (b) LPM. Compute the logistic model's *average marginal effect* (mean over data of dp/dx = p(1−p)·β), and compare it with the LPM slope. Write the sentence explaining why practitioners sometimes prefer the LPM coefficient for reporting.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+from sklearn.linear_model import LogisticRegression
+
+rng = np.random.default_rng(6)
+x = rng.uniform(0, 10, 1000)
+p = 1 / (1 + np.exp(-(x - 5) * 0.5))            # gentle slope
+y = (rng.uniform(0, 1, 1000) < p).astype(int)
+
+logit = LogisticRegression(C=1e6, max_iter=4000).fit(x.reshape(-1, 1), y)
+beta = logit.coef_[0][0]
+p_hat = logit.predict_proba(x.reshape(-1, 1))[:, 1]
+ame_logit = np.mean(p_hat * (1 - p_hat) * beta)
+
+lpm = sm.OLS(y, sm.add_constant(x)).fit().params[1]
+print(f"logistic beta = {beta:.3f};  average marginal effect = {ame_logit:.4f}")
+print(f"LPM slope = {lpm:.4f}")
+print("they agree because dp/dx is roughly constant in the mid-range")
+```
+
+For gentle slopes, p(1−p)·β is nearly constant, so "the logistic model's average effect" ≈ "the LPM slope" — but the LPM gets there with no iteration and reads directly off the coefficient table. That convenience is worth having *when the probability range is mid-span*; it evaporates near 0 or 1, where the LPM's line can't follow the logistic curve.
+</details>
+
+**Exercise 3.** Multi-class misuse: simulate three groups with distinct means on x and class labels (control/drugA/drugB) where drugB's shift is *not* double drugA's. Fit OLS on 0/1/2 codes and on one-hot dummies ([2.6](../part-02-linear-regression/02-6-categorical-predictors.qmd)); show the coded model's predictions are constrained to a line in code-space while the dummy model's are not, and quantify the prediction error of each against group means.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import pandas as pd
+import statsmodels.api as sm
+
+rng = np.random.default_rng(7)
+n = 300
+label = rng.choice([0, 1, 2], n)                # control, drugA, drugB (nominal!)
+shifts = {0: 0.0, 1: 2.0, 2: 2.5}               # NOT evenly spaced
+y = np.array([shifts[l] for l in label]) + rng.normal(0, 1, n)
+
+coded = sm.OLS(y, sm.add_constant(label)).fit()
+D = np.zeros((n, 2)); D[label == 1, 0] = 1; D[label == 2, 1] = 1
+dummied = sm.OLS(y, sm.add_constant(D)).fit()
+
+means = {l: y[label == l].mean() for l in [0, 1, 2]}
+pred_coded = {l: coded.params[0] + coded.params[1] * l for l in [0, 1, 2]}
+pred_dummy = {0: dummied.params[0],
+              1: dummied.params[0] + dummied.params[1],
+              2: dummied.params[0] + dummied.params[2]}
+
+print("group means:     ", {k: round(v, 3) for k, v in means.items()})
+print("coded-model preds:", {k: round(v, 3) for k, v in pred_coded.items()})
+print("dummy-model preds:", {k: round(v, 3) for k, v in pred_dummy.items()})
+print("coding forces equal spacing; dummies let each group have its own mean")
+```
+
+The coded fit is dragged by its fake arithmetic: it must place drugB at exactly twice drugA's offset. With nominal categories the one-hot model is *correct by construction* (it's just group means). Coded-label regression is not a shortcut; it's a different (wrong) model.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **The LPM's coefficient is on the probability scale; logistic's is on the log-odds scale.** Cross-model coefficient comparisons without conversion (e^β, or AMEs) are meaningless — a perennial review-report error.
+- **LPM + HC3 robust SEs** fix *inference* but not the range violations or efficiency losses; it remains an approximation whose quality is a function of how far p sits from 0/1.
+- **Don't diagnose-and-patch an LPM into a GLM manually** — weighting by 1/(p̂(1−p̂)) ("iterated WLS") is the historical pre-GLM trick; modern practice fits the Bernoulli likelihood directly.
+- **Zero-one-inflated outcomes** (p pinned near 0 for most x) make LPM slopes collapse toward 0 and R² meaningless (never above ~prevalence·(1−prevalence)); the rare-event regime is logistic's home turf.
+- **Thresholding an LPM at 0.5 implicitly equates FP and FN costs** — classification thresholds are decision theory ([3.1 Exercise 2](03-1-classification-fundamentals.qmd)), not model byproducts.
+- **Why not least squares on probabilities "estimated" from bins?** That's just the binned drill from [2.8](../part-02-linear-regression/02-8-nonlinear-transformations.qmd) — it works descriptively but has no likelihood, no efficient SEs, and bin boundaries are arbitrary.
+
+### Read & Refactor AI Code
+
+This AI-generated model has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(8)
+x = rng.uniform(0, 10, 300)
+y = (rng.uniform(0, 1, 300) < 1 / (1 + np.exp(-(x - 5)))).astype(int)
+
+# BUG 1: LPM for probability reporting
+fit = sm.OLS(y, sm.add_constant(x)).fit()
+print("P(y=1) at x=0:", fit.params[0].round(3))
+print("P(y=1) at x=10:", (fit.params[0] + fit.params[1] * 10).round(3))
+
+# BUG 2: classical p-values from structurally heteroscedastic errors
+print("slope p-value:", f"{fit.pvalues[1]:.4f}", "(classical)")
+
+# BUG 3: multi-class extension via codes
+label = rng.choice([0, 1, 2], 300)
+z = 2 * label + rng.normal(0, 1, 300)
+fit3 = sm.OLS(z, sm.add_constant(label)).fit()
+print("multi-class slope:", fit3.params[1].round(3), "-> 'drugB works twice as hard'")
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Out-of-range probabilities as deliverables**: reporting "P = 1.18" — a number that cannot exist — to stakeholders. Use logistic regression for probability outputs, or at minimum clip-and-disclose (and never feed unclipped values into cost arithmetic).
+2. **Classical SEs under structural heteroscedasticity**: wrong by construction ([2.10 Q1](../part-02-linear-regression/02-10-regression-assumptions.qmd)); minimum fix `cov_type="HC3"`, real fix Bernoulli likelihood.
+3. **Nominal codes as intensity**: "drugB = 2× drugA" was *inserted by the encoding*, not learned from data (see Exercise 3). Dummies or multinomial logistic, never ordinal codes on nominal labels.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+from sklearn.linear_model import LogisticRegression
+
+rng = np.random.default_rng(8)
+x = rng.uniform(0, 10, 300)
+y = (rng.uniform(0, 1, 300) < 1 / (1 + np.exp(-(x - 5)))).astype(int)
+
+logit = LogisticRegression(C=1e6, max_iter=4000).fit(x.reshape(-1, 1), y)
+for xv in [0, 5, 10]:
+    p = logit.predict_proba([[xv]])[0, 1]
+    print(f"logistic P(y=1) at x={xv}: {p:.3f}")   # always in (0,1)
+
+lpm = sm.OLS(y, sm.add_constant(x)).fit()
+rob = lpm.get_robustcov_results(cov_type="HC3")
+print(f"LPM slope {lpm.params[1]:.4f}; classical p {lpm.pvalues[1]:.4f} -> HC3 p {rob.pvalues[1]:.4f}")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Prove $\text{Var}(\varepsilon \mid x) = p(x)(1 - p(x))$ for a 0/1 response, and use it to show that OLS's Gauss–Markov efficiency claim fails for binary data: construct (in simulation) an estimator with lower variance than OLS — e.g., the MLE from logistic regression — and quantify the variance ratio as a function of the probability range in the data.
+
+<details>
+<summary>Hint</summary>
+
+Gauss–Markov requires homoscedastic errors; binary data violate it structurally. The Bernoulli MLE is (asymptotically) efficient for its model.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+ε = y − p(x) takes values 1−p (prob 1−p... wait: y=1 w.p. p ⇒ ε = 1−p) and −p (prob 1−p): Var = p(1−p)² + (1−p)p² = p(1−p). Since this varies with x, homoscedasticity fails and OLS is not BLUE for binary data. Simulation:
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+from sklearn.linear_model import LogisticRegression
+
+rng = np.random.default_rng(9)
+def var_ratio(n=300, spread=10):
+    slopes_lpm, slopes_glm = [], []
+    for _ in range(400):
+        x = rng.uniform(0, spread, n)
+        p = 1 / (1 + np.exp(-(x - spread/2)))
+        y = (rng.uniform(0, 1, n) < p).astype(int)
+        slopes_lpm.append(sm.OLS(y, sm.add_constant(x)).fit().params[1])
+        g = LogisticRegression(C=1e6, max_iter=4000).fit(x.reshape(-1,1), y)
+        slopes_glm.append(g.coef_[0][0])
+    return np.std(slopes_lpm) / np.std(slopes_glm)
+
+for spread in [2, 10]:
+    print(f"x-range {spread:>2}: SD(LPM)/SD(logit) = {var_ratio(spread=spread):.2f}")
+```
+
+Wider x-ranges (probabilities pushed toward 0/1, variance collapsing at the extremes) increase the LPM's relative inefficiency — the Bernoulli MLE exploits the variance function OLS ignores.
+</details>
+
+**Q2.** The *thresholded-LPM classifier* is not insane: threshold the linear fit at 0.5 and it often classifies nearly as well as logistic regression. Construct the regime where they differ maximally (steep sigmoid, wide x-range), show the classification agreement rate, and explain *why classification metrics hide what probability metrics expose* — connecting to the calibration discussion your [3.1](03-1-classification-fundamentals.qmd) answer promised.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+from sklearn.linear_model import LogisticRegression
+
+rng = np.random.default_rng(10)
+x = rng.uniform(0, 10, 1000)
+p = 1 / (1 + np.exp(-(x - 5) * 2.0))            # steep
+y = (rng.uniform(0, 1, 1000) < p).astype(int)
+
+lpm = sm.OLS(y, sm.add_constant(x)).fit()
+lpm_cls = (lpm.fittedvalues >= 0.5).astype(int)
+logit = LogisticRegression(C=1e6, max_iter=4000).fit(x.reshape(-1, 1), y)
+logit_cls = logit.predict(x.reshape(-1, 1))
+
+print("classification agreement:", (lpm_cls == logit_cls).mean().round(3))
+print("LPM test accuracy:", (lpm_cls == y).mean().round(3),
+      " logit accuracy:", (logit_cls == y).mean().round(3))
+
+# but the probabilities disagree violently at the extremes:
+for xv in [0.5, 9.5]:
+    pl = lpm.params[0] + lpm.params[1] * xv
+    pg = logit.predict_proba([[xv]])[0, 1]
+    print(f"x={xv}: LPM p = {pl:+.2f}  logit p = {pg:.3f}")
+```
+
+Both models place the 0.5-crossing near the same x (monotone scores, same ranking locally), so *hard labels* agree almost everywhere and accuracy/ROC-type views see little difference. But probability-valued outputs — costs, PPV statements, risk tiers — diverge wildly at the extremes (−0.4 vs 0.03!). Classification metrics are invariant to monotone score warping; probability correctness is not. That's the calibration axis from [3.1 Q5](03-1-classification-fundamentals.qmd), and it's why "same AUC" never means "same model."
+</details>
+
+## 6. Complex Questions
+
+**C1 (LPM × [2.7 Interaction](../part-02-linear-regression/02-7-interaction-terms.qmd)).** In an LPM, interaction coefficients are differences of *probability* effects — directly interpretable as percentage-point moderation. Fit LPM and logistic (with AME-style interpretation) to the same data with a true interaction; show where the two reports agree (mid-range) and disagree (tail). Which would you present to a clinical audience and why — and what does the "one number per moderation" convenience cost in fidelity at the tails?
+
+**C2 (LPM × [3.6 GLMs](03-6-generalized-linear-models.qmd) preview).** Write the Bernoulli log-likelihood for data (xᵢ, yᵢ) under (a) the linear-probability model p = β₀+β₁x (where you must clamp/penalize parameter values that push p outside [0, 1]) and (b) the logistic model p = σ(β₀+β₁x). Fit both by direct optimization (`scipy.optimize.minimize`) and compare each MLE against the plain OLS solution. The punchline to verify: OLS is not even the right *fitting criterion* for the LPM's own probabilistic story — report how far apart they land and why.
+
+## 7. Summary
+
+- OLS on 0/1 labels: unbounded predictions, variance = p(1−p) (heteroscedastic by design), wrong likelihood.
+- Classification metrics can hide all of this; probability uses and costs expose it.
+- The LPM survives as a *local approximation* with direct percentage-point readings — defensible mid-range, dangerous at the tails.
+- Nominal multi-class labels must never be numerically coded: codes fabricate order and spacing ([2.6](../part-02-linear-regression/02-6-categorical-predictors.qmd)).
+- Robust SEs patch inference, not probabilities; clipping patches decisions, not probabilities.
+- The honest machine for binary responses puts the Bernoulli likelihood and a bounded mean function together — logistic regression: [3.3 Logistic regression](03-3-logistic-regression.qmd).

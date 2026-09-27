@@ -15,6 +15,8 @@ An interactive course on **machine learning, statistics, and large language mode
 
 Your edits stay on your device; refresh the page to return to the original code.
 
+Parts 0–1 cover the toolkit (Python, NumPy, pandas, EDA, splitting; statistics bridge). Parts 2–4 build, fit, and honestly evaluate the classical model zoo — regression, classification, GLMs, and the validation machinery. Later parts layer in regularization, trees, SVMs, unsupervised learning, deep learning (T3), survival analysis, and multiple testing.
+
 ## The three execution tiers
 
 | Tier | What it means | Where it runs |
@@ -29,11 +31,11 @@ Parts 0–1 below are **fully Tier 1**. Later parts layer in T2 (Bioconductor di
 
 | Part | Topic | Status |
 |---|---|---|
-| **0** | Python and Data Foundations | **Building now** |
-| **1** | Statistics Bridge for ML | **Building now** |
-| 2 | Linear Regression and Prediction | Planned |
-| 3 | Classification and GLMs | Planned |
-| 4 | Validation, Uncertainty, Model Selection | Planned |
+| **0** | Python and Data Foundations | **Published** |
+| **1** | Statistics Bridge for ML | **Published** |
+| **2** | Linear Regression and Prediction | **Published** |
+| **3** | Classification and GLMs | **Published** |
+| **4** | Validation, Uncertainty, Model Selection | **Published** |
 | 5 | Regularization, Selection, High Dimensions | Planned |
 | 6 | Nonlinear Regression Models | Planned |
 | 7 | Tree-Based Models and Ensembles | Planned |

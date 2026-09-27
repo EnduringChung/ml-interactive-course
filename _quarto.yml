@@ -45,6 +45,36 @@ website:
             - part-01-statistics-bridge/01-3-probability-essentials.qmd
             - part-01-statistics-bridge/01-4-statistical-inference.qmd
             - part-01-statistics-bridge/01-5-resampling-intuition.qmd
+        - section: "Part 2 — Linear Regression & Prediction"
+          contents:
+            - part-02-linear-regression/02-1-regression-setup.qmd
+            - part-02-linear-regression/02-2-simple-linear-regression.qmd
+            - part-02-linear-regression/02-3-accuracy-of-coefficients.qmd
+            - part-02-linear-regression/02-4-accuracy-of-model.qmd
+            - part-02-linear-regression/02-5-multiple-linear-regression.qmd
+            - part-02-linear-regression/02-6-categorical-predictors.qmd
+            - part-02-linear-regression/02-7-interaction-terms.qmd
+            - part-02-linear-regression/02-8-nonlinear-transformations.qmd
+            - part-02-linear-regression/02-9-knn-regression.qmd
+            - part-02-linear-regression/02-10-regression-assumptions.qmd
+        - section: "Part 3 — Classification & GLMs"
+          contents:
+            - part-03-classification-glm/03-1-classification-fundamentals.qmd
+            - part-03-classification-glm/03-1-5-auprc.qmd
+            - part-03-classification-glm/03-2-why-not-linear-regression.qmd
+            - part-03-classification-glm/03-3-logistic-regression.qmd
+            - part-03-classification-glm/03-4-generative-classifiers.qmd
+            - part-03-classification-glm/03-5-knn-classification.qmd
+            - part-03-classification-glm/03-6-generalized-linear-models.qmd
+            - part-03-classification-glm/03-7-model-comparison.qmd
+        - section: "Part 4 — Validation & Model Selection"
+          contents:
+            - part-04-validation-model-selection/04-1-generalization-problem.qmd
+            - part-04-validation-model-selection/04-2-validation-set.qmd
+            - part-04-validation-model-selection/04-3-cross-validation.qmd
+            - part-04-validation-model-selection/04-4-bias-variance.qmd
+            - part-04-validation-model-selection/04-5-bootstrap.qmd
+            - part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd
 
 format:
   live-html:

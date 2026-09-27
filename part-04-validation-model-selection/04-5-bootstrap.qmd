@@ -1,9 +1,447 @@
 ---
-title: "Coming soon"
+title: "4.5 The Bootstrap"
 tier: 1
 engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - statsmodels
+    - matplotlib
 ---
 
-This page has not been published yet. It is scheduled in the [build order](/index.qmd) and will follow the same seven-section template as every other page.
+The bootstrap replaces distributional theory with computation: resample your data, refit, and read uncertainty off the spread. Beyond CIs for statistics ([1.5](../part-01-statistics-bridge/01-5-resampling-intuition.qmd)), it prices *models*: coefficient stability, prediction intervals, and the famous .632 correction for optimistic resubstitution error.
 
-Check back soon — progress is tracked in the [course home](/index.qmd).
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+**Mechanics for model assessment**: draw B bootstrap samples (n rows, sampled *with replacement*) from the training data; fit the model on each; the collection of B fitted models approximates the sampling variability of the fitting procedure.
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(0)
+n = 40
+x = rng.uniform(0, 1, n)
+y = 1 + 0.8 * x + rng.normal(0, 0.6, n)
+
+B = 2000
+boot_slopes = np.zeros(B)
+for b in range(B):
+    idx = rng.integers(0, n, n)                    # with replacement
+    fit = sm.OLS(y[idx], sm.add_constant(x[idx])).fit()
+    boot_slopes[b] = fit.params[1]
+
+formula_se = sm.OLS(y, sm.add_constant(x)).fit().bse[1]
+print(f"bootstrap SE(slope):  {boot_slopes.std():.4f}")
+print(f"formula SE(slope):    {formula_se:.4f}")
+print(f"95% bootstrap CI:     {np.percentile(boot_slopes, [2.5, 97.5]).round(3)}")
+```
+
+The same machinery gives **prediction uncertainty** — both of the fitted mean and of a new observation:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(1)
+n = 30
+x = np.sort(rng.uniform(0, 1, n))
+y = 2 - 1.2 * x + rng.normal(0, 0.5, n)
+xg = np.linspace(0, 1, 100)
+
+boot_lines = np.zeros((1000, 100))
+for b in range(1000):
+    idx = rng.integers(0, n, n)
+    c = np.polyfit(x[idx], y[idx], 1)
+    boot_lines[b] = c[1] + c[0] * xg
+
+lo, hi = np.percentile(boot_lines, [2.5, 97.5], axis=0)
+pred_lo, pred_hi = np.percentile(boot_lines, [2.5, 97.5], axis=0)  # mean-response band
+
+fig, ax = plt.subplots(figsize=(7, 3.4))
+ax.scatter(x, y, s=18, alpha=0.7)
+ax.plot(xg, boot_lines.mean(axis=0), color="red", lw=2)
+ax.fill_between(xg, lo, hi, alpha=0.25, label="bootstrap 95% band (mean)")
+ax.set(xlabel="x", ylabel="y", title="Coefficient uncertainty as a confidence band")
+ax.legend()
+plt.show()
+```
+
+**The .632 estimator** — fixing the optimistic resubstitution error. A bootstrap sample omits ≈ 36.8% of rows (since $(1-1/n)^n \to e^{-1}$); those *out-of-bag* rows are honest test cases for the bootstrap-fit model:
+
+$$\text{Err}^{(.632)} = 0.368 \cdot \text{Err}_{\text{train}} + 0.632 \cdot \text{Err}_{\text{OOB}}$$
+
+```{pyodide}
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+
+rng = np.random.default_rng(2)
+n = 60
+x = np.sort(rng.uniform(0, 1, n)).reshape(-1, 1)
+y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, 0.3, n)
+
+errs_train, errs_oob = [], []
+for b in range(300):
+    idx = rng.integers(0, n, n)
+    oob = np.setdiff1d(np.arange(n), idx)
+    if len(oob) == 0:
+        continue
+    f = KNeighborsRegressor(5).fit(x[idx], y[idx])
+    errs_train.append(np.mean((y - f.predict(x))**2))          # resubstitution (optimistic)
+    errs_oob.append(np.mean((y[oob] - f.predict(x[oob]))**2))  # honest for this fit
+
+err_train = np.mean(errs_train)
+err_oob = np.mean(errs_oob)
+err_632 = 0.368 * err_train + 0.632 * err_oob
+print(f"resubstitution error: {err_train:.4f}   (optimistic)")
+print(f"OOB error:            {err_oob:.4f}")
+print(f".632 estimate:        {err_632:.4f}")
+```
+
+## 2. Concept Questions
+
+1. Why must resampling be with replacement — and what fraction of rows does a bootstrap sample typically miss, to first order?
+2. The .632 blend uses the *resubstitution* error (optimistic!) with weight 0.368. What is the logic of including it at all?
+3. Bootstrap CIs for a model's coefficients vs the formula SEs of [2.3](../part-02-linear-regression/02-3-accuracy-of-coefficients.qmd): when do they agree, and what does it mean when they don't?
+4. Is the bootstrap valid for time-ordered rows? Name the assumption it needs and the standard fix when it fails.
+5. A model's OOB error ≈ its 10-fold CV error. Which property of the procedure makes those two estimates target (nearly) the same quantity?
+
+<details>
+<summary>Answers</summary>
+
+1. Replacement generates *variability* between replicates (each row appears Poisson(1) times; some twice, some never). Missed fraction → $e^{-1} ≈ 0.368$ — the "out-of-bag" set, which is what makes OOB evaluation possible.
+2. The resubstitution error is the *lower anchor* (the fit's error on data it memorized); OOB is closer to honest. Their weighted mix interpolates toward the true error — for stable learners with mild optimism the blend lands closer to truth than OOB alone, whose training sets are smaller (n distinct ≈ 0.632n, inflating OOB error). [Advanced Q1](#) covers the .632+ refinement.
+3. Under the model's own assumptions (linear, homoscedastic, independent), bootstrap SEs converge to the formula SEs — agreement *validates* both. Divergence means the assumptions are wrong (heteroscedasticity, outliers, small-n skew) — the bootstrap is measuring the world as it is; the formula measures the world as assumed ([2.3 Q2](../part-02-linear-regression/02-3-accuracy-of-coefficients.qmd)).
+4. It needs exchangeability — rows i.i.d. from one distribution. Time series violate it (resampling destroys temporal dependence → SEs too small). Fixes: block bootstrap (resample contiguous blocks), or model-based resampling of residuals.
+5. Both estimate the expected error of models trained on ≈ 63–80% of the data (bootstrap: ≈ 0.632n distinct rows; 10-fold CV: 90%) evaluated on unseen rows — the *training-set-size* mismatch is the main difference, and both are slightly pessimistic for the final refit-on-all-data model ([4.2](../part-04-validation-model-selection/04-2-validation-set.qmd)).
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(3)
+n = 100
+idx = rng.integers(0, n, n)
+oob = np.setdiff1d(np.arange(n), idx)
+print(f"rows in sample: {len(set(idx))} of {n} (≈ 63%)")
+print(f"out-of-bag: {len(oob)} (≈ 37%)")
+counts = np.bincount(idx, minlength=n)
+print("max times one row appeared:", counts.max())
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(4)
+# bootstrap the MEDIAN of a skewed sample
+x = rng.lognormal(0, 1, 80)
+meds = [np.median(rng.choice(x, 80, replace=True)) for _ in range(5000)]
+lo, hi = np.percentile(meds, [2.5, 97.5])
+print(f"median = {np.median(x):.3f}, boot 95% CI ({lo:.3f}, {hi:.3f})")
+```
+
+```{pyodide}
+import numpy as np
+# bootstrap the MAX: the degenerate case from 1.5
+rng = np.random.default_rng(5)
+x = rng.uniform(0, 10, 30)
+maxes = [rng.choice(x, 30, replace=True).max() for _ in range(3000)]
+frac_equal = np.mean(np.array(maxes) == x.max())
+print(f"fraction of bootstrap maxima equal to observed max: {frac_equal:.3f}")
+print("-> the bootstrap CANNOT see beyond the sample for order statistics")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.tree import DecisionTreeClassifier
+rng = np.random.default_rng(6)
+X = rng.normal(0, 1, (200, 2))
+y = (X[:, 0] * X[:, 1] > 0).astype(int)         # XOR-ish: unstable boundary
+accs = []
+for b in range(200):
+    idx = rng.integers(0, 200, 200)
+    accs.append(DecisionTreeClassifier(random_state=b).fit(X[idx], y[idx]).score(X, y))
+print(f"single-tree fit accuracy spread across bootstraps: "
+      f"{np.std(accs):.4f} (instability visible)")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Bootstrap vs formula SE shootout under violations: generate data with heteroscedastic noise ($\sigma \propto x$) and heavy-tailed noise (t₂), n = 40. For each, compute the OLS formula SE of the slope and the bootstrap SE (B = 3000). Report the ratio. Which violation breaks the formula SE more, and what does the bootstrap's larger value correspond to in reality?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(7)
+def boot_se(x, y, B=3000):
+    n = len(x)
+    out = []
+    for b in range(B):
+        i = rng.integers(0, n, n)
+        out.append(sm.OLS(y[i], sm.add_constant(x[i])).fit().params[1])
+    return np.std(out)
+
+for tag, noise in [("heteroscedastic", lambda n, x: rng.normal(0, 1, n) * (0.3 + 0.3 * x)),
+                   ("heavy-tailed", lambda n, x: rng.standard_t(2, n))]:
+    x = rng.uniform(0, 10, 40)
+    y = 2 + 0.5 * x + noise(40, x)
+    formula = sm.OLS(y, sm.add_constant(x)).fit().bse[1]
+    boot = boot_se(x, y)
+    print(f"{tag:16s} formula SE {formula:.4f}  bootstrap SE {boot:.4f}  ratio {boot/formula:.2f}")
+```
+
+The bootstrap SE exceeds the formula SE in both regimes — it prices the real error structure (heteroscedastic variance, outliers that sometimes land in a resample and swing the fit). The formula assumes one σ and thin tails; its number is a statement about the *assumed* world. When they diverge, trust the bootstrap and reach for robust SEs or a different likelihood.
+</details>
+
+**Exercise 2.** Implement the full **.632 vs cross-validation comparison**: for the k-NN regression setup above (and also k = 1 and k = 25), compute (a) resubstitution error, (b) .632 estimate, (c) 5-fold CV, and (d) the true test error on 20,000 fresh points. Tabulate all four per k. For which k does .632 come closest to truth, and what does the resubstitution column look like at k = 1 (why does that row explain the entire motivation of the estimator)?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+
+rng = np.random.default_rng(8)
+n = 60
+x = np.sort(rng.uniform(0, 1, n)).reshape(-1, 1)
+y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, 0.3, n)
+xte = np.linspace(0, 1, 20000).reshape(-1, 1)
+yte = np.sin(2 * np.pi * xte).ravel() + rng.normal(0, 0.3, 20000)
+
+from sklearn.model_selection import cross_val_score, KFold
+
+for k in [1, 5, 25]:
+    f = KNeighborsRegressor(k).fit(x, y)
+    resub = np.mean((y - f.predict(x))**2)
+
+    et, eo = [], []
+    for b in range(200):
+        idx = rng.integers(0, n, n)
+        oob = np.setdiff1d(np.arange(n), idx)
+        if len(oob) < 5:
+            continue
+        fb = KNeighborsRegressor(k).fit(x[idx], y[idx])
+        et.append(np.mean((y - fb.predict(x))**2))
+        eo.append(np.mean((y[oob] - fb.predict(x[oob]))**2))
+    e632 = 0.368 * np.mean(et) + 0.632 * np.mean(eo)
+
+    cv = -cross_val_score(KNeighborsRegressor(k), x, y, cv=KFold(5, shuffle=True,
+                          random_state=0), scoring="neg_mean_squared_error").mean()
+    truth = np.mean((yte - f.predict(xte))**2)
+    print(f"k={k:>2}: resub {resub:.4f} | .632 {e632:.4f} | 5-fold {cv:.4f} | truth {truth:.4f}")
+```
+
+At k = 1, resubstitution is *exactly 0* — the estimate that motivated .632. The .632 blend lands near truth for moderate-k stable learners; note its known weakness: for severely overfitting learners the resubstitution anchor (0 at k = 1) drags the blend *down* (optimistic) — the .632+ correction reweights by relative overfitting rate. CV remains the workhorse; .632 matters when CV is too expensive or training sets are tiny.
+</details>
+
+**Exercise 3.** Prediction intervals by bootstrap: for the linear fit, build three bands at x = 0.5: (a) bootstrap CI of the *mean response* (vary coefficients), (b) bootstrap *prediction* interval (add simulated residual noise to each bootstrap prediction), (c) the classical t-based prediction interval from statsmodels (`get_prediction`). Compare widths and centering. Which band is honest for "where will the next point land"?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(9)
+n = 40
+x = rng.uniform(0, 1, n)
+y = 1 + 0.7 * x + rng.normal(0, 0.5, n)
+fit = sm.OLS(y, sm.add_constant(x)).fit()
+
+# (a) mean-response bootstrap CI
+mean_preds = []
+for b in range(4000):
+    i = rng.integers(0, n, n)
+    fb = sm.OLS(y[i], sm.add_constant(x[i])).fit()
+    mean_preds.append(fb.params[0] + fb.params[1] * 0.5)
+a = np.percentile(mean_preds, [2.5, 97.5])
+
+# (b) prediction bootstrap: add resampled residual noise
+resid = fit.resid
+pred_draws = np.array(mean_preds) + rng.choice(resid, 4000)
+b_ = np.percentile(pred_draws, [2.5, 97.5])
+
+# (c) classical
+row = sm.add_constant(np.array([[0.5]]), has_constant="add")
+pi = fit.get_prediction(row).summary_frame(alpha=0.05)
+c_ = (pi["obs_ci_lower"].iloc[0], pi["obs_ci_upper"].iloc[0])
+ci_mean = (pi["mean_ci_lower"].iloc[0], pi["mean_ci_upper"].iloc[0])
+
+print(f"(a) boot mean-response CI: ({a[0]:.3f}, {a[1]:.3f})  classical: ({ci_mean[0]:.3f}, {ci_mean[1]:.3f})")
+print(f"(b) boot prediction int.:  ({b_[0]:.3f}, {b_[1]:.3f})")
+print(f"(c) classical pred. int.:  ({c_[0]:.3f}, {c_[1]:.3f})")
+```
+
+Band (a) is narrow (coefficient uncertainty only); bands (b)/(c) are wider by roughly 2σ·1.96 — the irreducible noise of a new point ([2.2 Exercise 3](../part-02-linear-regression/02-2-simple-linear-regression.qmd)). Bootstrap (b) matches classical (c) closely under correct specification and *inherits the empirical residual distribution* when it isn't (skew, outliers) — its advantage in exactly the settings where the classical t-interval is fiction.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **The bootstrap resamples rows** — paired/multilevel data must resample the *unit* (patient), not the visit; otherwise the resamples invent independence that isn't there (the [2.10 Q2](../part-02-linear-regression/02-10-regression-assumptions.qmd) lesson in resampling clothing).
+- **Order statistics and extremes** break it (the max degeneracy drill) — any statistic living at the sample boundary needs parametric or smoothed variants.
+- **B matters, but differently per use**: SEs stabilize by B ≈ 500–1000; 95% percentile CIs need B ≈ 2000+ (the 2.5% tail quantile is noisy); never report more digits than B supports.
+- **The bootstrap estimates variability of the *procedure*, not the specific fit** — that's a feature (matches deployment, where a new sample gets a new fit) and a warning (it cannot tell you about the one fit you shipped beyond its procedure-level behavior).
+- **Bootstrap model *selection* is optimistic** — choosing hyperparameters by OOB score then reporting that OOB score overfits the resamples exactly like CV-selection does ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)).
+- **.632+ exists** because .632 is optimistic for overfitting-heavy learners (Exercise 2's k = 1 row); it reweights the blend by an estimated relative-overfitting rate — implement only if you must explain it; CV is usually simpler.
+
+### Read & Refactor AI Code
+
+This AI-generated "bootstrap CI" has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+
+rng = np.random.default_rng(10)
+x = np.linspace(0, 1, 50)
+y = 2 + 0.7 * x + rng.normal(0, 0.5, 50)
+
+def slope(x, y):
+    return np.polyfit(x, y, 1)[0]
+
+# BUG 1: resample WITHOUT replacement
+boot = [slope(rng.choice(x, 50, replace=False), y) for _ in range(1000)]
+
+# BUG 2: y not resampled in step with x
+boot2 = [slope(rng.choice(x, 50), y) for _ in range(1000)]
+
+# BUG 3: 50 resamples, 3 significant digits
+boot3 = [slope(*(lambda i: (x[i], y[i]))(rng.integers(0, 50, 50))) for _ in range(50)]
+lo, hi = np.percentile(boot3, [2.5, 97.5])
+print(f"95% CI: ({lo:.3f}, {hi:.3f})")
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Without replacement**, every "replicate" is the original data permuted — the slope SD is ~0 and the CI is fake-narrow. Replacement is the entire engine.
+2. **x resampled, y left whole**: pairs are broken — slopes computed against unrelated responses; garbage variability. Resample *row indices*, jointly.
+3. **B = 50 for a 95% percentile CI**: the 2.5%/97.5% quantiles rest on ~1 order statistic each; the third decimal is noise. B ≥ 2000, and report digits B supports.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(10)
+x = np.linspace(0, 1, 50)
+y = 2 + 0.7 * x + rng.normal(0, 0.5, 50)
+
+def slope(x, y):
+    return np.polyfit(x, y, 1)[0]
+
+n = len(x)
+boot = np.array([slope(*(lambda i: (x[i], y[i]))(rng.integers(0, n, n)))
+                 for _ in range(3000)])
+lo, hi = np.percentile(boot, [2.5, 97.5])
+print(f"95% bootstrap CI for slope: ({lo:.2f}, {hi:.2f})  (B = 3000)")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Derive the OOB fraction: the probability row i is absent from a bootstrap sample is $(1 - 1/n)^n \to e^{-1} ≈ 0.368$. Then explain the *training-size mismatch* this creates for OOB error (models trained on ≈ 0.632n distinct rows), and quantify the mismatch's effect by simulation: compare OOB error of a 5-NN model against its test error when trained on all n, for n ∈ {30, 100, 400}. Which n makes the mismatch negligible?
+
+<details>
+<summary>Hint</summary>
+
+OOB evaluates models trained on ~63% of the data; [4.1 Exercise 2](../part-04-validation-model-selection/04-1-generalization-problem.qmd)'s learning-curve logic prices that.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+
+rng = np.random.default_rng(11)
+for n in [30, 100, 400]:
+    x = np.sort(rng.uniform(0, 1, n)).reshape(-1, 1)
+    y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, 0.3, n)
+    xte = np.linspace(0, 1, 5000).reshape(-1, 1)
+    yte = np.sin(2 * np.pi * xte).ravel() + rng.normal(0, 0.3, 5000)
+
+    f_full = KNeighborsRegressor(5).fit(x, y)
+    truth = np.mean((yte - f_full.predict(xte))**2)
+
+    oob_errs = []
+    for b in range(100):
+        idx = rng.integers(0, n, n)
+        oob = np.setdiff1d(np.arange(n), idx)
+        if len(oob) < 3:
+            continue
+        fb = KNeighborsRegressor(5).fit(x[idx], y[idx])
+        oob_errs.append(np.mean((y[oob] - fb.predict(x[oob]))**2))
+    print(f"n={n:>3}: OOB {np.mean(oob_errs):.4f} vs full-train test {truth:.4f} "
+          f"({(np.mean(oob_errs)/truth - 1)*100:+.0f}%)")
+```
+
+OOB error is systematically higher (pessimistic) because its models saw ≈ 63% of the data; the penalty shrinks as n grows (learning curve flattens — [4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd)). At n in the hundreds the mismatch is a few percent; at n = 30 it can double the estimate. The .632 blend exists precisely to price this back toward the full-training-set target.
+</details>
+
+**Q2.** Bootstrap a *model comparison*: two models' test errors on the same 200-row test set are 0.41 and 0.44. Design and implement the paired bootstrap CI for the difference (resample test rows, recompute both errors on the same resample, difference them), and explain (a) why resampling rows jointly is essential (what breaks if the two models' errors are bootstrapped independently), (b) what assumption about the test set the resulting CI carries, and (c) when the CI overstates confidence (connect to [3.7](../part-03-classification-glm/03-7-model-comparison.qmd)'s pairing discipline).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import train_test_split
+
+X, y = make_classification(n_samples=1000, n_features=6, class_sep=0.9, random_state=0)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=1)
+m1 = LogisticRegression(max_iter=4000).fit(X_tr, y_tr)
+m2 = KNeighborsClassifier(25).fit(X_tr, y_tr)
+e1 = (m1.predict(X_te) != y_te).astype(float)
+e2 = (m2.predict(X_te) != y_te).astype(float)
+
+rng = np.random.default_rng(2)
+diffs = []
+for b in range(4000):
+    i = rng.integers(0, len(y_te), len(y_te))
+    diffs.append(e2[i].mean() - e1[i].mean())
+lo, hi = np.percentile(diffs, [2.5, 97.5])
+print(f"error difference (KNN − logistic): point {e2.mean()-e1.mean():+.4f}, "
+      f"95% CI ({lo:+.4f}, {hi:+.4f})")
+```
+
+(a) Joint row resampling preserves the *per-row pairing* of the two models' errors; independent bootstraps would destroy the negative covariance between their errors and overstate the difference's variance (the paired-t logic of [1.4](../part-01-statistics-bridge/01-4-statistical-inference.qmd), resampled). (b) The CI treats the 200 rows as i.i.d. draws from the deployment population — cluster/row-duplicates or distribution shift break that. (c) It says nothing about *selection* (these two models were chosen after looking at related data) or about training-set variability — both models were fit once; the CI prices evaluation noise only, not the [4.3](../part-04-validation-model-selection/04-3-cross-validation.qmd)-level "refit on a new training set" noise.
+</details>
+
+## 6. Complex Questions
+
+**C1 (bootstrap × [4.3 CV](../part-04-validation-model-selection/04-3-cross-validation.qmd)).** For the KNN k-selection problem, compare three uncertainty procedures for the *selected model's* error: (a) .632, (b) 5-fold CV, (c) bootstrap-over-rows of the whole pipeline (resample rows, rerun the entire k-selection inside, evaluate OOB). Which procedure captures the selection step's variability? Implement (c) — the "bootstrap the pipeline" pattern is the general answer to "my pipeline has many steps; how uncertain is the end number?"
+
+**C2 (bootstrap × [2.3 coefficient inference](../part-02-linear-regression/02-3-accuracy-of-coefficients.qmd) × [4.4 decomposition](../part-04-validation-model-selection/04-4-bias-variance.qmd)).** For a heteroscedastic dataset, compute slope CIs four ways: formula, HC3 robust, pairs-bootstrap, and residual-bootstrap (resample residuals, refit — check why it's *invalid* here: it assumes homoscedastic errors by construction). Report all four intervals and order them by width. Then state which pair of intervals a reviewer should trust and why the residual bootstrap's failure is instructive about what each resampling scheme *assumes*.
+
+## 7. Summary
+
+- Bootstrap = resample rows with replacement, refit, read spread; ≈ 36.8% of rows are out-of-bag per sample.
+- It validates assumptions rather than needing them: agreement with formula SEs is a green light, divergence a diagnosis.
+- .632 blends the optimistic resubstitution anchor with honest OOB error; .632+ exists for heavy overfitters; CV remains the default.
+- Resample the *unit*, keep pairs together, mind order statistics and B-dependent precision.
+- Paired bootstrap over rows is the universal CI for model *differences*; pipeline-bootstrap for whole procedures.
+- Bootstrap prices evaluation and coefficient uncertainty; it does not excuse selection on the same resamples.
+- Every method here evaluates models honestly; choosing hyperparameters is next: [4.6 Hyperparameter tuning](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd).

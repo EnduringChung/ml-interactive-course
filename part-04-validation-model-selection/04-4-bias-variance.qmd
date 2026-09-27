@@ -1,9 +1,425 @@
 ---
-title: "Coming soon"
+title: "4.4 The Bias–Variance Trade-off"
 tier: 1
 engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - matplotlib
 ---
 
-This page has not been published yet. It is scheduled in the [build order](/index.qmd) and will follow the same seven-section template as every other page.
+Every model's expected error on a new point decomposes into three parts: **bias²** (systematic wrongness), **variance** (sensitivity to the training sample), and irreducible noise. The U-curve of [4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd) *is* this decomposition plotted against flexibility. Here you derive it, then watch it move under your own simulations.
 
-Check back soon — progress is tracked in the [course home](/index.qmd).
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+At a fixed query point $x_0$, with training set $T$ treated as random:
+
+$$\mathbb{E}_{T}\big[(y_0 - \hat{f}_T(x_0))^2\big] = \underbrace{\big(f(x_0) - \mathbb{E}_T[\hat{f}_T(x_0)]\big)^2}_{\text{bias}^2} + \underbrace{\mathbb{V}\text{ar}_T\big(\hat{f}_T(x_0)\big)}_{\text{variance}} + \underbrace{\mathbb{V}\text{ar}(\varepsilon)}_{\sigma^2}$$
+
+Derivation (one completing-the-square trick): write $\hat f_T(x_0) - y_0 = (\hat f_T - \mathbb{E}\hat f) + (\mathbb{E}\hat f - f) - \varepsilon$. The cross-terms vanish because ε is independent of T and mean-zero, and $\mathbb{E}_T[\hat f - \mathbb{E}\hat f] = 0$. Averaged over $x_0$: total test MSE = bias² + variance + σ².
+
+**Empirical decomposition** — bias and variance are measurable with many training sets:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.6
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+xg = np.linspace(0, 1, 200)
+truth = np.sin(2 * np.pi * xg)
+sigma = 0.3
+
+n_sets, n = 300, 30
+degrees = [1, 3, 10]
+grid_preds = {d: np.zeros((n_sets, 200)) for d in degrees}
+
+for s in range(n_sets):
+    x = np.sort(rng.uniform(0, 1, n))
+    y = np.sin(2 * np.pi * x) + rng.normal(0, sigma, n)
+    for d in degrees:
+        grid_preds[d][s] = np.polyval(np.polyfit(x, y, d), xg)
+
+fig, axes = plt.subplots(1, 3, figsize=(7.5, 3), sharey=True)
+for ax, d in zip(axes, degrees):
+    P = grid_preds[d]
+    bias2 = (P.mean(axis=0) - truth)**2
+    var = P.var(axis=0)
+    ax.plot(xg, bias2, label="bias²")
+    ax.plot(xg, var, label="variance")
+    ax.set_title(f"degree {d}")
+    ax.set_ylim(0, 1.0)
+axes[0].legend()
+fig.suptitle("Bias² vs variance along x, per model flexibility")
+fig.tight_layout()
+plt.show()
+```
+
+Averaged over the grid, the three curves and their sum:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(1)
+xg = np.linspace(0, 1, 200)
+truth = np.sin(2 * np.pi * xg)
+sigma = 0.3
+
+bias2s, variances, tests = [], [], []
+for d in range(1, 13):
+    P = np.zeros((200, 200))
+    for s in range(200):
+        x = np.sort(rng.uniform(0, 1, 30))
+        y = np.sin(2 * np.pi * x) + rng.normal(0, sigma, 30)
+        P[s] = np.polyval(np.polyfit(x, y, d), xg)
+    bias2 = np.mean((P.mean(axis=0) - truth)**2)
+    var = np.mean(P.var(axis=0))
+    # honest test error: average squared error to NEW noisy outcomes
+    y_new = truth[:, None] + rng.normal(0, sigma, (200, P.shape[0]))
+    test = np.mean((y_new - P.T)**2)
+    bias2s.append(bias2); variances.append(var); tests.append(test)
+
+ds = range(1, 13)
+fig, ax = plt.subplots(figsize=(7, 3.4))
+ax.plot(ds, bias2s, marker="o", ms=4, label="bias²")
+ax.plot(ds, variances, marker="s", ms=4, label="variance")
+ax.plot(ds, tests, marker="^", ms=4, label="test MSE = sum + σ²")
+ax.axhline(sigma**2, color="gray", ls=":", label="σ²")
+ax.set(xlabel="polynomial degree", ylabel="error", title="The decomposition, measured")
+ax.legend()
+plt.show()
+print("check sum ≈ test:", np.round(np.array(bias2s) + np.array(variances) + sigma**2, 4)[:5])
+```
+
+## 2. Concept Questions
+
+1. Where does the irreducible σ² term come from in the formula, and why can no model remove it?
+2. KNN: as k → 1 and as k → n, state the bias/variance limits at a fixed x₀.
+3. Your colleague says "the bias–variance trade-off means you should always pick the middle." Give a dataset property that pushes the optimum to the flexible end, and one that pushes it rigid.
+4. Why does more training data decrease variance but (mostly) leave bias unchanged — and which classical model is the exception where data shrinks bias too?
+5. Bootstrapped bagged trees average many trees trained on resamples. In decomposition language, what does the averaging buy, and what doesn't it fix? (Preview of Part 7.)
+
+<details>
+<summary>Answers</summary>
+
+1. ε enters the prediction target $y_0 = f(x_0) + \varepsilon$; since ε is independent of the training set, its variance adds in full. No function of the training data can predict ε — it's the noise floor of [2.1](../part-02-linear-regression/02-1-regression-setup.qmd).
+2. k = 1: $\hat f(x_0) = y_{\text{nearest}} = f(x_{\text{near}}) + \varepsilon_{\text{near}}$ — bias ≈ f(x_near) − f(x₀) ≈ 0 for dense data (low bias), variance = Var(ε) plus neighbor-identity jitter (high). k → n: prediction → global mean $\bar y$ — maximal bias (|f(x₀) − f̄|) and variance → Var(ȳ) ≈ σ²/n → 0.
+3. Flexible-friendly: large n, low noise, complex wiggly f (bias dominates rigid models). Rigid-friendly: small n, high noise, simple f — or high dimension d ≫ n, where variance of flexible models explodes ([2.9/3.5](../part-02-linear-regression/02-9-knn-regression.qmd) curse).
+4. Variance is estimation noise: more points pin each parameter/local average tighter (∝ 1/n effects). Bias is *structural* — wrong model class — so extra data from the same process doesn't help. The exception: KNN and other *local* methods — more data shrinks neighborhoods, reducing approximation (bias) too; that's why nonparametric methods converge to truth.
+5. Averaging i.i.d.-ish model fits cuts *variance* (∝ 1/B for uncorrelated members; less for correlated trees) while leaving each member's *bias* intact. Bagging fixes instability, not mis-specification — and boosting ([Part 7](#)) attacks bias by sequential fitting instead.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(2)
+# variance of the sample mean falls as 1/n (a "model" with one parameter)
+for n in [5, 25, 100]:
+    means = [rng.normal(0, 1, n).mean() for _ in range(5000)]
+    print(f"n={n:>3}: SD of mean = {np.std(means):.4f}  (theory {1/np.sqrt(n):.4f})")
+```
+
+```{pyodide}
+import numpy as np
+# bias of the mean-model on a curved truth: irreducible by n
+rng = np.random.default_rng(3)
+xg = np.linspace(0, 1, 1000)
+truth = np.sin(2*np.pi*xg)
+x = rng.uniform(0, 1, 5000)
+y = np.sin(2*np.pi*x) + rng.normal(0, 0.1, 5000)
+b0 = y.mean()
+print(f"mean-model bias² at x=0.25: {(truth[250] - y.mean())**2:.4f}")
+print(f"...with 10x data: same (bias is structural)")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+rng = np.random.default_rng(4)
+# KNN limits at a point
+x0 = 0.3; f0 = np.sin(2*np.pi*x0)
+preds = {"k=1": [], "k=200": []}
+for s in range(1000):
+    x = np.sort(rng.uniform(0, 1, 200))
+    y = np.sin(2*np.pi*x) + rng.normal(0, 0.2, x.size)
+    preds["k=1"].append(KNeighborsRegressor(1).fit(x.reshape(-1,1), y).predict([[x0]])[0])
+    preds["k=200"].append(KNeighborsRegressor(200).fit(x.reshape(-1,1), y).predict([[x0]])[0])
+for k, v in preds.items():
+    v = np.array(v)
+    print(f"{k}: bias {(v.mean() - f0):+.4f}, var {v.var():.5f}")
+print(f"f(x0) = {f0:.4f}; sigma^2 = 0.04")
+```
+
+```{pyodide}
+import numpy as np
+# bagging reduces variance of an unstable estimator (depth-5 tree-ish proxy)
+rng = np.random.default_rng(5)
+def unstable_fit(x, y, x0):
+    # a deliberately jumpy 1-NN-at-random-threshold proxy
+    j = rng.integers(0, len(x))
+    x_ord = np.argsort(x)
+    split = x[x_ord][j]
+    return y[x < split].mean() if x0 < split else y[x >= split].mean()
+
+x = rng.uniform(0, 1, 100)
+y = np.sin(2*np.pi*x) + rng.normal(0, 0.2, 100)
+single = [unstable_fit(x, y, 0.5) for _ in range(500)]
+bagged = [np.mean([unstable_fit(x, y, 0.5) for _ in range(50)]) for _ in range(500)]
+print(f"single SD: {np.std(single):.4f}   50-fold bagged SD: {np.std(bagged):.4f}")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Build `bias_variance(model_factory, make_data, x0, reps=1000)` returning bias, variance, and total MSE at point x0 for any sklearn-style model. Apply it to KNN with k ∈ {1, 5, 25, 100} on the sinusoid (n = 100, σ = 0.3); produce the k-vs-(bias², variance) table. Verify: total − σ² = bias² + variance within Monte Carlo error, and identify the MSE-minimizing k.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+
+def bias_variance(model_factory, make_data, x0, reps=1000, seed=0):
+    rng = np.random.default_rng(seed)
+    preds = []
+    for _ in range(reps):
+        X, y = make_data(rng)
+        model = model_factory().fit(X, y)
+        preds.append(model.predict(np.array([[x0]]))[0])
+    preds = np.array(preds)
+    f0 = np.sin(2 * np.pi * x0)
+    bias = preds.mean() - f0
+    return bias, preds.var(), bias**2 + preds.var()
+
+def make_data(rng, n=100):
+    x = np.sort(rng.uniform(0, 1, n)).reshape(-1, 1)
+    y = np.sin(2 * np.pi * x.ravel()) + rng.normal(0, 0.3, n)
+    return x, y
+
+x0 = 0.3
+f0 = np.sin(2 * np.pi * x0)
+print(f"sigma^2 = 0.09, f(x0) = {f0:.4f}\n")
+for k in [1, 5, 25, 100]:
+    b, v, t = bias_variance(lambda: KNeighborsRegressor(k), make_data, x0)
+    print(f"k={k:>3}: bias {b:+.4f}  bias² {b*b:.4f}  var {v:.4f}  "
+          f"bias²+var {b*b + v:.4f}  (+σ² = {b*b + v + 0.09:.4f})")
+```
+
+The table shows the trade exactly: k = 1 has tiny bias, large variance; k = 100 (≈ mean model at n = 100) has huge bias, vanishing variance; the MSE-optimal k sits between. Note bias isn't monotone in a trivial way at one point — averaging over x (as in Section 1) smooths the picture.
+</details>
+
+**Exercise 2.** Noise and flexibility interact: rerun the degree-sweep decomposition (Section 1's second figure) at σ = 0.05 and σ = 0.6. For each noise level, report the MSE-optimal degree. Write the one-line design rule linking noise to the flexibility you can afford, then connect it to why [2.10](../part-02-linear-regression/02-10-regression-assumptions.qmd)'s equal-variance violations matter for *model choice* and not just inference.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(6)
+xg = np.linspace(0, 1, 200)
+truth = np.sin(2 * np.pi * xg)
+
+for sigma in [0.05, 0.6]:
+    tests = []
+    for d in range(1, 11):
+        P = np.zeros((150, 200))
+        for s in range(150):
+            x = np.sort(rng.uniform(0, 1, 30))
+            y = np.sin(2 * np.pi * x) + rng.normal(0, sigma, 30)
+            P[s] = np.polyval(np.polyfit(x, y, d), xg)
+        y_new = truth[:, None] + rng.normal(0, sigma, (200, 150))
+        tests.append(np.mean((y_new - P.T)**2))
+    print(f"sigma={sigma}: optimal degree = {int(np.argmin(tests)) + 1}")
+```
+
+Low noise → optimal degree near the true complexity (variance is cheap); high noise → optimal degree drops hard (each estimated parameter imports σ² worth of variance). Rule: **affordable flexibility scales inversely with noise**. Heteroscedasticity ([2.10](../part-02-linear-regression/02-10-regression-assumptions.qmd)) makes noise region-dependent — so flexible features are *locally* affordable, one motivation for adaptive smoothers (Part 6) and variance-aware likelihoods (GLMs, [3.6](../part-03-classification-glm/03-6-generalized-linear-models.qmd)).
+</details>
+
+**Exercise 3.** The data-rescue curve, decomposed: fix degree 9 (overparameterized for n = 30) and rerun the decomposition at n ∈ {30, 100, 300, 1000}. Report bias², variance, and total at each n. Which component dies with data, which refuses, and what does the surviving component's floor equal (compute it analytically for reference)?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(7)
+xg = np.linspace(0, 1, 200)
+truth = np.sin(2 * np.pi * xg)
+
+for n in [30, 100, 300, 1000]:
+    P = np.zeros((150, 200))
+    for s in range(150):
+        x = np.sort(rng.uniform(0, 1, n))
+        y = np.sin(2 * np.pi * x) + rng.normal(0, 0.3, n)
+        P[s] = np.polyval(np.polyfit(x, y, 9), xg)
+    b2 = np.mean((P.mean(axis=0) - truth)**2)
+    v = np.mean(P.var(axis=0))
+    print(f"n={n:>4}: bias² {b2:.5f}  variance {v:.5f}  "
+          f"total(+σ²) {b2 + v + 0.09:.4f}")
+```
+
+Variance collapses roughly like (number of effective parameters)/n as n grows; bias² barely moves (degree 9 *can* represent the sinusoid, so its residual bias is small from the start — try degree 2 to see bias refuse to die). The floor is σ² = 0.09, exactly the irreducible term. Data cures variance; only a richer model class cures bias — the two diseases, two medicines.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **The decomposition is for squared loss** — classification's 0-1 loss has bias/variance notions but they're subtler (multiple decompositions exist; correlations between bias and variance signs). Don't force the additive story onto accuracy or AUC.
+- **Bias and variance need not trade monotonically at every point** — the trade is an *average* statement; at particular x₀, or with correlated estimators, both can move together (and modern double-descent breaks the U entirely beyond interpolation — hold the classical picture for classical models).
+- **Ensembles exploit the decomposition, not vibes**: bagging attacks variance (averaging correlated fits helps less — trees' correlation is why random *feature* subsampling (Part 7) works), boosting attacks bias (sequentially fitting residuals).
+- **Regularization (Part 5) is variance purchase with bias currency**: ridge shrinks coefficients (bias ↑, variance ↓); the penalty is the exchange rate. Every Part 5 method is a point on this dial.
+- **Estimating the decomposition from ONE training set is impossible** — bias and variance are properties of the *estimator across training sets* ([4.1 Exercise 1](../part-04-validation-model-selection/04-1-generalization-problem.qmd)); single-fit diagnostics speak to residuals, not to the decomposition.
+- **σ² estimation matters for everything downstream**: RSE ([2.4](../part-02-linear-regression/02-4-accuracy-of-model.qmd)), Cp/AIC penalties, and "are we at the floor" verdicts all consume σ̂²; a biased σ̂ (from a mis-specified model) corrupts the whole accounting.
+
+### Read & Refactor AI Code
+
+This AI-generated "bias-variance analysis" has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+
+rng = np.random.default_rng(8)
+xg = np.linspace(0, 1, 100)
+truth = np.sin(2 * np.pi * xg)
+
+# BUG 1: one training set, many bootstrap resamples, called "variance"
+x = np.sort(rng.uniform(0, 1, 30))
+y = np.sin(2 * np.pi * x) + rng.normal(0, 0.3, 30)
+boot_preds = []
+for b in range(200):
+    idx = rng.integers(0, 30, 30)
+    boot_preds.append(np.polyval(np.polyfit(x[idx], y[idx], 9), xg))
+P_boot = np.array(boot_preds)
+print("bootstrap 'variance':", P_boot.var().round(4))
+
+# BUG 2: measured error against TRAINING points, called test MSE
+train_mse = np.mean((y - np.polyval(np.polyfit(x, y, 9), x))**2)
+print("so-called test MSE:", train_mse.round(4))
+
+# BUG 3: bias computed against NOISY y instead of f
+P = P_boot
+bias2 = np.mean((P.mean(axis=0) - np.interp(xg, x, y))**2)
+print("bias² vs noisy data:", bias2.round(4))
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Bootstrap resamples of ONE training set measure stability-to-resampling of that fit** — not the estimator's sampling variance across training sets (it underestimates it and confounds data noise with fit jitter).
+2. **Training MSE ≠ test MSE** ([4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd)) — on 30 points degree 9 interpolates: ≈ 0. Fix with fresh evaluation data.
+3. **Bias is defined against f, not against a noisy realization** — regressing toward interpolated noise corrupts the target. Bias needs the true f (known in simulation) or a principled proxy.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(8)
+xg = np.linspace(0, 1, 100)
+truth = np.sin(2 * np.pi * xg)
+
+P = np.zeros((300, 100))
+for s in range(300):
+    x = np.sort(rng.uniform(0, 1, 30))
+    y = np.sin(2 * np.pi * x) + rng.normal(0, 0.3, 30)
+    P[s] = np.polyval(np.polyfit(x, y, 9), xg)
+
+bias2 = np.mean((P.mean(axis=0) - truth)**2)
+var = P.var(axis=0).mean()
+y_new = truth[:, None] + rng.normal(0, 0.3, (100, 300))
+test = np.mean((y_new - P.T)**2)
+print(f"bias² = {bias2:.4f}, variance = {var:.4f}, "
+      f"sum + σ² = {bias2 + var + 0.09:.4f}, test MSE = {test:.4f}")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Prove the decomposition rigorously: define $\bar{\hat f}(x_0) = \mathbb{E}_T[\hat f_T(x_0)]$, expand $\mathbb{E}_T[(y_0 - \hat f_T(x_0))^2]$ by adding and subtracting $\bar{\hat f}(x_0)$, and show both cross-terms vanish — one by independence of ε from T, one by the definition of expectation. Then explain where the proof fails for 0-1 loss (why no clean additive decomposition exists there).
+
+<details>
+<summary>Hint</summary>
+
+E[(A + B + C)²] with A = ȳ-type zero-mean term, B = bias, C = −ε; check E[A] = 0, E[AC] = E[A]E[C] = 0 by independence.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Let $A = \bar{\hat f} - \hat f_T$, $B = \bar{\hat f} - f(x_0)$, $C = -\varepsilon$. Then $y_0 - \hat f_T = A + B + C$. Squaring and taking $\mathbb{E}_T$: E[A²] = Var, B² = bias², E[C²] = σ². Cross-terms: E[AB] = B·E[A] = 0; E[BC] = B·E[C] = 0 (ε mean-zero, independent of everything T-derived); E[AC] = E[A]E[C] = 0 by independence. Sum = bias² + var + σ². For 0-1 loss the indicator $(y_0 \ne \hat f_T)$ doesn't expand into squares — bias and variance interact (high variance can *correct* systematic boundary bias — "variance cancels bias" — which squared loss forbids). That's why classification intuition sometimes rewards instability, and why the clean U-curve is a squared-loss picture.
+</details>
+
+**Q2.** Double descent, demonstrated small: with n = 40 points and a linear model in k random Fourier features (X → sin/cos features), sweep k from 5 to 300 and plot train and test MSE. Identify the interpolation threshold (train MSE ≈ 0) and describe test error's behavior around and beyond it. Then explain in bias/variance language why the classical U-curve story needs extending — and why you should still not casually interpolate your next dataset.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(9)
+n = 40
+x = np.sort(rng.uniform(0, 1, n))
+y = np.sin(2 * np.pi * x) + rng.normal(0, 0.2, n)
+xg = np.linspace(0, 1, 3000)
+yg = np.sin(2 * np.pi * xg) + rng.normal(0, 0.2, 3000)
+
+def feats(X, k):
+    freqs = np.linspace(1, 80, k)
+    return np.sin(X[:, None] * freqs * 2 * np.pi)
+
+tr_err, te_err, ks = [], [], range(5, 301, 5)
+from sklearn.linear_model import Ridge
+for k in ks:
+    F = feats(x, k); Fg = feats(xg, k)
+    m = Ridge(alpha=1e-9, fit_intercept=True).fit(F, y)   # near-OLS, stable solve
+    tr_err.append(np.mean((y - m.predict(F))**2))
+    te_err.append(np.mean((yg - m.predict(Fg))**2))
+
+fig, ax = plt.subplots(figsize=(7, 3.4))
+ax.plot(ks, tr_err, label="train")
+ax.plot(ks, te_err, label="test")
+ax.axvline(40, color="gray", ls=":", label="interpolation threshold (n)")
+ax.set(xlabel="number of features k", ylabel="MSE", yscale="log",
+       title="Double descent: test error dips, peaks at p≈n, descends again")
+ax.legend()
+plt.show()
+```
+
+Around p ≈ n the minimum-norm interpolating fit is unstable — test error peaks (the classical story ends at this wall). Beyond it, the *minimum-norm* solution among infinitely many interpolants becomes smoother/more benign as p grows, and test error descends again. Bias/variance language extends via "effective capacity" and norm-based complexity rather than parameter count. Practical stance: the descent region requires specific (min-norm/implicit-regularized) solvers and lots of features — for classical tabular work, the U-curve and its remedies (Part 5) remain the operating manual.
+</details>
+
+## 6. Complex Questions
+
+**C1 (bias–variance × [2.6–2.7 model classes](../part-02-linear-regression/02-6-categorical-predictors.qmd)).** Three nested model classes for one truth with group-specific slopes: additive (shared slope), interaction (two slopes), saturated (per-group curvature). For each class and n ∈ {40, 200, 1000}, measure test MSE by multi-training-set simulation. Produce the 3×3 table and read it in decomposition language: which cell's error is bias-dominated at n = 40 but variance-dominated at n = 40 for the *saturated* class, and how does the ranking of classes change with n?
+
+**C2 (bias–variance × [4.6 tuning](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd) preview).** The decomposition explains what CV's minimum *finds*: rerun Exercise 1's KNN sweep while recording the decomposition; overlay the empirical test-MSE minimum k with the k minimizing (bias² + variance) from the ground-truth simulation. How often (across 100 dataset draws) does CV pick within ±1 neighbor of the decomposition-optimal k? The frequency you observe is the empirical content of "CV approximates the bias-variance optimum" — and its failure cases are your introduction to why tuning needs care.
+
+## 7. Summary
+
+- Test MSE = bias² + variance + σ²; the proof is one completing-the-square; σ² never leaves.
+- Flexibility buys bias down at variance's price; the U-curve is that exchange plotted.
+- More data kills variance, not bias; local (nonparametric) methods are the exception — neighborhoods shrink.
+- Noise sets the flexibility budget: high σ ⇒ rigid optima ([Exercise 2](#)).
+- Bagging/boosting/regularization are the decomposition's applied children: variance-, bias-, and exchange-machines.
+- The decomposition is a squared-loss, classical-model story — 0-1 loss and interpolation-threshold regimes need amended maps.
+- With error anatomy understood, the bootstrap gives it standard errors without new theory: [4.5 The Bootstrap](../part-04-validation-model-selection/04-5-bootstrap.qmd).

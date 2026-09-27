@@ -1,0 +1,414 @@
+---
+title: "3.6 Generalized Linear Models"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scipy
+    - statsmodels
+    - patsy
+    - matplotlib
+---
+
+Logistic regression was not a one-off trick — it is one instance of a *general recipe*: pick a response distribution, a link between its mean and the linear predictor, fit by maximum likelihood. That recipe — the **GLM** — handles counts, rates, proportions, and skewed positives with the same coefficient-interpretation and inference machinery as Part 2.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+A GLM has three ingredients:
+
+1. **Random component** — the response's distribution family: Gaussian (linear regression), Binomial (logistic), **Poisson** (counts), Gamma (positive skewed), etc.
+2. **Systematic component** — the linear predictor $\eta = \beta_0 + \beta_1 x_1 + \cdots$
+3. **Link function** — $g(\mu) = \eta$, connecting the mean μ to the predictor. Identity for Gaussian; **logit** for Binomial; **log** for Poisson.
+
+The log link makes coefficients *multiplicative*: $e^{\beta}$ is a **rate ratio** per unit of x. Fitting maximizes the family's likelihood (IRLS again — same engine as [3.3](03-3-logistic-regression.qmd)).
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(0)
+n = 300
+x = rng.uniform(0, 10, n)                      # e.g., dose
+true_rate = np.exp(0.5 + 0.25 * x)             # λ = e^{0.5 + 0.25x}
+y = rng.poisson(true_rate)                     # counts
+
+X = sm.add_constant(x)
+glm = sm.GLM(y, X, family=sm.families.Poisson()).fit()
+print(f"intercept: true 0.50, fit {glm.params[0]:.3f}")
+print(f"log-rate slope: true 0.25, fit {glm.params[1]:.3f}")
+print(f"rate ratio per +1 dose: {np.exp(glm.params[1]):.3f} (true {np.exp(0.25):.3f})")
+```
+
+Why not just OLS on counts? Three failures, demonstrated live:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import statsmodels.api as sm
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(1)
+x = np.r_[rng.uniform(0, 10, 150)]
+y = rng.poisson(np.exp(0.5 + 0.25 * x))
+
+ols = sm.OLS(y, sm.add_constant(x)).fit()
+glm = sm.GLM(y, sm.add_constant(x), family=sm.families.Poisson()).fit()
+
+xg = np.linspace(0, 10, 200)
+fig, ax = plt.subplots(figsize=(7, 3.4))
+ax.scatter(x, y, s=12, alpha=0.5, label="counts")
+ax.plot(xg, ols.params[0] + ols.params[1] * xg, "r-", lw=2, label="OLS (can go < 0)")
+ax.plot(xg, np.exp(glm.params[0] + glm.params[1] * xg), "g-", lw=2, label="Poisson GLM")
+ax.axhline(0, color="gray", lw=0.8)
+ax.set(xlabel="x", ylabel="count", title="OLS vs Poisson GLM on counts")
+ax.legend()
+plt.show()
+print(f"OLS predictions below 0 on {100*(ols.params[0] + ols.params[1]*xg[xg>10.5] < 0).mean():.0f}% of the far range")
+print(f"residual SD low-x half: {ols.resid[x < 5].std():.2f}, high-x half: {ols.resid[x >= 5].std():.2f} (grows with mean)")
+```
+
+**Offsets** — exposures enter as a fixed coefficient: counts per *differing library sizes* model as $\log \lambda = \eta + \log(\text{depth})$, i.e., modeling the *rate* not the raw count:
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(2)
+n = 200
+x = rng.uniform(0, 10, n)
+depth = rng.uniform(0.5, 2.0, n) * 1e4          # sequencing depth per sample
+true_rate_per_read = np.exp(-9 + 0.3 * x)        # events per read
+y = rng.poisson(true_rate_per_read * depth)
+
+X = sm.add_constant(np.c_[x])
+glm = sm.GLM(y, X, family=sm.families.Poisson(), offset=np.log(depth)).fit()
+print(f"slope: true 0.30, fit {glm.params[1]:.3f}")
+print(f"log-rate intercept: true -9, fit {glm.params[0]:.2f}")
+```
+
+## 2. Concept Questions
+
+1. Name the three ingredients of a GLM, and identify all three for (a) linear regression, (b) logistic regression, (c) Poisson regression.
+2. β = 0.25 with a log link. State the effect in rate-ratio language, and in plain words if the baseline rate is 2.0.
+3. Why does the Poisson assumption Var = mean matter *inferentially* — and what is the standard diagnostic when counts are more spread than that?
+4. What does an offset do, when is it required, and why is log(depth) the offset rather than depth itself?
+5. Your response is a *proportion* of successes out of varying n per row. Which GLM family and what structural detail of the fit?
+
+<details>
+<summary>Answers</summary>
+
+1. (a) Gaussian; η = β₀+β₁x; identity. (b) Bernoulli/Binomial; η; logit. (c) Poisson; η; log. Every classical regression is this triple — memorize the table, and new response types stop being new methods.
+2. Each +1 in x multiplies the mean rate by e^0.25 ≈ 1.284 (+28.4%). At baseline 2.0: new rate ≈ 2.57 — the *absolute* jump grows with the baseline, which is exactly what multiplicative language encodes.
+3. Poisson's Var = mean enters the likelihood AND the SEs: if real counts are overdispersed (Var ≫ mean, near-universal in biology), GLM SEs are too small and p-values overconfident — by the same mechanism as [2.10](../part-02-linear-regression/02-10-regression-assumptions.qmd)'s equal-variance violation. Diagnostic: Pearson χ²/df ≫ 1; remedies: quasi-Poisson (robust SEs) or negative binomial — the default in differential-expression pipelines (Part 12's T2 workflow).
+4. An offset is a predictor with its coefficient *fixed at 1*: log λ = η + log(depth) ⇒ λ = depth × e^η — modeling rate per unit exposure. Required whenever observation effort/size varies (depths, person-years, areas). The log appears because the model is multiplicative: rate × exposure = count on the log scale becomes addition.
+5. **Binomial with a logit link, as a 2-column response (successes, failures)** — `sm.GLM(y, X, family=sm.families.Binomial())` with y = [successes, failures] per row — so each row's variance follows its own n. A plain 0/1 logistic ([3.3](03-3-logistic-regression.qmd)) is the n = 1 special case.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+rng = np.random.default_rng(3)
+x = rng.uniform(0, 5, 200)
+y = rng.poisson(np.exp(1 + 0.4 * x))
+fit = sm.GLM(y, sm.add_constant(x), family=sm.families.Poisson()).fit()
+print(fit.params.round(3))
+print("fitted mean at x=0:", np.exp(fit.params[0]).round(3), "(≈ e^1 = 2.72)")
+print(f"deviance: {fit.deviance:.2f} on {fit.df_resid:.0f} df -> ratio {fit.deviance/fit.df_resid:.2f}")
+```
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+rng = np.random.default_rng(4)
+# overdispersion in action: Var = 3 × mean
+x = rng.uniform(0, 5, 400)
+lam = np.exp(1 + 0.4 * x)
+y = rng.negative_binomial(np.ones_like(lam) * 1.5, 1.5 / (1.5 + lam)).astype(int)
+pois = sm.GLM(y, sm.add_constant(x), family=sm.families.Poisson()).fit()
+print(f"Poisson Pearson chi2/df = {pois.pearson_chi2 / pois.df_resid:.2f}  (>>1 = overdispersed)")
+print(f"its slope SE: {pois.bse[1]:.4f} — likely too small")
+```
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+# Gamma GLM for strictly-positive skewed responses
+rng = np.random.default_rng(5)
+x = rng.uniform(0, 10, 300)
+y = rng.gamma(shape=2, scale=np.exp(0.1 + 0.1 * x) / 2)
+g = sm.GLM(y, sm.add_constant(x), family=sm.families.Gamma(
+    link=sm.families.links.Log())).fit()
+print(f"log-link Gamma slope: {g.params[1]:.3f} (truth 0.1)")
+print("OLS would allow negative predictions; Gamma keeps mu > 0")
+```
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+# Binomial GLM with grouped trials: the proportion response
+rng = np.random.default_rng(6)
+n = 12                                   # wells per dose
+doses = np.repeat(np.linspace(0, 10, 8), 50)
+p = 1 / (1 + np.exp(-(doses - 5) * 0.8))
+deaths = rng.binomial(n, p)
+resp = np.c_[deaths, n - deaths]
+fit = sm.GLM(resp, sm.add_constant(doses), family=sm.families.Binomial()).fit()
+print(f"logit slope: {fit.params[1]:.3f} (truth 0.8)")
+print(f"LD50 (p=0.5) dose: {-fit.params[0]/fit.params[1]:.2f} (truth 5.0)")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Recover a rate model end-to-end: simulate hospital readmissions where each patient has an exposure (days, 1–30) and a covariate x (age, 30–80) with log-rate = −4 + 0.03·age. Fit the Poisson GLM with offset, interpret both parameters in plain words, predict the expected readmission count for a 65-year-old admitted for 10 days, and verify against the true rate.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(7)
+n = 500
+age = rng.uniform(30, 80, n)
+days = rng.uniform(1, 30, n)
+log_rate = -4 + 0.03 * age
+y = rng.poisson(np.exp(log_rate) * days)
+
+X = sm.add_constant(age)
+fit = sm.GLM(y, X, family=sm.families.Poisson(), offset=np.log(days)).fit()
+print(f"intercept: true -4.00, fit {fit.params[0]:.2f}")
+print(f"age slope: true  0.03, fit {fit.params[1]:.4f}")
+print(f"rate ratio per +10 yrs: {np.exp(10 * fit.params[1]):.3f}")
+
+pred = fit.predict(np.array([[1.0, 65.0]]), offset=np.log([10.0]))[0]
+truth = np.exp(-4 + 0.03 * 65) * 10
+print(f"predicted readmissions (65y, 10d): {pred:.2f}; truth {truth:.2f}")
+```
+
+Reading: baseline rate ≈ e^−4 ≈ 0.018/day at age 30 (intercept's reference); each decade multiplies the daily rate by ≈ 1.35. The offset does the bookkeeping for follow-up time — the model speaks in *rates*, the data arrive as *counts*.
+</details>
+
+**Exercise 2.** Overdispersion forensics: generate counts with Var = 4× mean (negative binomial), fit (a) Poisson GLM, (b) quasi-Poisson (`sm.families.Poisson()` + `scale='X2'` — Pearson-scaled SEs), (c) negative binomial GLM. Compare the slope estimates (all ≈ unbiased) and the three SEs, and report each model's p-value for the slope. Which models "know" the truth about uncertainty?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(8)
+n = 300
+x = rng.uniform(0, 5, n)
+lam = np.exp(0.5 + 0.3 * x)
+y = rng.negative_binomial(1.0, 1.0 / (1.0 + lam)).astype(int)   # Var ≈ mean + mean²
+
+pois = sm.GLM(y, sm.add_constant(x), family=sm.families.Poisson()).fit()
+quasi = sm.GLM(y, sm.add_constant(x), family=sm.families.Poisson()).fit(
+    scale="X2")                                                  # Pearson-scaled
+negbin = sm.GLM(y, sm.add_constant(x),
+                family=sm.families.NegativeBinomial(alpha=1.0)).fit()
+
+for name, f in [("Poisson", pois), ("quasi-Poisson", quasi), ("neg-binomial", negbin)]:
+    print(f"{name:14s} slope {f.params[1]:.4f}  SE {f.bse[1]:.4f}  p {f.pvalues[1]:.4f}")
+print(f"dispersion (Pearson chi2/df) = {pois.pearson_chi2/pois.df_resid:.2f}")
+```
+
+All three slopes agree (the *mean model* is fine); the Poisson SE is the liar — small p-value manufactured by pretending Var = mean. Quasi-Poisson (scaled SEs) and negative binomial (explicit variance function) restore honest uncertainty. In biology, *always* run the dispersion diagnostic before trusting a Poisson p-value.
+</details>
+
+**Exercise 3.** GLM diagnostics, Poisson edition: for the Exercise 1 setup, build the randomized-quantile or deviance-residual diagnostics: plot deviance residuals vs fitted and vs age; QQ-plot them; verify approximate normality of deviance residuals under correct specification. Then inject a mis-fit (drop the offset) and show which diagnostic screams first.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import statsmodels.api as sm
+import matplotlib.pyplot as plt
+from scipy import stats
+
+rng = np.random.default_rng(7)
+n = 500
+age = rng.uniform(30, 80, n)
+days = rng.uniform(1, 30, n)
+y = rng.poisson(np.exp(-4 + 0.03 * age) * days)
+
+good = sm.GLM(y, sm.add_constant(age), family=sm.families.Poisson(),
+              offset=np.log(days)).fit()
+bad = sm.GLM(y, sm.add_constant(age), family=sm.families.Poisson()).fit()  # no offset!
+
+fig, axes = plt.subplots(1, 3, figsize=(7.5, 3))
+for ax, (f, name) in zip(axes[:2], [(good, "with offset"), (bad, "offset dropped")]):
+    dr = f.resid_deviance
+    ax.scatter(f.fittedvalues, dr, s=8, alpha=0.5)
+    ax.set_title(f"{name}\ndispersion {np.sum(dr**2)/f.df_resid:.2f}")
+stats.probplot(good.resid_deviance, plot=axes[2])
+axes[2].set_title("deviance resid QQ (good fit)")
+fig.tight_layout()
+plt.show()
+```
+
+With the offset, deviance residuals look like N(0,1) noise (dispersion ≈ 1); without it, dispersion explodes (counts without their exposure correction look wildly inconsistent) and the residual-vs-fitted panel develops structure. The first diagnostic to scream: the dispersion ratio — it is the Poisson world's heteroscedasticity check ([2.10](../part-02-linear-regression/02-10-regression-assumptions.qmd) analog).
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Log-link counts and zero observations**: log(0) never appears *in the model* (the link acts on the mean, not on y) — but a *manual* log(y+1) OLS "fix" changes the estimand and breaks at different y's. Model the counts with the right likelihood instead.
+- **Overdispersion is the default state of biological counts** — quasi-Poisson or negative binomial before any p-value is read (Exercise 2); the Poisson is a special-case claim, not a default.
+- **Rate ratios vs risk ratios**: with log links, e^β multiplies *rates*; converting to risk differences/ratios needs the baseline and horizon — the same translation discipline as [3.3](03-3-logistic-regression.qmd)'s odds ratios.
+- **Offsets vs exposure covariates**: an offset has coefficient fixed at 1; leaving exposure out entirely (or as a free coefficient) answers a different question — model the design, don't average over it.
+- **Complete separation's cousin — zero cells**: grouped binomial tables with all-success/all-failure strata destabilize fits; the same regularization/futility logic as [3.3 Exercise 2](03-3-logistic-regression.qmd).
+- **GLM SEs are inverse-Hessian (asymptotic)**: valid for n reasonably large; small-sample counts (few events) need exact/penalized methods — the rare-event caveat again.
+
+### Read & Refactor AI Code
+
+This AI-generated count analysis has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(9)
+n = 250
+dose = rng.uniform(0, 10, n)
+depth = rng.uniform(1e3, 5e3, n)
+y = rng.poisson(np.exp(-2 + 0.3 * dose) * depth / 1000)
+
+# BUG 1: log-transform counts and run OLS
+fit_log_ols = sm.OLS(np.log(y + 1), sm.add_constant(np.c_[dose, depth])).fit()
+print("log-count OLS slope (dose):", fit_log_ols.params[1].round(3))
+
+# BUG 2: Poisson GLM ignoring depth
+pois_bad = sm.GLM(y, sm.add_constant(dose), family=sm.families.Poisson()).fit()
+print("GLM slope w/o offset:", pois_bad.params[1].round(3), "SE:", pois_bad.bse[1].round(4))
+
+# BUG 3: overdispersion ignored
+print("p-value:", f"{pois_bad.pvalues[1]:.6f}", "(trusted without dispersion check)")
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **log(y+1) OLS**: changes the estimand (now modeling log-counts, with the +1 bias), mishandles the count nature, and mixes depth in as a *free* coefficient on the wrong scale. Model rates with log link + offset.
+2. **Depth ignored**: dose effect is confounded with sequencing effort — samples with higher depth have more counts regardless of dose. Fix: `offset=np.log(depth)` (or include log-depth as a covariate with free coefficient if effort itself needs modeling).
+3. **Dispersion unchecked**: with Poisson SEs, significance claims are premature. Run Pearson chi²/df, scale or go negative binomial if ≫ 1.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(9)
+n = 250
+dose = rng.uniform(0, 10, n)
+depth = rng.uniform(1e3, 5e3, n)
+y = rng.poisson(np.exp(-2 + 0.3 * dose) * depth / 1000)
+
+fit = sm.GLM(y, sm.add_constant(np.c_[dose]), family=sm.families.Poisson(),
+             offset=np.log(depth / 1000)).fit()
+print(f"rate-ratio per dose unit: {np.exp(fit.params[1]):.3f} (true {np.exp(0.3):.3f})")
+print(f"dispersion: {fit.pearson_chi2 / fit.df_resid:.2f}")
+
+if fit.pearson_chi2 / fit.df_resid > 1.5:
+    robust = fit.get_robustcov_results()
+    print("overdispersed -> robust p:", f"{robust.pvalues[1]:.5f}")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Derive the Poisson GLM's IRLS update and show its working response is $z = \eta + (y - \mu)/\mu$ and its weight is $w = \mu$. Use this to explain (a) why zero-count observations get *high* weight in the fit relative to OLS's treatment of residuals, and (b) why the variance structure (w = μ) automatically produces the funnel-shaped raw residuals of Exercise-drill 2 — and why that funnel is *correct behavior*, not a violation.
+
+<details>
+<summary>Hint</summary>
+
+For Poisson, Var(y) = μ; the IRLS weight is Var⁻¹ evaluated at the current μ; the working response is the linearization of the link.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+With g = log, g′(μ) = 1/μ: working response z = g(μ) + (y − μ)g′(μ) = η + (y−μ)/μ; IRLS weight w = 1/(g′(μ)²Var) = μ. (a) A zero count at μ = 4 gives working residual (0−4)/4 = −1 — the same pull as a count of 8 (+1): the link scales residuals by 1/μ, so *relative* misses weigh equally; OLS would treat the count-0 miss (−4) as four times the count-8 miss — inverting the information content for heteroscedastic counts. (b) Raw residuals y−μ have SD √μ by construction: the funnel in raw residuals is the model *passing* its own variance assumption; only deviance/Pearson residuals (normalized) should look homoscedastic. Diagnosing raw GLM residuals with OLS eyes inverts the verdict.
+</details>
+
+**Q2.** A colleague fits a Poisson GLM to single-cell UMI counts (dropped-out, overdispersed, zero-inflated) and reports significant genes via Poisson p-values. Design the critique experiment: simulate zero-inflated negative-binomial counts with (a) no real genes and (b) 100 truly differential genes; run the Poisson pipeline; report false-positive rate and sensitivity. Then state which layer of the pipeline each problem (overdispersion, zero-inflation) belongs to, and what the standard production answer is (negative binomial with empirical dispersion — the DESeq2/edgeR view, previewing Part 12's T2 workflow).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(10)
+n = 100
+group = rng.integers(0, 2, n)
+base = rng.lognormal(0, 1, 40)                       # 40 genes
+
+def sim(zf_genes=0):
+    Y = np.zeros((n, 40), dtype=int)
+    truth = np.zeros(40, dtype=bool)
+    truth[:zf_genes] = True
+    for g in range(40):
+        lam = base[g] * np.exp(0.8 * (group * truth[g]))
+        size = 0.5                                    # heavy overdispersion
+        prob = size / (size + lam)
+        Y[:, g] = rng.negative_binomial(size, prob)
+        drop = rng.uniform(0, 1, n) < 0.2             # zero inflation
+        Y[drop, g] = 0
+    return Y, truth
+
+fp_counts, tp_counts = 0, 0
+for rep in range(20):
+    Y, truth = sim(zf_genes=10)
+    fp = tp = 0
+    for g in range(40):
+        fit = sm.GLM(Y[:, g], sm.add_constant(group),
+                     family=sm.families.Poisson()).fit()
+        if fit.pvalues[1] < 0.05:
+            if truth[g]:
+                tp += 1
+            else:
+                fp += 1
+    fp_counts += fp; tp_counts += tp
+print(f"over 20 sims: null genes flagged {fp_counts} times "
+      f"(FPR per test ≈ {fp_counts / (20 * 30):.3f})")
+print(f"true genes detected {tp_counts}/200 (sensitivity {tp_counts/200:.2f})")
+```
+
+The Poisson pipeline flags null genes far above 5% (overdispersion + zero-inflation inflate the statistic) while missing many true effects. Layering: overdispersion is a *variance-function* misspecification (fix: NB/quasi-likelihood); zero-inflation is a *mean-process* mixture (fix: ZINB hurdle models, or aggregates/normalization strategies). Production pipelines (DESeq2/edgeR) use empirical-Bayes negative binomial dispersions across genes — the principle: share variance information across the feature family rather than trusting per-gene Poisson. Full treatment in [12.6](../part-12-multiple-testing-bioinformatics/12-6-differential-expression.qmd) (T2).
+</details>
+
+## 6. Complex Questions
+
+**C1 (GLM × [3.3 logistic](03-3-logistic-regression.qmd) × [2.7 interaction](../part-02-linear-regression/02-7-interaction-terms.qmd)).** Poisson model a count response with treatment × sex interaction on the log-rate scale. Show numerically that the interaction coefficient is a *ratio of rate ratios* — and that a significant multiplicative interaction can correspond to nearly identical *absolute* rate differences at low baselines. Produce the two-panel plot (rate ratio and rate difference by baseline) that would let a reviewer see both languages at once.
+
+**C2 (GLM × [2.4 model accuracy](../part-02-linear-regression/02-4-accuracy-of-model.qmd) × [4.3 CV](../part-04-validation-model-selection/04-3-cross-validation.qmd) preview).** Define and compute an out-of-sample deviance (or Poisson log-loss) for the readmission model of Exercise 1 across 5 folds, and compare in-sample vs CV deviance. What plays the role of R² here (hint: compare against the intercept-only GLM's deviance)? This "explained deviance" is how GLM model accuracy is reported — practice computing it honestly.
+
+## 7. Summary
+
+- GLM = family × linear predictor × link; logistic and linear regression are members; Poisson (counts, log link) is the workhorse you didn't know you needed.
+- e^β = rate ratio; offsets convert counts to rates when exposure varies.
+- OLS on counts predicts negatives, misweights residuals, and misstates variance — the likelihood is the fix, not a transform.
+- Overdispersion (Pearson χ²/df ≫ 1) is biology's default; quasi-Poisson/negative binomial before believing p-values.
+- Diagnostics: deviance residuals (not raw), dispersion ratio as the first alarm.
+- p ≫ n and rare events strain GLM SEs — regularization and exact methods await in Part 5.
+- Every model so far needs the same referee: how well does it predict *new* data, really? Part 4 begins: [4.1 The generalization problem](../part-04-validation-model-selection/04-1-generalization-problem.qmd).

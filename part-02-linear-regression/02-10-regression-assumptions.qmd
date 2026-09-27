@@ -1,0 +1,408 @@
+---
+title: "2.10 Regression Assumptions & Diagnostics"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scipy
+    - statsmodels
+    - patsy
+    - matplotlib
+---
+
+Every SE, t-test, CI, and F-test in Part 2 rests on assumptions: **L**inearity, **I**ndependence, **N**ormality, **E**qual variance (of errors). Violations don't just "break the model" abstractly — each one breaks a *specific* thing (usually inference, sometimes prediction), and each has a signature plot. This page makes the diagnostics reflexive.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+The assumptions, what each buys, and what its violation costs:
+
+| Assumption | Formal statement | Needed for | Violation's cost |
+|---|---|---|---|
+| **Linearity** | $\mathbb{E}[\varepsilon \mid X] = 0$ | unbiased β̂, meaningful coefficients | biased estimates; everything downstream is about the wrong model |
+| **Independence** | errors uncorrelated across rows | valid SEs, tests, CIs | SEs wildly wrong (often underestimated); p-values meaningless |
+| **Normality** | $\varepsilon \sim N(0, \sigma^2)$ | exact t/F reference distributions | only mild at large n (CLT); matters at small n and for prediction intervals |
+| **Equal variance** | $\text{Var}(\varepsilon \mid X) = \sigma^2$ | SEs, exact tests | wrong SEs; OLS no longer most efficient |
+
+Key triage: **prediction needs linearity** (systematic structure captured); **inference needs all four**.
+
+The diagnostic quartet, on one simulated misspecification each:
+
+```{pyodide}
+#| fig-width: 8.5
+#| fig-height: 6.5
+import numpy as np
+import statsmodels.api as sm
+import matplotlib.pyplot as plt
+from scipy import stats
+
+rng = np.random.default_rng(0)
+n = 120
+x = rng.uniform(0, 10, n)
+
+datasets = {
+    "well-specified":  2 + 0.7 * x + rng.normal(0, 1.5, n),
+    "nonlinear":       2 + 0.7 * x + 0.12 * (x - 5)**2 + rng.normal(0, 1.0, n),
+    "heteroscedastic": 2 + 0.7 * x + rng.normal(0, 1, n) * (0.3 + 0.25 * x),
+    "non-normal":      2 + 0.7 * x + rng.standard_t(2, n),
+}
+
+fig, axes = plt.subplots(4, 3, figsize=(8.5, 10))
+for row, (name, y) in enumerate(datasets.items()):
+    fit = sm.OLS(y, sm.add_constant(x)).fit()
+    resid, fitted = fit.resid, fit.fittedvalues
+
+    axes[row, 0].scatter(fitted, resid, s=12, alpha=0.6)
+    axes[row, 0].axhline(0, color="red", lw=0.8)
+    axes[row, 0].set_title(f"{name}\nresiduals vs fitted")
+
+    stats.probplot(resid, dist="norm", plot=axes[row, 1])
+    axes[row, 1].set_title("QQ plot")
+
+    axes[row, 2].scatter(fitted, np.sqrt(np.abs(resid / resid.std())), s=12, alpha=0.6)
+    axes[row, 2].set_title("scale-location")
+
+fig.tight_layout()
+plt.show()
+```
+
+Reading guide: **residuals-vs-fitted** should show a structureless horizontal band (curvature ⇒ nonlinearity; funnel ⇒ heteroscedasticity); **QQ** should hug the diagonal (S-curves ⇒ heavy tails/skew); **scale-location** should be flat (trend ⇒ variance grows with the mean).
+
+## 2. Concept Questions
+
+1. Which assumption does a U-shaped residuals-vs-fitted plot violate, and what's the two-column fix?
+2. Your errors are independent but *heteroscedastic*. Are your β̂ biased? Your SEs? Name the one-line remedy that fixes the SEs.
+3. Why is normality of errors the *least* worrying of the four at n = 500, but a genuine worry at n = 8?
+4. Residuals are correlated in time order (a drifting instrument). Which printed numbers become lies, and does the slope estimate itself have to be wrong?
+5. Why must diagnostics use *residuals*, never the raw y?
+
+<details>
+<summary>Answers</summary>
+
+1. **Linearity** (systematic curvature left unmodeled). Fix: add $x^2$ (or a spline basis) — two columns in, assumption restored; refit and re-diagnose ([2.8](02-8-nonlinear-transformations.qmd)).
+2. β̂: **unbiased** (linearity intact — OLS is still the right *center*). SEs: **wrong** (they assume one σ). Remedy: heteroscedasticity-robust SEs — `fit(cov_type="HC3")` — or model the variance (GLM, [3.6](../part-03-classification-glm/03-6-generalized-linear-models.qmd)).
+3. At large n, the CLT makes t/F statistics approximately valid regardless of error shape (influence of each single point vanishes). At n = 8, one outlier *is* the distribution — the t-reference is fiction, CIs undercover, and no CLT rescue exists.
+4. Every SE, t, p, CI — they all assume independent errors; positive serial correlation makes the effective sample size much smaller than n (n = 200 correlated readings ≈ far fewer independent ones). The slope estimate can remain unbiased but its *precision claim* is fantasy.
+5. Raw y mixes signal f(x) with error: a "non-normal y" can come entirely from a skewed x-distribution with perfectly normal errors. Residuals isolate ε̂ — the only thing the assumptions speak about.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+rng = np.random.default_rng(1)
+x = rng.uniform(0, 10, 100)
+y = 2 + 0.5 * x + 0.3 * (x - 5)**2 + rng.normal(0, 1, 100)   # quadratic truth
+fit_lin = sm.OLS(y, sm.add_constant(x)).fit()
+corr_resid_x2 = np.corrcoef(fit_lin.resid, x**2)[0, 1]
+print("corr(residuals, x²):", round(corr_resid_x2, 3), " <- structure left behind")
+fit_quad = sm.OLS(y, sm.add_constant(np.c_[x, x**2])).fit()
+print("after adding x²: corr =", round(np.corrcoef(fit_quad.resid, x**2)[0, 1], 3))
+```
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+from scipy import stats
+rng = np.random.default_rng(2)
+x = rng.uniform(0, 10, 60)
+y_t = 1 + 0.5 * x + rng.standard_t(2, 60)          # heavy tails
+fit = sm.OLS(y_t, sm.add_constant(x)).fit()
+sw = stats.jarque_bera(fit.resid)
+print(f"Jarque-Bera p = {sw.pvalue:.4f}  <- flags non-normal residuals")
+sh = stats.shapiro(fit.resid)
+print(f"Shapiro-Wilk p = {sh.pvalue:.4f}")
+```
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+rng = np.random.default_rng(3)
+n = 150
+x = rng.uniform(0, 10, n)
+y = 1 + 0.5 * x + rng.normal(0, 1, n) * (0.2 + 0.3 * x)     # funnel
+fit = sm.OLS(y, sm.add_constant(x)).fit()
+lo, hi = x < 5, x >= 5
+print("residual SD low x-half: ", round(fit.resid[lo].std(), 3))
+print("residual SD high x-half:", round(fit.resid[hi].std(), 3))
+print("robust SE (HC3):", round(fit.get_robustcov_results(cov_type="HC3").bse[1], 4))
+print("classical SE:   ", round(fit.bse[1], 4))
+```
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+rng = np.random.default_rng(4)
+# serial correlation: SEs lie
+n = 200
+e = np.zeros(n)
+for t in range(1, n):
+    e[t] = 0.8 * e[t-1] + rng.normal(0, 1)        # AR(1) errors
+x = rng.uniform(0, 10, n)
+y = 1 + 0.5 * x + e
+fit = sm.OLS(y, sm.add_constant(x)).fit()
+naive = fit.bse[1]
+from statsmodels.stats.sandwich_covariance import cov_hac
+import numpy.linalg as la
+X = sm.add_constant(x)
+V_hac = cov_hac(fit)
+print(f"naive SE: {naive:.4f}   HAC (Newey-West) SE: {np.sqrt(V_hac[1,1]):.4f}")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Build `diagnose(fit)` — a function taking a statsmodels fit and returning a dict of verdicts: residual–fitted curvature score (correlation of residuals with fitted²), funnel score (Spearman |ρ| of |residuals| vs fitted), and normality p-value (Jarque–Bera). Run it on the four synthetic datasets from Section 1 and confirm it flags the right problem in each. What can a verdict dictionary *not* tell you that the plot can?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+from scipy import stats
+
+def diagnose(fit):
+    r, f = fit.resid, fit.fittedvalues
+    return {
+        "curvature": round(float(np.corrcoef(r, f**2)[0, 1]), 3),
+        "funnel(|r| vs fitted)": round(float(stats.spearmanr(np.abs(r), f).statistic), 3),
+        "JB normality p": round(float(stats.jarque_bera(r).pvalue), 4),
+    }
+
+rng = np.random.default_rng(0)
+n = 120
+x = rng.uniform(0, 10, n)
+cases = {
+    "clean": 2 + 0.7 * x + rng.normal(0, 1.5, n),
+    "nonlinear": 2 + 0.7 * x + 0.12 * (x - 5)**2 + rng.normal(0, 1, n),
+    "hetero": 2 + 0.7 * x + rng.normal(0, 1, n) * (0.3 + 0.25 * x),
+    "heavy-tail": 2 + 0.7 * x + rng.standard_t(2, n),
+}
+for name, y in cases.items():
+    print(f"{name:11s}", diagnose(sm.OLS(y, sm.add_constant(x)).fit()))
+```
+
+The scores separate the cases (curvature high only for "nonlinear", funnel only for "hetero", JB only for "heavy-tail"). What the dict can't show: *patterns a scalar compresses away* — e.g. one wild leverage point inside a clean cloud scores fine numerically but is obvious in the plot, and residual-vs-fitted plots reveal *which* region of x misbehaves. Numbers triage; eyes diagnose.
+</details>
+
+**Exercise 2.** The repair menu, demonstrated: for each mis-specified fit below, apply the indicated fix and re-run the diagnostic that failed. (a) quadratic truth + linear model → add x²; (b) heteroscedastic → log-transform y (verify the funnel flattens) and compare HC3 SEs; (c) heavy-tailed → report the HC3 SE alongside classical and note which coefficients lose significance.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+from scipy import stats
+
+rng = np.random.default_rng(5)
+n = 150
+x = rng.uniform(0, 10, n)
+
+# (a) curvature
+y_a = 2 + 0.5 * x + 0.15 * (x - 5)**2 + rng.normal(0, 0.8, n)
+f_lin = sm.OLS(y_a, sm.add_constant(x)).fit()
+f_quad = sm.OLS(y_a, sm.add_constant(np.c_[x, x**2])).fit()
+print("(a) curvature corr: linear", round(np.corrcoef(f_lin.resid, x**2)[0,1], 3),
+      "-> quadratic", round(np.corrcoef(f_quad.resid, x**2)[0,1], 3))
+
+# (b) funnel -> log y
+y_b = np.exp(1 + 0.08 * x + rng.normal(0, 0.8, n) * (0.2 + 0.05 * x))
+f_raw = sm.OLS(y_b, sm.add_constant(x)).fit()
+f_log = sm.OLS(np.log(y_b), sm.add_constant(x)).fit()
+funnel_raw = stats.spearmanr(np.abs(f_raw.resid), f_raw.fittedvalues).statistic
+funnel_log = stats.spearmanr(np.abs(f_log.resid), f_log.fittedvalues).statistic
+print(f"(b) funnel: raw {funnel_raw:.3f} -> log {funnel_log:.3f}")
+
+# (c) heavy tails -> robust SEs
+y_c = 1 + 0.5 * x + rng.standard_t(2, n)
+f_c = sm.OLS(y_c, sm.add_constant(x)).fit()
+rob = f_c.get_robustcov_results(cov_type="HC3")
+sig_classical = (f_c.pvalues < 0.05)
+sig_robust = (rob.pvalues < 0.05)
+print(f"(c) significant coefficients: classical {sig_classical.sum()}, robust {sig_robust.sum()}")
+```
+
+Each repair targets the assumption its diagnostic flagged — and the diagnostics *after* repair verify the fix rather than trusting it.
+</details>
+
+**Exercise 3.** **Leverage vs outlier.** Construct a 30-point dataset where one point has extreme x (high leverage, y consistent with the line) and another has extreme y at typical x (outlier, low leverage). Fit with and without each point; report slope changes. Which point is more dangerous to the *slope*? Then connect to Cook's distance (`get_influence().cooks_distance[0]`) — which point does it flag?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(6)
+x = rng.uniform(0, 10, 30)
+y = 1 + 0.6 * x + rng.normal(0, 1, 30)
+x_l, y_l = 25.0, 1 + 0.6 * 25                       # high leverage, on the line
+x_o, y_o = 5.0, 1 + 0.6 * 5 + 12                    # outlier, off the line
+
+def slope(xs, ys):
+    return sm.OLS(ys, sm.add_constant(xs)).fit().params[1]
+
+base = slope(x, y)
+print(f"baseline slope:           {base:.3f}")
+print(f"drop leverage point:      {slope(np.delete(x, 0), np.delete(y, 0)):.3f}")
+print(f"drop outlier point:       {slope(np.delete(x, 5), np.delete(y, 5)):.3f}")
+
+xy_l = np.r_[x, x_l]; yy_l = np.r_[y, y_l]
+xy_o = np.r_[x, x_o]; yy_o = np.r_[y, y_o]
+print(f"add leverage point:       {slope(xy_l, yy_l):.3f}")
+print(f"add outlier point:        {slope(xy_o, yy_o):.3f}")
+
+infl = sm.OLS(yy_o, sm.add_constant(xy_o)).fit().get_influence()
+cd = infl.cooks_distance[0]
+print("Cook's d flags index:", int(np.argmax(cd)), "(the outlier at index 30)")
+```
+
+Leverage without discrepant y barely moves the fit (it *agrees* with the line); an outlier at ordinary x drags the line locally but has limited reach. The nightmare is both at once (high leverage AND off-line) — Cook's distance combines exactly those two ingredients, which is why it, not raw residual size, is the deletion diagnostic.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Diagnostics are for the *training* residuals, decisions are for the *study*** — after repair (transform, robust SEs), refit and *re-diagnose*; one pass is not a workflow.
+- **Testing normality with p-values on residuals** (Shapiro/JB) is a weak tool: at small n it lacks power, at large n it flags trivial departures. The QQ plot, read as a shape, is more informative than any single p-value.
+- **Independence is the assumption you cannot plot away** — it comes from the *design* (time order, clustering, relatedness). Residual-vs-order plots and HAC/mixed models (the drill) manage known structure; unknown structure needs better data.
+- **Heteroscedasticity has two fixes with different goals**: robust SEs fix *your uncertainty about β̂* (inference), WLS/GLM/log-transform fix *efficiency and prediction intervals* (the model). Pick by goal.
+- **Leverage ≠ outlier ≠ influential** (Exercise 3): check Cook's distance (or DFFITS) rather than residual magnitude, especially before deleting anything — deletion is a modeling decision to report, not hygiene.
+- **Don't diagnose the test set**: split integrity ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd)) applies — diagnostics belong to the modeling loop on training data; the test set is spent once.
+- **Multicollinearity** ([2.5](02-5-multiple-linear-regression.qmd)) is sometimes listed as a fifth assumption — it is not an assumption violation (the model can be true!) but a data condition that inflates SEs; diagnose with VIFs, not residual plots.
+
+### Read & Refactor AI Code
+
+This AI-generated validation script has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+from scipy import stats
+
+rng = np.random.default_rng(7)
+n = 100
+x = rng.uniform(0, 10, n)
+y = 2 + 0.5 * x + 0.1 * (x - 5)**2 + rng.normal(0, 1, n)   # quadratic truth
+fit = sm.OLS(y, sm.add_constant(x)).fit()
+
+# BUG 1: normality tested on raw y
+print("normality of y:", stats.jarque_bera(y).pvalue.round(4))
+
+# BUG 2: heteroscedasticity checked by correlating residuals with y
+print("corr(resid, y):", np.corrcoef(fit.resid, y)[0, 1].round(3),
+      "-> 'no funnel'")
+
+# BUG 3: p-values trusted after obvious misspecification
+print("slope p-value:", f"{fit.pvalues[1]:.5f}", "-> 'effect confirmed'")
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **Normality of y ≠ normality of ε** — y's distribution is dominated by f(x)'s shape; the assumption concerns residuals only. (Here x is uniform, y is U-shaped — the test "fails" for a reason irrelevant to the model.)
+2. **Funnel signature is |residuals| vs fitted** — correlation of signed residuals with y mostly re-detects the slope, not variance structure. Fix: Spearman(|resid|, fitted), or compare residual SD across fitted-value halves.
+3. **Inference on a visibly mis-specified model**: the quadratic truth leaves systematic curvature; the classical p-value's null distribution is wrong. Fix the specification first, *then* read tests.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+from scipy import stats
+
+rng = np.random.default_rng(7)
+n = 100
+x = rng.uniform(0, 10, n)
+y = 2 + 0.5 * x + 0.1 * (x - 5)**2 + rng.normal(0, 1, n)
+
+fit_lin = sm.OLS(y, sm.add_constant(x)).fit()
+print("residual normality p:", stats.jarque_bera(fit_lin.resid).pvalue.round(4))
+print("funnel score:", round(float(stats.spearmanr(
+    np.abs(fit_lin.resid), fit_lin.fittedvalues).statistic), 3))
+print("curvature in residuals:", round(float(np.corrcoef(fit_lin.resid, x**2)[0,1]), 3),
+      "-> fix specification BEFORE interpreting any p-value")
+
+fit_quad = sm.OLS(y, sm.add_constant(np.c_[x, x**2])).fit()
+print("after repair, x² coefficient p:", f"{fit_quad.pvalues[2]:.5f}",
+      "| residual normality p:", stats.jarque_bera(fit_quad.resid).pvalue.round(3))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Derive the exact variance function of OLS residuals for a binary-style Bernoulli-mean response and show it is inherently heteroscedastic ($\text{Var}(\varepsilon \mid x) = p(x)(1-p(x))$), peaking at p = 0.5. Use this to explain why linear-probability models always show funnel diagnostics and why the logistic/GLM view ([3.2](../part-03-classification-glm/03-2-why-not-linear-regression.qmd), [3.6](../part-03-classification-glm/03-6-generalized-linear-models.qmd)) resolves rather than repairs the problem.
+
+<details>
+<summary>Hint</summary>
+
+If y ∈ {0,1} with mean p(x), write y = p(x) + ε and compute Var(ε|x).
+</details>
+
+<details>
+<summary>Solution</summary>
+
+y ∈ {0,1}, E[y|x] = p(x) ⇒ ε = y − p(x) takes values −p(x) and 1−p(x), so Var(ε|x) = p(x)(1−p(x)) — maximal (0.25) at p = 0.5, shrinking to 0 at the extremes. The linear-probability model therefore *cannot* satisfy equal-variance for any σ: the funnel is structural, baked into binary outcomes. No transform or robust SE "fixes" the model; the likelihood that matches the data-generating mechanism (Bernoulli with logit link — logistic regression) makes the variance function part of the model. This is the template for GLMs generally: choose the variance function from the response's nature, then the mean model — the organizing idea of [3.6](../part-03-classification-glm/03-6-generalized-linear-models.qmd).
+</details>
+
+**Q2.** A dataset has grouped structure: 30 patients × 5 repeated measurements (150 rows), with patient-level random drift. (a) Demonstrate empirically that OLS SEs are too small (simulate 500 such datasets; compare the empirical SD of β̂ across simulations to the average classical SE). (b) Show that simply averaging each patient's rows (n = 30) restores honest SEs at the cost of power, and (c) name the two standard remedies that keep all 150 rows (cluster-robust SEs; mixed models) — verify (a)'s lie and one remedy numerically.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(8)
+def sim_dataset(n_pat=30, n_rep=5):
+    pat_effect = rng.normal(0, 2, n_pat)                    # shared drift per patient
+    x = rng.uniform(0, 10, (n_pat, n_rep))
+    y = 0.5 * x + pat_effect[:, None] + rng.normal(0, 1, (n_pat, n_rep))
+    return x.ravel(), y.ravel()
+
+naive_ses, slopes, avg_ses = [], [], []
+for _ in range(500):
+    x, y = sim_dataset()
+    fit = sm.OLS(y, sm.add_constant(x)).fit()
+    naive_ses.append(fit.bse[1])
+    slopes.append(fit.params[1])
+    # (b) patient means
+    xm = x.reshape(30, 5).mean(axis=1); ym = y.reshape(30, 5).mean(axis=1)
+    fm = sm.OLS(ym, sm.add_constant(xm)).fit()
+    avg_ses.append(fm.bse[1])
+
+print(f"average classical SE:     {np.mean(naive_ses):.4f}")
+print(f"TRUE SD of beta-hat:      {np.std(slopes):.4f}  <- naive SE underestimates!")
+print(f"patient-mean-model SE:    {np.mean(avg_ses):.4f}  <- honest")
+```
+
+The classical SE assumes 150 independent errors; with 30 patients' shared drift, effective information ≈ 30-ish units, so the true SD of β̂ is several× the naive SE. Remedies keeping all rows: `fit(cov_type="cluster")` with patient IDs (fixes inference) and linear mixed models (random patient intercepts — models the structure, often more efficient). Averaging (b) is the transparent sanity check that exposes the lie.
+</details>
+
+## 6. Complex Questions
+
+**C1 (assumptions × [2.8 Transforms](02-8-nonlinear-transformations.qmd) × [3.6 GLMs](../part-03-classification-glm/03-6-generalized-linear-models.qmd) preview).** For count data generated as Poisson($e^{1+0.3x}$): fit (a) OLS y ~ x, (b) OLS log y ~ x (adding 0.5 to dodge zeros), (c) a Poisson GLM with log link. Compare the coefficient estimates to the truth and run residual diagnostics on (a) and (b). Which problems are *repairable* by transforms and which are baked into the response's nature? Write the sentence that motivates GLMs in one breath.
+
+**C2 (assumptions × [4.1 Generalization](../part-04-validation-model-selection/04-1-generalization-problem.qmd) preview).** Generate 300 datasets where the true model is quadratic but analysts fit lines. Split each dataset, record (a) the linear model's test MSE and (b) its slope p-value. What fraction of datasets show a "highly significant" slope alongside clearly worse-than-quadratic test performance? What does this experiment say about the *independence of inference validity from predictive adequacy* — and why does Part 4's out-of-sample discipline catch what diagnostics+tests can miss?
+
+## 7. Summary
+
+- L-I-N-E: linearity (unbiasedness), independence (valid SEs), normality (small-n exactness), equal variance (efficient, valid SEs).
+- Residuals — never raw y — are the diagnostic subject: residuals-vs-fitted, QQ, scale-location.
+- Each violation has a repair menu: +x²/splines, transforms, robust/HAC/cluster SEs, GLMs.
+- Influence ≠ leverage ≠ outlier; Cook's distance is the deletion diagnostic.
+- Serial/grouped correlation silently multiplies your p-values' confidence — design awareness, not plots, is the defense.
+- Diagnose → repair → re-diagnose; and never diagnose on the test set.
+- Part 2's regression toolkit is complete. Part 3 turns to categorical responses, where the equal-variance assumption dies by definition — beginning with what classification is and how it's scored: [3.1 Classification fundamentals](../part-03-classification-glm/03-1-classification-fundamentals.qmd).

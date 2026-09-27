@@ -1,0 +1,412 @@
+---
+title: "2.7 Interaction Terms"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - statsmodels
+    - patsy
+    - matplotlib
+---
+
+So far every model assumed additive effects: each predictor shifts y by a fixed amount *regardless of the others*. An **interaction** lets the effect of one predictor depend on another — the model's most commonly forgotten question, and the difference between "drug works" and "drug works in women under 60."
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+Add a product column:
+
+$$y = \beta_0 + \beta_1 x_1 + \beta_2 x_2 + \beta_3\, x_1 x_2 + \varepsilon$$
+
+Now the effect of $x_1$ is $\beta_1 + \beta_3 x_2$ — a *function* of $x_2$, not a number. If $\beta_3 \ne 0$, the lines/planes tilt against each other; there is no single "effect of $x_1$" to report.
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.5
+import numpy as np
+import statsmodels.formula.api as smf
+import pandas as pd
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+n = 120
+df = pd.DataFrame({
+    "dose":   rng.uniform(0, 10, n),
+    "female": rng.integers(0, 2, n),          # 0/1 group label
+})
+df["response"] = (2.0
+                  + 0.8 * df["dose"]                      # slope in males
+                  - 1.0 * df["female"]                    # level shift
+                  - 0.12 * df["dose"] * df["female"]      # slope difference!
+                  + rng.normal(0, 1, n))
+
+fit = smf.ols("response ~ dose * female", data=df).fit()   # * = main + interaction
+print(fit.params.round(3))
+
+fig, ax = plt.subplots(figsize=(7, 3.5))
+xg = np.linspace(0, 10, 50)
+for f, style in [(0, "male"), (1, "female")]:
+    ax.plot(xg, fit.params["Intercept"] + fit.params["female"] * f
+            + (fit.params["dose"] + fit.params["dose:female"] * f) * xg,
+            label=style)
+ax.scatter(df["dose"], df["response"], s=10, alpha=0.25, color="gray")
+ax.set(xlabel="dose", ylabel="response", title="Interaction = two slopes")
+ax.legend()
+plt.show()
+```
+
+Read the coefficients directly: male slope = `dose` = 0.80; female slope = `dose + dose:female` = 0.80 − 0.12 = 0.68; the female *level* offset at dose 0 = `female` = −1.0.
+
+**Continuous × continuous** — the effect of one variable changes *linearly* with the other:
+
+```{pyodide}
+import numpy as np
+import statsmodels.formula.api as smf
+import pandas as pd
+
+rng = np.random.default_rng(1)
+n = 200
+df = pd.DataFrame({
+    "temp":  rng.uniform(10, 40, n),
+    "conc":  rng.uniform(0, 5, n),
+})
+df["yield_pct"] = 10 + 0.5 * df["temp"] + 1.0 * df["conc"] + 0.05 * df["temp"] * df["conc"] \
+                  + rng.normal(0, 1, n)
+
+fit = smf.ols("yield_pct ~ temp * conc", data=df).fit()
+print(fit.params.round(3))
+print("effect of +1 conc at temp=15:", round(float(fit.params["conc"] + 15 * fit.params["temp:conc"]), 3))
+print("effect of +1 conc at temp=35:", round(float(fit.params["conc"] + 35 * fit.params["temp:conc"]), 3))
+```
+
+## 2. Concept Questions
+
+1. In `yield ~ temp * conc`, what exactly does the `conc` coefficient mean *now*? Why is it "the effect of conc at temp = 0"?
+2. Your interaction p-value is 0.4 but a main effect's p-value is 0.001. May you drop the interaction and keep the main effect? May you drop the *non-significant main effect* and keep a significant interaction?
+3. Interaction vs correlation between predictors ([2.5](02-5-multiple-linear-regression.qmd) collinearity) — what's the difference in what each breaks?
+4. The model says the drug×sex interaction is 0.5 (p = 0.01). A headline says "drug works better in women." What extra number does the headline need?
+5. Why do people *center* variables before forming interactions, and what changes vs stays the same?
+
+<details>
+<summary>Answers</summary>
+
+1. With the product term present, the conc effect is $\beta_{conc} + \beta_{temp:conc}\,\text{temp}$ — it has no single value; by the algebra of "hold everything else fixed," the printed $\beta_{conc}$ is the conc effect evaluated at temp = 0. Since temp = 0 may be outside the data, that number can be meaningless — center temp and it becomes "at average temp."
+2. Drop the interaction: yes (back to the additive model — standard hierarchy *downward* is fine after a null result). Drop a main effect while keeping its interaction: **no** — the hierarchy principle: an interaction contains the main effects, and removing them forces the model through artificial constraints (e.g., zero effect at the other variable's zero) that bias everything.
+3. Collinearity is about *redundant information* (identifying coefficients; inflates SEs); interaction is about *structure* (whether effects multiply/moderate each other). Two collinear predictors can have zero interaction; two interacting predictors can be perfectly independent. Fixing one never fixes the other.
+4. The two slopes (or the two marginal effects at meaningful values) with CIs: "slope in women = a (b to c), in men = d (e to f)" — the interaction coefficient alone doesn't say which group is bigger, and "better" needs the scale (also: a significant interaction can mean "less bad in men"!).
+5. Centering (subtracting means) makes main-effect coefficients interpretable at *typical* values of the moderator and reduces the correlation between the product column and its ingredients (numerical conditioning). It does **not** change fitted values, R², the interaction coefficient, or its test (with raw quadratic terms, tiny rounding aside).
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np, pandas as pd, statsmodels.formula.api as smf
+rng = np.random.default_rng(2)
+n = 150
+df = pd.DataFrame({"x": rng.uniform(0, 5, n), "g": rng.integers(0, 2, n)})
+df["y"] = 1 + 2 * df["x"] + rng.normal(0, 1, n)     # NO interaction in truth
+fit = smf.ols("y ~ x * g", data=df).fit()
+print(fit.params.round(3))
+print("p(x:g) =", round(fit.pvalues["x:g"], 3), " <- correctly > 0.05 most runs")
+```
+
+```{pyodide}
+import numpy as np, pandas as pd, statsmodels.formula.api as smf
+rng = np.random.default_rng(3)
+n = 150
+df = pd.DataFrame({"x": rng.uniform(0, 5, n), "g": rng.integers(0, 2, n)})
+df["y"] = 1 + (2 + 1.5 * df["g"]) * df["x"] + rng.normal(0, 1, n)   # slope diff = 1.5
+fit = smf.ols("y ~ x * g", data=df).fit()
+print("slope g=0:", fit.params["x"].round(3))
+print("slope g=1:", (fit.params["x"] + fit.params["x:g"]).round(3))
+```
+
+```{pyodide}
+import numpy as np, pandas as pd, statsmodels.formula.api as smf
+rng = np.random.default_rng(4)
+n = 200
+df = pd.DataFrame({"a": rng.uniform(0, 10, n), "b": rng.uniform(0, 10, n)})
+df["y"] = 1 + df["a"] + df["b"] + 0.5 * df["a"] * df["b"] + rng.normal(0, 1, n)
+
+f_raw = smf.ols("y ~ a * b", data=df).fit()
+d = df.copy(); d["a_c"] = d["a"] - d["a"].mean(); d["b_c"] = d["b"] - d["b"].mean()
+f_ctr = smf.ols("y ~ a_c * b_c", data=d).fit()
+print("interaction coef raw:    ", f_raw.params["a:b"].round(4))
+print("interaction coef centered:", f_ctr.params["a_c:b_c"].round(4), " <- unchanged")
+print("main 'a' raw:", f_raw.params["a"].round(3), " centered:",
+      f_ctr.params["a_c"].round(3), " <- now = effect at mean(b)")
+```
+
+```{pyodide}
+import numpy as np, pandas as pd, statsmodels.formula.api as smf
+from statsmodels.stats.anova import anova_lm
+rng = np.random.default_rng(5)
+n = 150
+df = pd.DataFrame({"x": rng.uniform(0, 5, n), "g": rng.integers(0, 2, n)})
+df["y"] = 1 + 2 * df["x"] + rng.normal(0, 1, n)
+add = smf.ols("y ~ x + g", data=df).fit()
+int_ = smf.ols("y ~ x * g", data=df).fit()
+print(anova_lm(add, int_).round(4))     # partial F for the interaction
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Simulate a *cross-over* interaction: treatment helps at low severity, harms at high severity (`y = 10 + 1.0·sev − 0.8·trt + 0.2·sev·trt + noise`). Fit the interaction model; compute the treatment effect at severity 2, 5, 8 with CIs (delta-method-free: refit with re-centered severity); find the severity where the effect crosses zero and verify by plotting both lines.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7
+#| fig-height: 3.5
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(6)
+n = 240
+df = pd.DataFrame({"sev": rng.uniform(0, 10, n), "trt": rng.integers(0, 2, n)})
+df["y"] = 10 + 1.0 * df["sev"] - 0.8 * df["trt"] + 0.2 * df["sev"] * df["trt"] \
+          + rng.normal(0, 1, n)
+
+fit = smf.ols("y ~ sev * trt", data=df).fit()
+
+for s in [2, 5, 8]:
+    d = df.copy()
+    d["sev_c"] = d["sev"] - s                      # re-center: main effect AT sev=s
+    f = smf.ols("y ~ sev_c * trt", data=d).fit()
+    ci = f.conf_int().loc["trt"]
+    print(f"treatment effect at sev={s}: {f.params['trt']:+.3f}  "
+          f"(95% CI {ci[0]:+.3f}, {ci[1]:+.3f})")
+
+fig, ax = plt.subplots(figsize=(7, 3.5))
+xg = np.linspace(0, 10, 50)
+for t in [0, 1]:
+    ax.plot(xg, fit.params["Intercept"] + fit.params["trt"] * t
+            + (fit.params["sev"] + fit.params["sev:trt"] * t) * xg, label=f"trt={t}")
+ax.legend(); ax.set(xlabel="severity", ylabel="y", title="Cross-over: lines swap order")
+plt.show()
+```
+
+Re-centering the moderator converts "effect at severity s" into a *main effect with proper SE and CI* — no delta method needed. The cross-over point (≈ 4 here) is where the treatment recommendation flips; interactions are how subgroup medicine becomes honest instead of a fishing expedition.
+</details>
+
+**Exercise 2.** Test the parallel-slopes assumption from [2.6 Exercise 3](02-6-categorical-predictors.qmd) properly: fit the age × tissue model on that cohort, use `anova_lm` to compare against the additive model, and draw the fitted age-lines per tissue on one plot. Then write the sentence the additive model would have printed if the interaction were real but ignored — what goes wrong in it?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7
+#| fig-height: 3.5
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+from statsmodels.stats.anova import anova_lm
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(1)
+n = 150
+df = pd.DataFrame({
+    "tissue": rng.choice(["normal", "tumorA", "tumorB"], n),
+    "age": rng.uniform(30, 80, n),
+})
+df["expr"] = (8 + 0.02 * df["age"]
+              + 2.5 * (df["tissue"] == "tumorA")
+              + 4.0 * (df["tissue"] == "tumorB")
+              + 0.15 * df["age"] * (df["tissue"] != "normal")     # interaction!
+              + rng.normal(0, 1.5, n))
+
+add = smf.ols("expr ~ age + C(tissue)", data=df).fit()
+full = smf.ols("expr ~ age * C(tissue)", data=df).fit()
+print(anova_lm(add, full).round(4))
+
+fig, ax = plt.subplots(figsize=(7, 3.5))
+xg = np.linspace(30, 80, 40)
+for t in ["normal", "tumorA", "tumorB"]:
+    grid = pd.DataFrame({"age": xg, "tissue": t})
+    ax.plot(xg, full.predict(grid), label=t)
+ax.legend(); ax.set(xlabel="age", ylabel="expr", title="Age × tissue: non-parallel lines")
+plt.show()
+
+print("If ignored, the additive model would report ONE average age slope,",
+      "\nmasking that tumors' expression rises with age while normal tissue doesn't.")
+```
+
+The pooled slope is a precision-weighted average of *different* per-group slopes; an "age effect" headline from the additive model would be an artifact of group composition — Simpson-adjacent, and invisible without the interaction test.
+</details>
+
+**Exercise 3.** Continuous × continuous as a surface: fit `yield ~ temp * conc` (data regenerated below), then plot the *marginal effect of conc* (with 95% CI) as a function of temp using the re-centering trick at a grid of temperatures. At which temperatures is conc's effect significantly positive? This "moderated effect plot" is the professional alternative to staring at coefficient tables.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7
+#| fig-height: 3.5
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(7)
+n = 250
+df = pd.DataFrame({"temp": rng.uniform(10, 40, n), "conc": rng.uniform(0, 5, n)})
+df["yield_pct"] = 10 + 0.5 * df["temp"] + 1.0 * df["conc"] + 0.05 * df["temp"] * df["conc"] \
+                  + rng.normal(0, 1, n)
+
+temps = np.arange(10, 41, 2.5)
+effects, los, his = [], [], []
+for t in temps:
+    d = df.copy()
+    d["temp_c"] = d["temp"] - t
+    f = smf.ols("yield_pct ~ temp_c * conc", data=d).fit()
+    lo, hi = f.conf_int().loc["conc"]
+    effects.append(f.params["conc"]); los.append(lo); his.append(hi)
+
+fig, ax = plt.subplots(figsize=(7, 3.5))
+ax.plot(temps, effects, marker="o", ms=3)
+ax.fill_between(temps, los, his, alpha=0.25, label="95% CI")
+ax.axhline(0, color="gray", lw=0.8)
+ax.set(xlabel="temperature", ylabel="effect of +1 conc", title="Marginal effect of conc vs temp")
+ax.legend()
+plt.show()
+```
+
+The effect grows linearly with temp (that IS the interaction) and its CI clears zero everywhere here — but the *plot* is what a collaborator can read: "the concentration benefit ranges from ~1.5 at 10° to ~3 at 40°." Tables report; plots convince.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Hierarchy principle**: keep main effects whenever their interaction is present (dropping them constrains effects at the origin and biases estimates). Adding a *non-significant* interaction downward (simplifying) is fine; building interaction-only models is not.
+- **"No significant interaction" ≠ "no interaction"** — power for interactions is famously low (you're estimating a difference of slopes); absence of evidence again ([1.4](../part-01-statistics-bridge/01-4-statistical-inference.qmd)). Check what effect size the CI *rules out*.
+- **Interpretability of main effects dies with the interaction** — the printed β̂_x is the effect at moderator = 0, often outside data. Center, or report effects at grid values (Exercise 1/3 pattern).
+- **Polynomial terms are self-interactions**: x² is "x interacting with x" (curvature), x³ more so — everything on this page (centering, hierarchy, interpretation at values) applies to [2.8](02-8-nonlinear-transformations.qmd).
+- **Multiplicative hypotheses hide in logs**: `log(y) ~ x * g` interactions are ratios of ratios — a significant interaction can mean "proportional effect differs," which looks different back on the raw scale.
+- **Multiple interactions multiply the search space** — each added product is another test (Part 12's problem in miniature); pre-specify the interactions theory predicts rather than sweeping all pairs.
+
+### Read & Refactor AI Code
+
+This AI-generated subgroup analysis has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+
+rng = np.random.default_rng(8)
+n = 300
+df = pd.DataFrame({"dose": rng.uniform(0, 10, n), "sex": rng.integers(0, 2, n)})
+df["resp"] = 5 + 1.0 * df["dose"] - 0.6 * df["sex"] + rng.normal(0, 1.5, n)  # no interaction
+
+# BUG 1: subgroup analyses instead of a tested interaction
+for s in [0, 1]:
+    sub = df[df["sex"] == s]
+    f = smf.ols("resp ~ dose", data=sub).fit()
+    print(f"sex={s}: dose slope = {f.params['dose']:.3f} (p={f.pvalues['dose']:.4f})")
+
+# BUG 2: interaction model missing a main effect
+fit = smf.ols("resp ~ dose + dose:sex", data=df).fit()
+print(fit.params.round(3))
+
+# BUG 3: interpreting main effects with interaction present
+print("dose effect is +1.0 for everyone")
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **Two subgroup fits test slopes informally and underpowered**: comparing two p-values ("significant here, not there") is *not* an interaction test — differences of significant/non-significant are themselves noisy. Fix: one model with `dose * sex`, interaction tested once with full power.
+2. **`dose + dose:sex` violates hierarchy**: no `sex` main effect forces both groups' lines through the same intercept — a strong, unjustified constraint that biases the interaction estimate itself.
+3. **"+1.0 for everyone" contradicts the model being fit**: with an interaction, the dose effect is slope + interaction×sex — the sentence is only true for sex = 0 (and the printed main effect is at sex = 0 by construction).
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+from statsmodels.stats.anova import anova_lm
+
+rng = np.random.default_rng(8)
+n = 300
+df = pd.DataFrame({"dose": rng.uniform(0, 10, n), "sex": rng.integers(0, 2, n)})
+df["resp"] = 5 + 1.0 * df["dose"] - 0.6 * df["sex"] + rng.normal(0, 1.5, n)
+
+add = smf.ols("resp ~ dose + sex", data=df).fit()
+full = smf.ols("resp ~ dose * sex", data=df).fit()
+print("interaction p =", round(anova_lm(add, full).iloc[1]["Pr(>F)"], 3),
+      " <- one test, answers the subgroup question")
+print(add.params.round(3))
+print(f"slope for sex=1: {add.params['dose']:.3f} (additive model: shared slope)")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Show algebraically that centering both predictors before forming the product leaves the fitted values, R², and the interaction coefficient unchanged, and derive exactly what happens to the main-effect coefficients. Then state the one situation in which centering changes *conclusions*.
+
+<details>
+<summary>Hint</summary>
+
+Write $x_1 = \tilde x_1 + m_1$ (m = mean), expand the product term, and match coefficients between parameterizations.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+With $x_1 = \tilde x_1 + m_1$, $x_2 = \tilde x_2 + m_2$: $x_1x_2 = \tilde x_1\tilde x_2 + m_2\tilde x_1 + m_1\tilde x_2 + m_1m_2$. Substituting and regrouping shows the new model is a *reparameterization* of the same column space (each new column is a combination of old columns), so fitted values and R² are identical; the interaction coefficient is unchanged ($\tilde\beta_{12} = \beta_{12}$) while new mains absorb shifts: $\tilde\beta_1 = \beta_1 + m_2\beta_{12}$ — precisely "the x₁ effect at $x_2 = m_2$." The SEs of the mains change (they estimate different quantities at different points). Conclusions change only when you *interpret* the main effects: at moderator = 0 (raw, possibly absurd) vs moderator = mean (centered, meaningful). Same model, different sentences — which is why centering is an interpretation tool, not a statistics fix.
+</details>
+
+**Q2.** An interaction is significant in a discovery cohort (n = 400) and you plan a confirmatory cohort (n = 400). Given that interaction power is low, design the confirmation: what is tested, what alpha, what counts as replication (same sign? CI overlap? pre-registered effect size?), and what does the "winner's curse" of the discovery estimate imply for the expected confirmatory effect size? Demonstrate the winner's curse by simulation.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(9)
+# simulate many discovery cohorts with a TRUE null interaction; record only p<0.05 hits
+hits = []
+for _ in range(3000):
+    x = rng.normal(0, 1, 400); g = rng.integers(0, 2, 400)
+    y = 1 + x + g + rng.normal(0, 2, 400)              # no interaction in truth
+    X = sm.add_constant(np.c_[x, g, x * g])
+    b, p = sm.OLS(y, X).fit().params[3], sm.OLS(y, X).fit().pvalues[3]
+    if p < 0.05:
+        hits.append(b)
+print(f"false-positive interactions found: {len(hits)}/3000")
+print(f"mean |effect| among hits: {np.mean(np.abs(hits)):.3f} (true = 0 — pure selection)")
+```
+
+Design: (1) test the *same, pre-registered* interaction in the confirmation cohort at one-sided α = 0.05 in the pre-stated direction; (2) replication = significant *and* same sign, ideally with effect size inside the discovery CI's plausible range; CI overlap alone is far too weak (overlapping CIs are consistent with significant differences); (3) the winner's curse: conditional on being selected for p < 0.05 under the null, the discovery estimate averages ~1 SE in magnitude (simulation above: false hits with mean |β̂| ≈ 0.1 SD against truth 0) — so *shrink expectations*: the confirmatory estimate will typically be smaller than the discovery headline even when real. Report both cohorts' estimates side by side, never the discovery estimate alone as "the effect."
+</details>
+
+## 6. Complex Questions
+
+**C1 (interaction × [2.6 Categorical](02-6-categorical-predictors.qmd) × [1.2 Simpson](../part-01-statistics-bridge/01-2-relationships.qmd)).** Construct data where: pooled slope is positive, every group's slope is negative, and the group×x interaction is significant. This is Simpson's paradox *with heterogeneous slopes* — show the three nested models (pooled, dummies, dummies×x) and write which model each of three stakeholders (hospital administrator, per-site clinician, meta-analyst) should read.
+
+**C2 (interaction × [4.6 Tuning](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd) preview).** Generate data with a true interaction and compare the *out-of-sample* performance of (a) the additive model, (b) the correctly specified interaction model, (c) the all-pairs-interactions model (x1:x2, x1:x3, x2:x3, x1:x2:x3 with 4 predictors), across n = 40, 100, 400. Which model wins at each n, and what does this tell you about interaction hunting as a function of sample size — before you ever look at a p-value?
+
+## 7. Summary
+
+- An interaction makes an effect a function: β₃ ≠ 0 means "the effect of x₁ depends on x₂."
+- Report effects at meaningful moderator values (re-center and read main effects) — never the raw table alone.
+- Hierarchy principle: keep main effects with their interaction; simplify downward only.
+- Subgroup p-value comparisons are not interaction tests; one product term, tested once, has the power.
+- Centering changes interpretation, never fit; polynomial curvature is interaction with itself.
+- Interaction power is low; absence of evidence needs the CI's effect-size statement.
+- Linearity itself is now the last standing structural assumption — [2.8 Nonlinear feature transformations](02-8-nonlinear-transformations.qmd) bends the line without leaving the linear-model world.

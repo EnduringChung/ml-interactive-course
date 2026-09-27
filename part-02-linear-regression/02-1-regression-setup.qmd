@@ -1,9 +1,300 @@
 ---
-title: "Coming soon"
+title: "2.1 The Regression Problem"
 tier: 1
 engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - matplotlib
 ---
 
-This page has not been published yet. It is scheduled in the [build order](/index.qmd) and will follow the same seven-section template as every other page.
+Regression is the archetypal supervised-learning problem: given inputs $X$, predict a **quantitative** response $Y$ by estimating the underlying function $f$ with a model $\hat{f}$ trained on data. Every idea in this course — loss, generalization, bias–variance, tuning — can be seen first through this lens.
 
-Check back soon — progress is tracked in the [course home](/index.qmd).
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+We assume data is generated as
+
+$$Y = f(X) + \varepsilon, \qquad \mathbb{E}[\varepsilon \mid X] = 0$$
+
+where $f$ is the **systematic** part (what we want to learn) and $\varepsilon$ is **irreducible error** (measurement noise, unmeasured variables). We estimate $\hat{f}$ from training data and measure quality by a **loss**; for regression, the standard is squared error, whose average on new data is the **mean squared error**:
+
+$$\text{MSE} = \frac{1}{n}\sum_i \big(y_i - \hat{f}(x_i)\big)^2$$
+
+Two distinct goals (ISL's famous dichotomy — know which one you are doing):
+
+- **Prediction**: $\hat{Y} = \hat{f}(X)$ for new $X$ — interpretability optional, accuracy paramount.
+- **Inference**: *which* predictors matter, *how*, and with what uncertainty — a mis-specified-but-interpretable $\hat f$ can be worse than useless even if it predicts well.
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.5
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+
+def true_f(x):                       # the unknown "law of nature"
+    return 2.0 + 0.8 * x - 0.05 * x**2
+
+x = np.sort(rng.uniform(0, 20, 40))
+y = true_f(x) + rng.normal(0, 1.5, 40)         # f(x) + irreducible noise
+
+xg = np.linspace(0, 20, 300)
+fig, ax = plt.subplots(figsize=(7, 3.5))
+ax.scatter(x, y, s=25, alpha=0.7, label="observed data")
+ax.plot(xg, true_f(xg), lw=2, label="true f (never observed)")
+ax.set(xlabel="x", ylabel="y", title="Data = f(x) + noise")
+ax.legend()
+plt.show()
+```
+
+The regression task: from the dots alone, recover an approximation of the curve.
+
+**Reducible vs irreducible error.** Even a perfect $\hat f = f$ leaves MSE $= \text{Var}(\varepsilon)$. Model improvements can only shrink the reducible part. This decomposes (proved via a completing-the-square argument in [4.4 Bias–variance](../part-04-validation-model-selection/04-4-bias-variance.qmd)):
+
+$$\mathbb{E}\big[(Y - \hat{f}(X))^2\big] = \underbrace{\big(f(X) - \mathbb{E}\hat{f}(X)\big)^2}_{\text{bias}^2} + \underbrace{\text{Var}\big(\hat{f}(X)\big)}_{\text{variance}} + \underbrace{\text{Var}(\varepsilon)}_{\text{irreducible}}$$
+
+## 2. Concept Questions
+
+1. Your model's test MSE is 2.31 and you estimate $\text{Var}(\varepsilon) = 2.25$. How much room is left for model improvement?
+2. Give one scenario where a highly interpretable but slightly-less-accurate model is the right choice, and one where it is not.
+3. Is $f$ observable? Is $\hat f$? What dataset do you need to *evaluate* $\hat f$?
+4. Why is squared error the conventional loss? Name one situation where it is a poor match.
+5. In $Y = f(X) + \varepsilon$, what role does $\mathbb{E}[\varepsilon \mid X] = 0$ play?
+
+<details>
+<summary>Answers</summary>
+
+1. $\text{MSE} \ge \text{Var}(\varepsilon)$ always, so the reducible gap is $2.31 - 2.25 = 0.06$ — the model is within 6% of the noise floor. Chasing further gains with the same features is wasted effort; collect better features or accept the limit.
+2. Yes: clinical dosing or credit decisions, where the model must be audited and each coefficient argued. Not: real-time image tagging, where nobody reads the model and only accuracy matters.
+3. $f$ is never observed; $\hat f$ is computed from training data. To *evaluate* it honestly you need data **not used in fitting** ([0.5 Data splitting](../part-00-python-foundations/00-5-data-splitting.qmd)) — evaluating on training data measures memorization.
+4. Squared error is smooth, differentiable, corresponds to Gaussian-noise MLE ([A.2](#) in the appendix), and treats errors symmetrically — but a single outlier contributes quadratically, so for heavy-tailed or gross-error settings, absolute loss or Huber loss fits better (and then "best" means a different model: median regression).
+5. It makes $\varepsilon$ *noise*, not *bias*: the mean of the error is zero at every $X$, so all systematic structure lives in $f$. If violated (e.g. calibration drift), the whole decomposition and OLS theory sit on sand.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(1)
+y_true = np.array([3.0, 5.0, 7.0, 9.0])
+y_pred = np.array([2.5, 5.5, 7.0, 11.0])
+resid = y_true - y_pred
+print(resid)                                   # [ 0.5 -0.5  0. -2. ]
+print(np.mean(resid**2))                       # 1.375 — MSE
+print(np.mean(np.abs(resid)))                  # 0.75 — MAE (different loss, different model)
+print(np.sqrt(np.mean(resid**2)).round(4))     # RMSE, back in y-units
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(2)
+n = 500
+y = rng.normal(10, 2, n)
+mean_pred = np.full(n, y.mean())               # the "null model": always predict the mean
+print("null-model MSE:", round(np.mean((y - mean_pred)**2), 3))
+print("sample variance:  ", round(y.var(ddof=0), 3))   # identical! MSE of the mean-model IS the variance
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(3)
+# irreducible error floor: same f-hat, more noise
+x = np.linspace(0, 1, 200)
+f_hat = 3 * x
+for sigma in [0.2, 1.0]:
+    y = 3 * x + rng.normal(0, sigma, 200)
+    print(f"sigma={sigma}: best-possible MSE ≈ {sigma**2}, achieved: {np.mean((y - f_hat)**2):.4f}")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Generate $n = 100$ points from $y = 1 + 2x + \varepsilon$, $\varepsilon \sim N(0, 4)$. Fit a line with `np.polyfit`, then report (a) training MSE, (b) fresh test MSE on 10,000 new points, (c) the theoretical noise floor $\sigma^2$. Which of the two MSEs is closer to the floor, and why — what is the name of that gap?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(4)
+
+x_tr = rng.uniform(-3, 3, 100)
+y_tr = 1 + 2 * x_tr + rng.normal(0, 2, 100)
+b1, b0 = np.polyfit(x_tr, y_tr, 1)             # slope, intercept
+
+train_mse = np.mean((y_tr - (b0 + b1 * x_tr))**2)
+
+x_te = rng.uniform(-3, 3, 10_000)
+y_te = 1 + 2 * x_te + rng.normal(0, 2, 10_000)
+test_mse = np.mean((y_te - (b0 + b1 * x_te))**2)
+
+print(f"train MSE = {train_mse:.3f}")
+print(f"test  MSE = {test_mse:.3f}")
+print(f"noise floor σ² = 4.0")
+```
+
+Test MSE is closer to the floor but sits **above** it: training MSE is optimistically biased (the fit adapted to training noise — in-sample optimism), while test MSE = bias² + variance + σ² with small bias² and variance for a well-specified linear model. The excess over 4.0 is **reducible error** (here: estimation variance, shrinking with n).
+</details>
+
+**Exercise 2.** Prediction vs inference framing: you have `hours_studied` and `exam_score` data (generated below with a ceiling at 100). Fit a line, predict for hours = 5 and hours = 30, and explain which prediction is trustworthy, which is nonsense, and which *word* describes the failure ([2.2](02-2-simple-linear-regression.qmd) formalizes it).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(5)
+hours = rng.uniform(0, 12, 80)
+score = np.clip(40 + 5 * hours + rng.normal(0, 6, 80), 0, 100)
+b1, b0 = np.polyfit(hours, score, 1)
+print(f"fitted: score = {b0:.1f} + {b1:.2f} × hours")
+print("predict hours=5: ", round(b0 + b1 * 5, 1))
+print("predict hours=30:", round(b0 + b1 * 30, 1))
+```
+
+hours = 5 is **interpolation** — inside the training range (0–12), trustworthy within uncertainty. hours = 30 is **extrapolation** — 2.5× beyond the observed range; the model silently reports ~175, physically impossible (score caps at 100). The word: *extrapolation*. Linear models extend the fitted pattern blindly; domain limits must be imposed by the analyst.
+</details>
+
+**Exercise 3.** Implement a `regress_compare(y_true, y_pred_a, y_pred_b)` helper returning MSE, RMSE, and MAE for two competing predictors, and use it to compare the **mean-predictor** vs the **median-predictor** on lognormal data. Which loss does each predictor win, and what does that tell you about the mean–median–loss triangle from [1.1](../part-01-statistics-bridge/01-1-descriptive-statistics.qmd)?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+def regress_compare(y_true, pred_a, pred_b, names=("A", "B")):
+    for name, p in zip(names, [pred_a, pred_b]):
+        mse = np.mean((y_true - p)**2)
+        mae = np.mean(np.abs(y_true - p))
+        print(f"{name}: MSE = {mse:.3f}   RMSE = {np.sqrt(mse):.3f}   MAE = {mae:.3f}")
+
+rng = np.random.default_rng(6)
+y = np.exp(rng.normal(2, 1, 500))              # skewed
+regress_compare(y, np.full_like(y, y.mean()), np.full_like(y, np.median(y)),
+                names=("mean-pred", "median-pred"))
+```
+
+The **mean-predictor minimizes MSE** and the **median-predictor minimizes MAE** — each wins its own column (check: mean-pred beats median-pred on MSE, median-pred beats mean-pred on MAE). "Which predictor is better" is ill-posed until you name the loss; this is the predictive face of the robustness trade-off from [1.1](../part-01-statistics-bridge/01-1-descriptive-statistics.qmd).
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **In-sample (training) MSE is always optimistic** — the model was chosen to make it small. The gap between training and test error is **optimism**, and estimating *it* is half of Part 4.
+- **Extrapolation is silent**: linear models return values outside any observed region with total confidence. Always compare prediction ranges against training ranges.
+- **The noise floor is a feature of the data, not the model** — before tuning hyperparameters for hours, estimate $\sigma^2$ (replicates, domain knowledge, or residual variance from a saturated fit) and ask what's left to gain (Concept Question 1).
+- **MSE vs RMSE**: RMSE is in y-units (reportable), MSE is differentiable-friendly and decomposable (math-friendly). Don't average RMSEs across folds — average MSEs, then take the root.
+- **`y_true - y_pred` sign conventions** flip between residual-as-truth-minus-fit and fit-minus-truth; squared losses don't care, but printed residual diagnostics do — know your library's convention.
+- **Prediction vs inference changes pre-processing rules**: dropping a confounded-but-predictive variable is fine for pure prediction and fatal for inference ([2.5](02-5-multiple-linear-regression.qmd)).
+
+### Read & Refactor AI Code
+
+This AI-generated evaluation has **three bugs**. Run it, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+
+rng = np.random.default_rng(7)
+x = rng.uniform(0, 10, 100)
+y = 2 + 1.5 * x + rng.normal(0, 2, 100)
+
+b1, b0 = np.polyfit(x, y, 1)                    # note: HIGHEST power first
+
+# BUG 1: evaluate on the training data, call it test MSE
+train_pred = b0 + b1 * x
+test_mse = np.mean((y - train_pred)**2)
+print("test MSE:", round(test_mse, 3))
+
+# BUG 2: compare RMSEs of two models by AVERAGING them across folds
+fold_rmse = [0.9, 1.1, 1.0, 1.3]
+print("average RMSE:", np.mean(fold_rmse).round(3))   # seductive but wrong
+
+# BUG 3: predict outside the observed range with no warning
+print("prediction at x = 50:", round(b0 + b1 * 50, 1))
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **Training MSE labeled "test"**: `polyfit` minimized exactly this quantity — it is the *in-sample* error and cannot evidence generalization. Fix: split first, evaluate on untouched data.
+2. **Averaging RMSEs across folds** is not the RMSE of anything (root is nonlinear). Fix: collect fold MSEs, average, then take the square root.
+3. **Silent extrapolation** to x = 50 when training spanned 0–10. Fix: assert/flag predictions outside the training range, or constrain the domain.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(7)
+x = rng.uniform(0, 10, 100)
+y = 2 + 1.5 * x + rng.normal(0, 2, 100)
+b1, b0 = np.polyfit(x, y, 1)
+
+X, x_te, Y, y_te = train_test_split(x.reshape(-1, 1), y, test_size=0.25, random_state=1)
+model_b1, model_b0 = np.polyfit(X.ravel(), Y, 1)
+
+test_pred = model_b0 + model_b1 * x_te
+test_mse = np.mean((y_te - test_pred)**2)
+print("honest test MSE:", round(test_mse, 3))
+
+fold_mse = [0.9**2, 1.1**2, 1.0**2, 1.3**2]
+print("proper RMSE:", round(np.sqrt(np.mean(fold_mse)), 3))
+
+def safe_predict(x_new, x_lo, x_hi):
+    if np.any((x_new < x_lo) | (x_new > x_hi)):
+        print("WARNING: extrapolating beyond training range")
+    return model_b0 + model_b1 * x_new
+
+print("x=8 (in range): ", round(float(safe_predict(8.0, 0, 10)), 2))
+print("x=50 (out!):   ", round(float(safe_predict(50.0, 0, 10)), 2))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Show that the function $c \mapsto \frac{1}{n}\sum (y_i - c)^2$ is minimized at $c = \bar{y}$, and use this to explain why the mean-model's training MSE equals the sample variance (drill above). What is the analogous statement for the median and MAE?
+
+<details>
+<summary>Hint</summary>
+
+Differentiate in $c$; you already proved the median version in [1.1 Q1](../part-01-statistics-bridge/01-1-descriptive-statistics.qmd).
+</details>
+
+<details>
+<summary>Solution</summary>
+
+$\frac{d}{dc}\sum(y_i-c)^2 = -2\sum(y_i - c) = 0 \Rightarrow c = \bar y$; substituting back gives $\frac{1}{n}\sum(y_i - \bar y)^2$, the (population-formula) sample variance. So the intercept-only least-squares model *is* the sample mean, and its in-sample MSE *is* the variance — which is exactly why $R^2 = 1 - \text{RSS}/\text{TSS}$ compares every model against this null ([2.4](02-4-accuracy-of-model.qmd)). The MAE analog: constant predictors are minimized by the median, with in-sample MAE = mean absolute deviation.
+</details>
+
+**Q2.** A colleague reports: "train MSE 0.9, test MSE 4.1, estimated σ² = 4.0 — my model is optimal, no more work needed." Evaluate all three numbers as evidence. What additional split or sample-size information would sharpen the claim?
+
+<details>
+<summary>Solution</summary>
+
+Test MSE 4.1 ≈ σ² = 4.0 suggests the reducible part is tiny — *if* the estimate is trustworthy. But (1) a single test split's MSE has sampling noise (its own SE ≈ σ²·√(2/n_test) under normality — a 100-point test set gives ±0.56 at 1 SE, so 4.1 vs 4.0 is inconclusive); (2) train MSE 0.9 ≪ 4.0 shows substantial in-sample optimism, meaning the model has meaningful variance (complexity) — the test error could still be lowered by regularization or a simpler model family even if it's near the floor *on average*; (3) σ² estimated how? If from training residuals of the same model, it inherits the model's bias (under-specified models inflate apparent σ²). Sharpening: K-fold CV for a stable test estimate, a proper noise estimate (replicates), and n_train/n_test sizes to judge estimation variance.
+</details>
+
+## 6. Complex Questions
+
+**C1 (setup × [1.3 Probability](../part-01-statistics-bridge/01-3-probability-essentials.qmd)).** Simulate 500 repetitions of: draw n = 25 training points from the Exercise 1 process, fit the line, record test MSE. Plot the histogram of the 500 test MSEs. Relate its center and spread to (a) the noise floor, (b) the sampling variability of $\hat\beta$ you will quantify in [2.3](02-3-accuracy-of-coefficients.qmd) — and predict qualitatively how the histogram changes at n = 200.
+
+**C2 (setup × [0.4 EDA](../part-00-python-foundations/00-4-visualization-eda.qmd)).** Generate data where $f(x)$ is multiplicative ($y = 3x\cdot e^{\varepsilon}$, constant *relative* noise). Show that regressing $y$ on $x$ produces the funnel-shaped residuals of [0.4 Q2](../part-00-python-foundations/00-4-visualization-eda.qmd), then regress $\log y$ on $\log x$ and verify the noise is additive there. State the modeling rule this suggests before any model is fit.
+
+## 7. Summary
+
+- Regression = estimating $f$ in $Y = f(X) + \varepsilon$ from data; quality = MSE on data not used for fitting.
+- $\text{Var}(\varepsilon)$ is the floor: model work shrinks only bias and variance, never the floor.
+- Prediction and inference are different games; they impose different rules on feature choice and reporting.
+- Training MSE is optimism in numbers; test MSE is the only honest currency (Part 4 prices it).
+- The mean-model is least squares' null hypothesis; $R^2$ is measured against it.
+- Extrapolation is silent failure — police the input range.
+- With the target defined, [2.2 Simple linear regression](02-2-simple-linear-regression.qmd) builds the first — and still most interpretable — estimator of $f$.

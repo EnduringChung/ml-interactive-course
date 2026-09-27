@@ -1,0 +1,472 @@
+---
+title: "3.4 Generative Classifiers: LDA, QDA, Naive Bayes"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - matplotlib
+---
+
+Instead of modeling P(y|x) directly (discriminative — logistic), **generative** classifiers model how each class *generates* data — P(x|y) and P(y) — then flip the conditioning with Bayes' rule. Three classical instances span the assumption spectrum: **LDA** (Gaussian, shared covariance), **QDA** (Gaussian, per-class covariance), **Naive Bayes** (conditionally independent features).
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+Bayes' rule chooses the class maximizing the posterior:
+
+$$P(y = k \mid x) = \frac{P(x \mid y = k)\, P(y = k)}{\sum_j P(x \mid y = j)\, P(y = j)}$$
+
+**LDA** assumes each class is Gaussian with its own mean μₖ but one *shared* covariance Σ. Plugging in and simplifying, the log-posterior becomes **linear** in x — hence linear discriminant. **QDA** gives each class its own Σₖ; quadratic terms survive — quadratic boundaries. **Gaussian Naive Bayes** assumes independence *within* each class (diagonal covariance): one variance per feature per class, no correlations — crude but fast and parameter-poor.
+
+```{pyodide}
+#| fig-width: 8
+#| fig-height: 3.6
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
+
+rng = np.random.default_rng(0)
+n = 120
+X0 = rng.normal([0, 0], 1.0, (n, 2))
+X1 = rng.normal([1.5, 1.0], 1.0, (n, 2))     # same spread -> LDA's world
+X = np.vstack([X0, X1]); y = np.r_[np.zeros(n), np.ones(n)].astype(int)
+
+lda = LinearDiscriminantAnalysis().fit(X, y)
+qda = QuadraticDiscriminantAnalysis().fit(X, y)
+
+xx, yy = np.meshgrid(np.linspace(-4, 6, 250), np.linspace(-4, 5, 250))
+grid = np.c_[xx.ravel(), yy.ravel()]
+
+fig, axes = plt.subplots(1, 2, figsize=(8, 3.6), sharey=True)
+for ax, model, name in [(axes[0], lda, "LDA"), (axes[1], qda, "QDA")]:
+    Z = model.predict(grid).reshape(xx.shape)
+    ax.contourf(xx, yy, Z, levels=[-0.5, 0.5, 1.5], alpha=0.25, colors=["steelblue", "salmon"])
+    ax.scatter(X0[:, 0], X0[:, 1], s=8, c="steelblue")
+    ax.scatter(X1[:, 0], X1[:, 1], s=8, c="salmon")
+    acc = model.score(X, y)
+    ax.set_title(f"{name} (train acc {acc:.2f})")
+fig.tight_layout()
+plt.show()
+```
+
+When the classes' covariances genuinely differ, QDA earns its extra parameters:
+
+```{pyodide}
+#| fig-width: 8
+#| fig-height: 3.6
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
+
+rng = np.random.default_rng(1)
+n = 120
+X0 = rng.normal([0, 0], [0.6, 2.2], (n, 2))   # stretched vertically
+X1 = rng.normal([2.5, 0], [2.2, 0.6], (n, 2)) # stretched horizontally
+X = np.vstack([X0, X1]); y = np.r_[np.zeros(n), np.ones(n)].astype(int)
+
+lda = LinearDiscriminantAnalysis().fit(X, y)
+qda = QuadraticDiscriminantAnalysis().fit(X, y)
+
+xx, yy = np.meshgrid(np.linspace(-5, 8, 250), np.linspace(-5, 5, 250))
+grid = np.c_[xx.ravel(), yy.ravel()]
+
+fig, axes = plt.subplots(1, 2, figsize=(8, 3.6), sharey=True)
+for ax, model, name in [(axes[0], lda, "LDA (misspecified)"), (axes[1], qda, "QDA (right)")]:
+    Z = model.predict(grid).reshape(xx.shape)
+    ax.contourf(xx, yy, Z, levels=[-0.5, 0.5, 1.5], alpha=0.25, colors=["steelblue", "salmon"])
+    ax.scatter(X0[:, 0], X0[:, 1], s=8, c="steelblue")
+    ax.scatter(X1[:, 0], X1[:, 1], s=8, c="salmon")
+    ax.set_title(f"{name}: acc {model.score(X, y):.2f}")
+fig.tight_layout()
+plt.show()
+```
+
+**Naive Bayes by hand** — the whole method in ten lines, then verified against sklearn:
+
+```{pyodide}
+import numpy as np
+from sklearn.naive_bayes import GaussianNB
+
+rng = np.random.default_rng(2)
+X0 = rng.normal([0, 0], [1, 2], (200, 2))       # correlated-ish structure...
+X0[:, 1] = 0.8 * X0[:, 0] + rng.normal(0, 1, 200)  # ...with real correlation
+X1 = rng.normal([2, 1.5], [1, 2], (200, 2))
+X1[:, 1] = 0.8 * X1[:, 0] + rng.normal(0, 1, 200)
+X = np.vstack([X0, X1]); y = np.r_[np.zeros(200), np.ones(200)].astype(int)
+
+class HandNB:
+    def fit(self, X, y):
+        self.classes = np.unique(y)
+        self.prior = {c: (y == c).mean() for c in self.classes}
+        self.mu = {c: X[y == c].mean(axis=0) for c in self.classes}
+        self.var = {c: X[y == c].var(axis=0) for c in self.classes}
+        return self
+    def predict(self, X):
+        out = []
+        for x in X:
+            scores = {}
+            for c in self.classes:
+                loglik = np.sum(-0.5 * np.log(2 * np.pi * self.var[c])
+                                - (x - self.mu[c])**2 / (2 * self.var[c]))
+                scores[c] = np.log(self.prior[c]) + loglik
+            out.append(max(scores, key=scores.get))
+        return np.array(out)
+
+hand = HandNB().fit(X, y)
+sk = GaussianNB().fit(X, y)
+print("agreement with sklearn:", (hand.predict(X) == sk.predict(X)).mean().round(4))
+print(f"hand acc { (hand.predict(X) == y).mean():.3f}, sklearn {sk.score(X, y):.3f}")
+```
+
+## 2. Concept Questions
+
+1. What does the "naive" in Naive Bayes assume, and why is it catastrophic for *correlated* features even when each feature is individually informative?
+2. LDA vs QDA: state the parameter-count trade (in d dimensions, per class) and the sample-size rule of thumb that follows.
+3. Why do generative models need fewer training samples to reach a given accuracy *when their assumptions hold* — and what happens when the assumptions don't hold?
+4. LDA's boundary is linear. Which two simplifications of the Bayes-optimal rule produce that linearity?
+5. Your features are 5,000 gene counts with strong correlations. Which of the three would you reach for first, and what would you need to check before trusting QDA?
+
+<details>
+<summary>Answers</summary>
+
+1. Features are **conditionally independent given the class** (diagonal class covariance). With correlated informative features, NB *double-counts the same evidence*: two correlated genes each "voting" for the class push the posterior toward certainty twice — overconfident probabilities, badly calibrated posteriors (accuracy can survive; the probability values don't).
+2. LDA: one shared Σ = O(d²) parameters total + d means per class; QDA: full Σₖ per class = O(k·d²). With d = 50, LDA's Σ has 1,275 entries shared; QDA's two have 2,550 estimated separately. Rule of thumb (ISL): small n or a shared-covariance belief → LDA; large n or visibly different covariances → QDA. (Between them sits "regularized QDA"/shrinkage covariance.)
+3. Modeling the joint densities adds structure the data needn't discover: with correct assumptions, the estimate converges at parametric rates and out-of-sample accuracy rises quickly with n (fewer effective parameters than a discriminative search over boundaries). When wrong, the bias is baked in — and generative models typically converge to the *wrong* boundary no matter how much data arrives, while flexible discriminative methods would eventually find the truth.
+4. (a) Gaussian class densities; (b) *equal* covariance matrices — the quadratic terms x^TΣₖ⁻¹x then coincide across classes and cancel in the log-ratio, leaving a linear score.
+5. Gaussian NB with correlation-aware caution... honestly: none of the three directly. NB's independence assumption is badly violated (double counting). QDA in d = 5,000 estimates 12.5M covariance entries per class — singular without regularization; you'd need heavy shrinkage (`reg_param`) or feature reduction first (or logistic regression with penalties — Part 5). The check before QDA: n ≫ d and covariance stability, neither plausible here.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+rng = np.random.default_rng(3)
+X = np.r_[rng.normal([0, 0], 1, (100, 2)), rng.normal([3, 0], 1, (100, 2))]
+y = np.array([0]*100 + [1]*100)
+lda = LinearDiscriminantAnalysis().fit(X, y)
+print("coef:", lda.coef_[0].round(3))         # direction of the boundary normal
+print("prior:", lda.priors_)                   # empirical class frequencies
+print("accuracy:", round(lda.score(X, y), 3))
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.naive_bayes import GaussianNB
+rng = np.random.default_rng(4)
+# NB double-counting: two features carrying the SAME signal
+n = 400
+z = rng.normal(0, 1, n)
+X = np.c_[z, z + rng.normal(0, 0.1, n)]        # near-duplicates!
+y = (rng.uniform(0, 1, n) < 1 / (1 + np.exp(-3 * z))).astype(int)
+nb = GaussianNB().fit(X, y)
+p = nb.predict_proba(X)[:, 1]
+print("NB predicted-prob spread at y=1:", p[y == 1].min().round(3), "to", p[y == 1].max().round(3))
+print("overconfident? mean |p - truth-ish|:", np.abs(p.mean() - y.mean()).round(3))
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+rng = np.random.default_rng(5)
+# QDA in tiny samples is unstable: reg_param as the stabilizer
+for n in [10, 50, 300]:
+    X = np.r_[rng.normal([0, 0, 0], 1, (n, 3)), rng.normal([1, 1, 1], 1.4, (n, 3))]
+    y = np.array([0]*n + [1]*n)
+    q0 = QuadraticDiscriminantAnalysis(reg_param=0.0).fit(X, y)
+    q1 = QuadraticDiscriminantAnalysis(reg_param=0.5).fit(X, y)
+    print(f"n/class={n:>3}: acc reg=0 {q0.score(X, y):.3f} | reg=0.5 {q1.score(X, y):.3f}")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+# LDA as a supervised dimension reduction: 10 features -> 1 discriminant
+rng = np.random.default_rng(6)
+X = rng.normal(0, 1, (200, 10))
+signal = 2 * X[:, 0] - X[:, 3]
+y = (rng.uniform(0, 1, 200) < 1 / (1 + np.exp(-signal))).astype(int)
+lda = LinearDiscriminantAnalysis().fit(X, y)
+print("scalings shape:", lda.scalings_.shape)         # (10, k-1) = (10, 1)
+print("biggest weights:", np.argsort(-np.abs(lda.scalings_[:, 0]))[:3])
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Implement LDA's classification rule **from scratch** for two classes: estimate μ̂₀, μ̂₁, pooled covariance Σ̂, priors; classify by sign of the linear score $x^\top \Sigma^{-1}(\mu_1 - \mu_0) - \tfrac12(\mu_1^\top\Sigma^{-1}\mu_1 - \mu_0^\top\Sigma^{-1}\mu_0) + \log(\pi_1/\pi_0)$. Verify 100% agreement with sklearn on training data, then perturb one class's covariance and show where LDA and QDA begin to disagree.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
+
+rng = np.random.default_rng(7)
+X0 = rng.normal([0, 0], [1, 1], (150, 2))
+X1 = rng.normal([2, 1], [1.6, 0.9], (150, 2))
+X = np.vstack([X0, X1]); y = np.r_[np.zeros(150), np.ones(150)].astype(int)
+
+class HandLDA:
+    def fit(self, X, y):
+        self.classes = np.unique(y)
+        self.pi = {c: (y == c).mean() for c in self.classes}
+        self.mu = {c: X[y == c].mean(axis=0) for c in self.classes}
+        Xc = np.vstack([X[y == c] - self.mu[c] for c in self.classes])
+        self.Sigma = np.cov(Xc, rowvar=False)
+        return self
+    def decision(self, X):
+        c0, c1 = self.classes
+        Sinv = np.linalg.inv(self.Sigma)
+        d = Sinv @ (self.mu[c1] - self.mu[c0])
+        b = (-0.5 * (self.mu[c1] @ Sinv @ self.mu[c1]
+                     - self.mu[c0] @ Sinv @ self.mu[c0])
+             + np.log(self.pi[c1] / self.pi[c0]))
+        return X @ d + b
+
+hand = HandLDA().fit(X, y)
+sk = LinearDiscriminantAnalysis().fit(X, y)
+print("agreement:", (sk.predict(X) == (hand.decision(X) > 0).astype(int)).mean())
+
+# covariance mismatch: QDA's edge grows
+X1b = rng.normal([2, 1], [2.6, 0.6], (150, 2))
+Xb = np.vstack([X0, X1b]); yb = y
+for model, name in [(LinearDiscriminantAnalysis(), "LDA"),
+                    (QuadraticDiscriminantAnalysis(), "QDA")]:
+    print(f"{name} acc under mismatched cov: {model.fit(Xb, yb).score(Xb, yb):.3f}")
+```
+
+The hand version IS sklearn's rule (up to internal scaling). Once covariances differ, the shared-Σ score is no longer Bayes-optimal and QDA's quadratic terms capture the elliptical structure — visible as disagreement concentrated far from the boundary.
+</details>
+
+**Exercise 2.** The NB double-counting experiment, quantified: build truth where P(y=1|x) depends on a single latent z, and expose it through k increasingly correlated copies (ρ = 0, 0.5, 0.9, 1.0 between copies). For each ρ, fit GaussianNB and logistic regression; report (a) accuracy, (b) the *mean predicted probability* for true positives (overconfidence meter). Which model's accuracy degrades with ρ? Which model's probabilities degrade?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.naive_bayes import GaussianNB
+from sklearn.linear_model import LogisticRegression
+
+rng = np.random.default_rng(8)
+for rho in [0.0, 0.5, 0.9]:
+    z = rng.normal(0, 1, 1000)
+    x2 = rho * z + np.sqrt(1 - rho**2) * rng.normal(0, 1, 1000)
+    X = np.c_[z, x2]
+    y = (rng.uniform(0, 1, 1000) < 1 / (1 + np.exp(-2 * z))).astype(int)
+    nb = GaussianNB().fit(X, y)
+    lr = LogisticRegression(max_iter=4000).fit(X, y)
+    nb_p = nb.predict_proba(X)[:, 1][y == 1].mean()
+    lr_p = lr.predict_proba(X)[:, 1][y == 1].mean()
+    print(f"rho={rho}: NB acc {nb.score(X, y):.3f} (mean p|y=1 {nb_p:.3f}) | "
+          f"LR acc {lr.score(X, y):.3f} (mean p|y=1 {lr_p:.3f})")
+```
+
+Accuracy stays similar across ρ for both (the information content doesn't change much), but NB's predicted probabilities inflate toward 1 as correlation grows — the same evidence counted twice. Logistic regression, discriminative, never assumed independence and stays calibrated. Lesson: *choose the model by what you consume* — rankings (NB fine) or probabilities (NB dangerous under correlation).
+</details>
+
+**Exercise 3.** Generative vs discriminative sample-efficiency sweep: fixed true model = two Gaussians with *equal* covariance (LDA's world, so its assumptions hold). For n per class in {5, 15, 50, 200}, fit LDA and unpenalized logistic on 100 independent training sets, evaluate each on a fixed test set, and plot mean test accuracy vs n. Which converges faster? Then repeat with *unequal* covariances and re-read the curves.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.linear_model import LogisticRegression
+
+def sweep(equal_cov=True, seed=0):
+    rng = np.random.default_rng(seed)
+    ns = [5, 15, 50, 200]
+    lda_means, lr_means = [], []
+    xte = np.vstack([rng.normal([0, 0], 1, (2000, 2)),
+                     rng.normal([1.8, 1.2], 1 if equal_cov else [1.8, 0.5], (2000, 2))])
+    yte = np.r_[np.zeros(2000), np.ones(2000)].astype(int)
+    for n in ns:
+        lda_acc, lr_acc = [], []
+        for rep in range(100):
+            X0 = rng.normal([0, 0], 1, (n, 2))
+            X1 = rng.normal([1.8, 1.2], 1 if equal_cov else [1.8, 0.5], (n, 2))
+            X = np.vstack([X0, X1])
+            y = np.r_[np.zeros(n), np.ones(n)].astype(int)
+            lda_acc.append(LinearDiscriminantAnalysis().fit(X, y).score(xte, yte))
+            lr_acc.append(LogisticRegression(max_iter=2000).fit(X, y).score(xte, yte))
+        lda_means.append(np.mean(lda_acc)); lr_means.append(np.mean(lr_acc))
+    return ns, lda_means, lr_means
+
+fig, axes = plt.subplots(1, 2, figsize=(7, 3.4), sharey=True)
+for ax, eq in zip(axes, [True, False]):
+    ns, l1, l2 = sweep(equal_cov=eq)
+    ax.plot(ns, l1, marker="o", label="LDA")
+    ax.plot(ns, l2, marker="s", label="logistic")
+    ax.set_xscale("log"); ax.set_title("equal cov" if eq else "unequal cov")
+    ax.set_xlabel("n per class")
+axes[0].legend(); axes[0].set_ylabel("test accuracy")
+fig.tight_layout()
+plt.show()
+```
+
+Equal covariance (LDA's assumptions true): LDA leads at every n — the generative parametric payoff. Unequal: LDA's advantage evaporates/reverses as its bias caps its ceiling while logistic keeps climbing. The generative-vs-discriminative trade, drawn to scale.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **LDA's shared covariance is a modeling claim** — check it (visual covariance ellipses, Box's M in spirit) before trusting its SEs/probabilities; QDA when ellipses differ, and `reg_param` when n is small.
+- **QDA in high dimensions is numerically fragile**: per-class covariance matrices go singular (d > n per class); sklearn's `reg_param` adds ridge-like stabilization — tune it, don't disable it.
+- **NB posteriors are overconfident under any correlation** — never quote its probabilities without calibration checks ([3.7](03-7-model-comparison.qmd)); its *rankings* survive much better than its values.
+- **Class priors matter**: LDA/NB use empirical priors; in case–control samples the priors are sampling artifacts — correct with `priors=` (sklearn) or logit-offset ([3.3 C2](03-3-logistic-regression.qmd)).
+- **LDA is also a projector**: its scalings give the k−1 discriminant axes — a supervised alternative to PCA for visualization ([9.2](../part-09-unsupervised-learning/09-2-principal-component-analysis.qmd) contrast: PCA is unsupervised, ignores y).
+- **Multiclass comes free**: all three handle k > 2 natively (no one-vs-rest machinery) — a quiet advantage over the logistic formulations of [3.3](03-3-logistic-regression.qmd).
+
+### Read & Refactor AI Code
+
+This AI-generated classifier has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.naive_bayes import GaussianNB
+from sklearn.metrics import accuracy_score
+
+rng = np.random.default_rng(9)
+n = 500
+latent = rng.normal(0, 1, n)
+X = np.c_[latent,                       # gene 1
+          0.95 * latent + rng.normal(0, .2, n),   # gene 2 (copy)
+          0.95 * latent + rng.normal(0, .2, n)]   # gene 3 (copy)
+y = (rng.uniform(0, 1, n) < 1 / (1 + np.exp(-2 * latent))).astype(int)
+
+nb = GaussianNB().fit(X, y)
+pred = nb.predict(X)
+
+# BUG 1: report probabilities as calibrated risks
+print("mean predicted risk when y=1:", nb.predict_proba(X)[:, 1][y == 1].mean().round(3))
+
+# BUG 2: sample priors from a case-control design used as population risks
+X_case = X[y == 1]; X_ctrl = X[y == 0]
+print("training priors:", nb.class_prior_.round(2), "-> quoted as disease prevalence")
+
+# BUG 3: QDA with n < d-style covariance (3 features ok, but tiny classes)
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+Xs = np.vstack([X[y == 0][:3, :2], X[y == 1][:3, :2]])   # 2 features only
+ys = np.array([0, 0, 0, 1, 1, 1])
+qda = QuadraticDiscriminantAnalysis(reg_param=0).fit(Xs, ys)
+print("QDA on 6 samples:", qda.score(Xs, ys))
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **NB probabilities quoted as risks**: three near-copies of one signal triple-count the evidence; predicted risks inflate toward 1. Report rankings, or recalibrate ([3.7](03-7-model-comparison.qmd)), or drop duplicate features / use logistic.
+2. **Case–control priors as prevalence**: `class_prior_` here reflects the *sampling design* (here 50/50), not biology. Set `GaussianNB(priors=...)` to real prevalence or correct downstream.
+3. **QDA on 6 samples**: covariance estimates are garbage (reg_param=0 doesn't even stabilize); the 1.00 "score" is training-set self-evaluation. Fix: more data, `reg_param` tuned by CV, or LDA.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.naive_bayes import GaussianNB
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+from sklearn.model_selection import cross_val_score
+from sklearn.linear_model import LogisticRegression
+
+rng = np.random.default_rng(9)
+n = 500
+latent = rng.normal(0, 1, n)
+X = np.c_[latent, 0.95 * latent + rng.normal(0, .2, n),
+          0.95 * latent + rng.normal(0, .2, n)]
+y = (rng.uniform(0, 1, n) < 1 / (1 + np.exp(-2 * latent))).astype(int)
+
+lr = LogisticRegression(max_iter=4000).fit(X, y)
+print("logistic mean p|y=1 (calibrated-ish):",
+      lr.predict_proba(X)[:, 1][y == 1].mean().round(3))
+
+nb = GaussianNB(priors=[0.5, 0.5]).fit(X, y)   # priors set by design, disclosed
+cv_qda = cross_val_score(QuadraticDiscriminantAnalysis(reg_param=0.5), X, y, cv=5)
+print("QDA reg=0.5 CV acc:", cv_qda.mean().round(3), "(honest, not train-acc)")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Derive LDA's linear score from the Gaussian log-densities: write $\log P(x|k) + \log \pi_k$ for class k, subtract the two classes' expressions, and show every quadratic term cancels under Σ₀ = Σ₁. Then state precisely which direction the discriminant points (Σ⁻¹(μ₁−μ₀)) and why it is the Fisher optimal projection (maximizing between-class over within-class variance).
+
+<details>
+<summary>Hint</summary>
+
+Expand −½(x−μₖ)ᵀΣ⁻¹(x−μₖ); the xᵀΣ⁻¹x piece is class-independent.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+log P(x|k) = −½(x−μₖ)ᵀΣ⁻¹(x−μₖ) + constₖ. The difference log P(x|1) − log P(x|0) = xᵀΣ⁻¹(μ₁−μ₀) − ½(μ₁ᵀΣ⁻¹μ₁ − μ₀ᵀΣ⁻¹μ₀) — the xᵀΣ⁻¹x terms cancel *because Σ is shared*. The decision score is linear with direction w = Σ⁻¹(μ₁−μ₀): the class separation, whitened by within-class covariance — which is exactly Fisher's criterion argmax wᵀ(μ₁−μ₀)/√(wᵀΣw). Two views, one vector: the generative derivation and the optimal-projection problem have the same solution, which is why LDA doubles as both a classifier and a supervised projector.
+</details>
+
+**Q2.** You have d = 2,000 features, n = 200 samples, two classes with correlated features. Design the analysis pipeline: which of LDA/QDA/NB/logistic is even feasible as-is, what preprocessing must precede it, how you'd validate the choice ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd) + [4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd) discipline), and what failure mode each option guards against. Demonstrate with a simulation: compare the candidates' CV accuracies and calibration under p ≫ n.
+
+<details>
+<summary>Solution</summary>
+
+Feasibility triage: QDA — infeasible (4M covariance parameters/class, singular). LDA — pooled Σ is 2000×2000 from 200 samples: singular; needs shrinkage or feature reduction. GaussianNB — *feasible* (2 diag variances per class) but assumes away the correlations and p ≫ n overconfidence. Logistic with L2 penalty — feasible and standard. Pipeline: standardize → (optionally) reduce dimension (feature screening inside CV only, or PCA) → fit penalized logistic / shrunk-LDA / NB inside a Pipeline → nested CV for model choice, calibration curve at the end.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.naive_bayes import GaussianNB
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+
+rng = np.random.default_rng(10)
+n, d = 200, 2000
+latent = rng.normal(0, 1, (n, 3))                     # 3 real dimensions
+X = rng.normal(0, 1, (n, d))
+X[:, :3] = latent
+y = (rng.uniform(0, 1, n) < 1 / (1 + np.exp(-(2*latent[:,0] - latent[:,1])))).astype(int)
+
+kf = StratifiedKFold(5, shuffle=True, random_state=0)
+candidates = {
+    "GaussianNB": make_pipeline(StandardScaler(), GaussianNB()),
+    "LDA (shrink)": make_pipeline(StandardScaler(),
+                    LinearDiscriminantAnalysis(solver="lsqr", shrinkage="auto")),
+    "Logistic L2": make_pipeline(StandardScaler(),
+                    LogisticRegression(max_iter=5000)),
+}
+for name, pipe in candidates.items():
+    acc = cross_val_score(pipe, X, y, cv=kf).mean()
+    print(f"{name:12s} CV acc = {acc:.3f}")
+```
+
+Typical outcome: penalized logistic ≈ shrunk LDA > NB on accuracy, and only logistic/LDA give trustworthy probability *directions*; NB's accuracy is respectable while its probabilities are inflated. The p ≫ n moral: the choice is not "which classifier" but "which regularization + which validation" — the subject of Part 5 and Part 4 respectively.
+</details>
+
+## 6. Complex Questions
+
+**C1 (generative × [2.6 categorical](../part-02-linear-regression/02-6-categorical-predictors.qmd)).** Extend the Bayes classifier to *mixed* feature types: one Gaussian feature and one binary feature per class (model the binary one with class-specific Bernoulli probabilities — the "independence" NB way). Implement the joint log-posterior by hand, verify on simulated data against GaussianNB-on-dummified input where possible, and explain where a fully-Naive treatment misprices the *joint* evidence of (Gaussian, binary) pairs that are correlated within class.
+
+**C2 (generative × [4.4 bias–variance](../part-04-validation-model-selection/04-4-bias-variance.qmd) preview).** Organize the three classifiers on a flexibility axis: NB (diagonal, k·d params) → LDA (shared full Σ) → QDA (per-class Σ). Simulate data under each of the three data-generatings in turn; for each, sweep the three models across n ∈ {20, 100, 500} and record test accuracy. You should reproduce the classic picture: the correctly-specified model dominates at small n; all converge at large n *unless* misspecified. Bring the resulting 3×3×3 table to [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd) and map each cell onto bias/variance language.
+
+## 7. Summary
+
+- Generative = model P(x|y)P(y), classify by posterior; fewer effective parameters, stronger assumptions.
+- LDA: shared Gaussian covariance → linear boundary + Fisher projection; QDA: per-class covariance → quadratic; NB: conditional independence → diagonal, fast, fragile probabilities.
+- LDA/QDA need n ≫ d and covariance stability (shrinkage/reg_param); NB needs feature independence to be honest.
+- Priors are parameters: sampling designs (case–control) must be corrected before quoting posteriors.
+- Correlated features double-count in NB — rankings survive, probabilities don't.
+- Generative wins small-n under true assumptions; discriminative catches up and overtakes when assumptions fail.
+- The remaining classical classifier is assumption-free neighborhood voting: [3.5 KNN classification](03-5-knn-classification.qmd).

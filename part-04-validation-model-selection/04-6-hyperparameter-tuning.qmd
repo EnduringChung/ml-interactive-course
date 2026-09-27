@@ -1,9 +1,444 @@
 ---
-title: "Coming soon"
+title: "4.6 Hyperparameter Tuning"
 tier: 1
 engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - matplotlib
 ---
 
-This page has not been published yet. It is scheduled in the [build order](/index.qmd) and will follow the same seven-section template as every other page.
+Every model from Part 2–3 has dials you don't fit from data: polynomial degree, KNN's k, regularization strength, tree depth. **Hyperparameter tuning** chooses them by validation — and inherits every trap of [4.1–4.5](../part-04-validation-model-selection/04-1-generalization-problem.qmd) in concentrated form, because tuning is selection, and selection is optimism. This page builds the honest tuning machine: grids, pipelines, nested CV, and the reporting discipline that keeps the numbers true.
 
-Check back soon — progress is tracked in the [course home](/index.qmd).
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+**The separation of hats**: hyperparameters are chosen on validation data (inner loop); performance of the *whole choose-and-fit procedure* is estimated on untouched data (outer loop). Conflating the hats — tuning and reporting on the same data — is the single most common inflated number in applied ML.
+
+```{pyodide}
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import (train_test_split, GridSearchCV,
+                                     cross_val_score, StratifiedKFold)
+
+X, y = make_classification(n_samples=800, n_features=6, class_sep=1.0, random_state=0)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, stratify=y, random_state=1)
+
+pipe = make_pipeline(StandardScaler(), KNeighborsClassifier())
+grid = {"kneighborsclassifier__n_neighbors": list(range(1, 31, 2))}
+
+inner = StratifiedKFold(5, shuffle=True, random_state=2)
+search = GridSearchCV(pipe, grid, cv=inner, scoring="accuracy").fit(X_tr, y_tr)
+print("best k:", search.best_params_["kneighborsclassifier__n_neighbors"])
+print("CV score of best (inner):", round(search.best_score_, 4))
+
+outer = StratifiedKFold(5, shuffle=True, random_state=3)
+honest = cross_val_score(GridSearchCV(pipe, grid, cv=inner, scoring="accuracy"),
+                         X, y, cv=outer)
+print("nested CV estimate of the WHOLE procedure:", round(honest.mean(), 4))
+
+final = search.best_estimator_.fit(X_tr, y_tr)
+print("held-out test accuracy (spent once):", round(final.score(X_te, y_te), 4))
+```
+
+The tuning landscape itself — mean CV score per k with its fold spread:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+
+results = search.cv_results_
+ks = results["param_kneighborsclassifier__n_neighbors"]
+means, stds = results["mean_test_score"], results["std_test_score"]
+
+fig, ax = plt.subplots(figsize=(7, 3.4))
+ax.plot(ks, means, marker="o", ms=4)
+ax.fill_between(ks, means - stds, means + stds, alpha=0.2)
+ax.axvline(search.best_params_["kneighborsclassifier__n_neighbors"],
+           color="red", ls=":", label=f"best k = {search.best_params_['kneighborsclassifier__n_neighbors']}")
+ax.set(xlabel="k", ylabel="5-fold CV accuracy", title="The tuning landscape (mean ± fold SD)")
+ax.legend()
+plt.show()
+```
+
+Note the landscape's flat top: neighboring k values are statistically indistinguishable — the one-standard-error rule (below) exists for exactly this reason.
+
+## 2. Concept Questions
+
+1. Why is `search.best_score_` NOT an unbiased estimate of the tuned model's performance — describe the mechanism in one sentence.
+2. State the one-standard-error rule and the philosophy behind preferring the simpler model within 1 SE of the best.
+3. Grid vs random search: when does random win, and what property of real hyperparameter landscapes makes it so?
+4. Your pipeline = scaler + feature-selector + model, all tuned. Why must the *selector's* parameters also live inside the CV loop?
+5. After nested CV selects and scores the procedure, what model do you deploy, and what number do you quote for its expected performance?
+
+<details>
+<summary>Answers</summary>
+
+1. `best_score_` is the maximum over candidates of noisy CV estimates — an order statistic. Even on pure noise it beats the true optimum; its expected value = true performance + selection bonus (measured in [4.1 Q2](../part-04-validation-model-selection/04-1-generalization-problem.qmd)). Only an *outer* loop (or fresh test set) prices the selection itself.
+2. Among models whose CV scores lie within 1 SE of the best, choose the most *parsimonious* (largest k, strongest penalty, fewest features). Rationale: those scores are indistinguishable from the best; the simpler model has less variance, better interpretability, and typically better deployment behavior — you give up nothing measurable and buy robustness.
+3. When the grid is larger than a handful of dimensions or several parameters are irrelevant (low effective dimensionality of the response surface). Landscapes are usually dominated by a few parameters (e.g., k, learning rate) while others barely matter — random points find the important dimensions faster than a lattice that spends equal effort on all.
+4. Because feature selection *fits parameters to data* (which features look informative): leaving it outside the loop means validation folds were pre-filtered using their own labels — leakage by another name ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd), [4.3](../part-04-validation-model-selection/04-3-cross-validation.qmd)). The fold must contain the entire data-dependent chain.
+5. Deploy the chosen configuration **refit on all available data**; quote the *outer* (nested) estimate as the expected performance of the procedure — not the inner best score, not the refit model's training score.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import GridSearchCV
+from sklearn.linear_model import Ridge
+from sklearn.datasets import make_regression
+X, y = make_regression(n_samples=200, n_features=10, random_state=0)
+grid = GridSearchCV(Ridge(), {"alpha": 10.0 ** np.arange(-3, 4)}, cv=5)
+grid.fit(X, y)
+print("alphas:", grid.cv_results_["param_alpha"].data)
+print("means: ", grid.cv_results_["mean_test_score"].round(3))
+print("best:  ", grid.best_params_, round(grid.best_score_, 4))
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import RandomizedSearchCV
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.datasets import make_classification
+X, y = make_classification(n_samples=300, random_state=1)
+rs = RandomizedSearchCV(KNeighborsClassifier(),
+                        {"n_neighbors": list(range(1, 51)),
+                         "weights": ["uniform", "distance"],
+                         "p": [1, 2]},
+                        n_iter=20, cv=5, random_state=2)
+rs.fit(X, y)
+print("tried:", rs.n_iter, "of", len(rs.cv_results_["params"]), "combinations")
+print("best:", rs.best_params_)
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import validation_curve
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.datasets import make_classification
+X, y = make_classification(n_samples=400, random_state=3)
+tr, va = validation_curve(
+    make_pipeline(StandardScaler(), KNeighborsClassifier()),
+    X, y, param_name="kneighborsclassifier__n_neighbors",
+    param_range=[1, 3, 7, 15, 31, 63], cv=5)
+print("train:", tr.mean(axis=1).round(3))
+print("valid:", va.mean(axis=1).round(3))   # watch the U appear
+```
+
+```{pyodide}
+import numpy as np
+# selection inflation grows with candidate count
+rng = np.random.default_rng(4)
+for M in [1, 5, 20, 100]:
+    winners = []
+    for rep in range(2000):
+        scores = rng.normal(0.5, 0.05, M)      # all models identical in truth
+        winners.append(scores.max())
+    print(f"M={M:>3}: mean best score {np.mean(winners):.4f} (truth 0.50)")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Two grids, honestly compared: candidate A tunes KNN over k ∈ {1..30}; candidate B tunes k ∈ {1..30} *and* weights ∈ {uniform, distance} and p ∈ {1, 2} (180 combos). On the same outer 5-fold nested evaluation, compare the two *procedures'* nested scores. Does the bigger grid win? By how much — and is the gain inside noise? Then relate the answer to the selection-inflation drill: which procedure pays more selection tax?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import (train_test_split, GridSearchCV,
+                                     cross_val_score, StratifiedKFold)
+
+X, y = make_classification(n_samples=800, n_features=6, class_sep=1.0, random_state=0)
+
+pipe = make_pipeline(StandardScaler(), KNeighborsClassifier())
+grid_a = {"kneighborsclassifier__n_neighbors": list(range(1, 31))}
+grid_b = {"kneighborsclassifier__n_neighbors": list(range(1, 31)),
+          "kneighborsclassifier__weights": ["uniform", "distance"],
+          "kneighborsclassifier__p": [1, 2]}
+
+inner = StratifiedKFold(5, shuffle=True, random_state=1)
+outer = StratifiedKFold(5, shuffle=True, random_state=2)
+
+for tag, g in [("grid A (30 combos)", grid_a), ("grid B (180 combos)", grid_b)]:
+    s = cross_val_score(GridSearchCV(pipe, g, cv=inner), X, y, cv=outer)
+    print(f"{tag}: nested accuracy {s.mean():.4f} ± {s.std():.4f}")
+```
+
+Typical result: grid B edges out A by a fraction of a percent — often within the outer-fold SD. The 6× larger search pays 6× the selection tax on its inner best score; the *outer* estimate, which prices that tax, shows the true (small) gain. Lesson: bigger grids mostly buy bigger reported inner numbers, not performance — tune what theory says matters, not what the grid can enumerate.
+</details>
+
+**Exercise 2.** The one-standard-error rule in action: from Section 1's GridSearchCV, compute the SE of the best score's folds, mark the 1-SE band, and list all k whose mean score falls within it. Choose the largest such k and compare its held-out test accuracy to the argmax k's. Repeat over 30 different random states — how often does the 1-SE model match or beat the argmax on test?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
+
+wins, ties, losses = 0, 0, 0
+for state in range(30):
+    X, y = make_classification(n_samples=800, n_features=6, class_sep=1.0,
+                               random_state=100 + state)
+    X_tr, X_te, y_tr, y_te = train_test_split(X, y, stratify=y, random_state=state)
+    pipe = make_pipeline(StandardScaler(), KNeighborsClassifier())
+    inner = StratifiedKFold(5, shuffle=True, random_state=state)
+    g = GridSearchCV(pipe, {"kneighborsclassifier__n_neighbors": list(range(1, 31, 2))},
+                     cv=inner).fit(X_tr, y_tr)
+    means = g.cv_results_["mean_test_score"]
+    stds = g.cv_results_["std_test_score"]
+    ks = g.cv_results_["param_kneighborsclassifier__n_neighbors"].data.astype(int)
+
+    i_best = int(np.argmax(means))
+    threshold = means[i_best] - stds[i_best] / np.sqrt(5)   # SE of the MEAN
+    ok = np.where(means >= threshold)[0]
+    k_1se = int(ks[ok[np.argmax(ks[ok])]])                   # largest k within 1 SE
+
+    acc = lambda k: (make_pipeline(StandardScaler(),
+                     KNeighborsClassifier(k)).fit(X_tr, y_tr).score(X_te, y_te))
+    a_best, a_1se = acc(int(ks[i_best])), acc(k_1se)
+    if a_1se > a_best: wins += 1
+    elif a_1se == a_best: ties += 1
+    else: losses += 1
+
+print(f"1-SE rule vs argmax on held-out test: wins {wins}, ties {ties}, losses {losses}")
+```
+
+The 1-SE model matches or beats the argmax most of the time despite (usually) being smoother — its test luck is comparable *and* it's the model you'd rather deploy (larger k = stabler). The rule isn't magic; it's a tie-breaker that spends a tie on robustness.
+</details>
+
+**Exercise 3.** Build `nested_compare(procedures, X, y, outer_k=5)` where each procedure is an unfitted GridSearchCV — returning each procedure's outer mean/SD plus a paired comparison of the top two (fold-wise differences, t-test). Demonstrate on (a) KNN with tuned k, (b) logistic with tuned C, (c) LDA (no tuning) on one dataset. Report the ranking, the paired p-value for the leaders, and the honest sentence you'd write about "the best model."
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy import stats
+from sklearn.datasets import make_classification
+from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_val_score
+
+def nested_compare(procedures, X, y, outer_k=5, seed=0):
+    outer = StratifiedKFold(outer_k, shuffle=True, random_state=seed)
+    out = {}
+    for name, proc in procedures.items():
+        out[name] = cross_val_score(proc, X, y, cv=outer)
+    for name, folds in out.items():
+        print(f"{name:12s} nested acc {folds.mean():.4f} ± {folds.std():.4f}")
+    return out
+
+X, y = make_classification(n_samples=800, n_features=8, class_sep=0.9, random_state=3)
+inner = StratifiedKFold(5, shuffle=True, random_state=4)
+
+procedures = {
+    "KNN tuned": GridSearchCV(
+        make_pipeline(StandardScaler(), KNeighborsClassifier()),
+        {"kneighborsclassifier__n_neighbors": list(range(1, 31, 2))}, cv=inner),
+    "Logit tuned C": GridSearchCV(
+        make_pipeline(StandardScaler(), LogisticRegression(max_iter=4000)),
+        {"logisticregression__C": 10.0 ** np.arange(-3, 4)}, cv=inner),
+    "LDA (fixed)": make_pipeline(StandardScaler(), LinearDiscriminantAnalysis()),
+}
+
+res = nested_compare(procedures, X, y)
+names = list(res)
+d = res[names[0]] - res[names[1]]
+t, p = stats.ttest_rel(res[names[0]], res[names[1]])
+print(f"\npaired fold differences {names[0]} − {names[1]}: "
+      f"mean {d.mean():+.4f}, paired t p = {p:.3f}")
+print("Honest sentence: 'Procedure differences are within fold noise; "
+      "we deploy the simpler/interpretable one.'")
+```
+
+Nested comparison answers "which *procedure* generalizes better," with pairing across outer folds and a real test — and the usual outcome on modest data is "statistically indistinguishable," which is a finding, not a failure: it licenses choosing by interpretability, cost, or simplicity ([3.7](../part-03-classification-glm/03-7-model-comparison.qmd)'s ethic, formalized).
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **The tuning metric must be the deployment metric** — tuning accuracy to deploy a precision@k system optimizes the wrong thing; set `scoring` deliberately (roc_auc, average_precision, f1, custom).
+- **Grid resolution is a bias-variance choice**: coarse grids miss optima (bias), fine grids inflate selection tax and compute. Log-spaced grids for scale parameters (C, α, learning rate) are the efficient default.
+- **Search over preprocessing counts too** — imputation strategy, scaling flavor, selector's k are hyperparameters and belong in the grid (inside the pipeline); anything data-dependent outside the loop is leakage.
+- **Refit-on-all-data after selection** (GridSearchCV does it by default: `refit=True`) — but the *number* you report is the outer/nested one, never `best_score_`.
+- **Flat landscapes are informative**: if a wide band of hyperparameters scores identically, the data cannot distinguish them — pick by parsimony/interpretability and say so, rather than reporting the argmax as if it were discovered.
+- **Compute budgeting**: nested CV multiplies fits (outer × inner × grid); for heavy models use coarse inner grids, random search, or successive halving — but never drop the outer layer: that's the whole page.
+- **Tuning on the test set via iteration** ("we only looked at the test score a few times") is optional stopping ([1.4](../part-01-statistics-bridge/01-4-statistical-inference.qmd)) — the test set's budget is spent by *attention*, not by fit calls.
+
+### Read & Refactor AI Code
+
+This AI-generated "tuning pipeline" has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
+
+X, y = make_classification(n_samples=1000, n_features=8, random_state=5)
+
+# BUG 1: scale on all data, then split, then tune on the test set too
+Xs = StandardScaler().fit_transform(X)
+X_tr, X_te, y_tr, y_te = train_test_split(Xs, y, random_state=6)
+grid = GridSearchCV(LogisticRegression(max_iter=5000),
+                    {"C": 10.0 ** np.arange(-3, 4)},
+                    cv=5, refit=False)
+grid.fit(X_tr, y_tr)
+best_C = grid.best_params_["C"]
+
+# BUG 2: evaluate MANY Cs on the test set and keep the best
+test_scores = {}
+for C in 10.0 ** np.arange(-3, 4):
+    m = LogisticRegression(C=C, max_iter=5000).fit(X_tr, y_tr)
+    test_scores[C] = accuracy_score(y_te, m.predict(X_te))
+final_C = max(test_scores, key=test_scores.get)
+print("C from CV:", best_C, "| C from test:", final_C)
+
+# BUG 3: report the test-tuned score as performance
+print("final performance:", round(test_scores[final_C], 4))
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Scaling before split + tuning** — leakage (scaler saw test rows) and the inner CV scores are computed on pre-scaled data. Pipeline + refit-per-fold.
+2. **Argmax on the test set across 7 Cs** — the test set just became a training set; `final_C` is selection-on-test ([4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd)). The test set gets ONE evaluation of the frozen winner.
+3. **The reported number is the max of 7 noisy test numbers** — pure order-statistic optimism. Report the frozen model's single test score (or better, a nested CV estimate).
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+
+X, y = make_classification(n_samples=1000, n_features=8, random_state=5)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=6)
+
+pipe = make_pipeline(StandardScaler(), LogisticRegression(max_iter=5000))
+grid = GridSearchCV(pipe, {"logisticregression__C": 10.0 ** np.arange(-3, 4)},
+                    cv=5)
+grid.fit(X_tr, y_tr)
+print("inner best C:", grid.best_params_["logisticregression__C"],
+      "| inner best score:", round(grid.best_score_, 4))
+
+final = grid.best_estimator_                 # refit on training data by refit=True
+print("frozen model's single test score:", round(final.score(X_te, y_te), 4))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Derive (or verify by simulation) the expected selection bonus for M candidates whose scores are i.i.d. N(μ, s²): it is μ + s·E[max of M standard normals] ≈ μ + s·√(2 ln M). Then measure the bonus empirically for M = 10, 100, 1000 with s = 0.02 and compare against the formula. What does the logarithmic growth imply about adding candidates to a search — and about the honesty of "we searched 10,000 configurations and found X"?
+
+<details>
+<summary>Hint</summary>
+
+E[max] of M standard normals grows like √(2 ln M); the bonus scales with the *noise* s, not the effect sizes.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(7)
+mu, s = 0.70, 0.02
+for M in [10, 100, 1000]:
+    empirical = np.mean([rng.normal(mu, s, M).max() for _ in range(5000)])
+    theory = mu + s * np.sqrt(2 * np.log(M))
+    print(f"M={M:>5}: E[best] empirical {empirical:.4f}  formula {theory:.4f}")
+```
+
+Agreement is close (√(2 ln M) is an asymptotic approximation, slightly high at small M). Implications: the bonus grows only logarithmically — 10× more candidates buys little extra inflation — *but* it grows without bound, and it scales with score noise s: noisy small-validation searches suffer most. A "10,000-configuration search" must therefore report performance from an outer/nested estimate; the search's own best score is guaranteed flattery worth ≈ s√(2 ln M).
+</details>
+
+**Q2.** Successive halving / Hyperband-style tuning spends more budget on promising candidates. Design a miniature version for 60 KNN configurations (k ∈ 1..60) on a fixed dataset: start all on 2-fold CV over 200 rows, keep the top 20, then 4-fold over 400 rows, keep top 7, then full 5-fold on all rows. Compare the winner and total fit-count against exhaustive GridSearchCV (60 configs × 5 folds). Does the cheap scheme pick the same k? Implement and report — and state the failure mode it imports (which honest-estimator principle does the multi-stage scoring bend?).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import cross_val_score, KFold
+
+X, y = make_classification(n_samples=600, n_features=6, class_sep=1.0, random_state=8)
+ks = list(range(1, 61))
+fits = 0
+
+def cv_score(k, splits):
+    global fits
+    pipe = make_pipeline(StandardScaler(), KNeighborsClassifier(k))
+    fits += splits.get_n_splits()
+    return cross_val_score(pipe, X, y, cv=splits).mean()
+
+stage1 = {k: cv_score(k, KFold(2, shuffle=True, random_state=0)) for k in ks}
+top20 = sorted(stage1, key=stage1.get, reverse=True)[:20]
+stage2 = {k: cv_score(k, KFold(4, shuffle=True, random_state=1)) for k in top20}
+top7 = sorted(stage2, key=stage2.get, reverse=True)[:7]
+stage3 = {k: cv_score(k, KFold(5, shuffle=True, random_state=2)) for k in top7}
+winner_sh = max(stage3, key=stage3.get)
+
+full = {k: cv_score(k, KFold(5, shuffle=True, random_state=2)) for k in ks}
+winner_full = max(full, key=full.get)
+print(f"successive halving winner: k={winner_sh} (fits used: {fits})")
+print(f"exhaustive winner:         k={winner_full} (fits: {60*5})")
+```
+
+The cheap scheme usually lands on the same k or a neighbor (flat landscape) at a fraction of the fits. The bent principle: candidates are *compared on different amounts of data at different stages* — early elimination can kill a config whose advantage only shows at full data (variance-vs-budget trade). Remedies: generous early stages, random restarts, or accepting a small probability of eliminating the true optimum — the same order-statistic humility as everything else on this page.
+</details>
+
+## 6. Complex Questions
+
+**C1 (tuning × [4.3 CV](../part-04-validation-model-selection/04-3-cross-validation.qmd) × [3.7 comparison](../part-03-classification-glm/03-7-model-comparison.qmd)).** Design and run the full "honest bake-off": 4 model families (logistic+C, KNN+k, random-forest-ish depth dial — use a shallow `DecisionTreeClassifier` with tuned `max_depth`, LDA fixed), each tuned by inner 5-fold over sensible grids, compared by outer 5-fold nested CV with paired fold-differences and a multiplicity-aware verdict (Bonferroni across the 6 pairs). Deliver the table, the pairwise p-value matrix, and the deployment sentence — this is the capstone artifact of Parts 2–4.
+
+**C2 (tuning × [12.x multiplicity](../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.qmd) preview).** Show that hyperparameter search over M configurations is structurally identical to testing M hypotheses: simulate null data; for each of M = 100 random configurations compute a CV score and its (approximate) p-value vs a fixed baseline; count "significant improvements" at α = 0.05 raw and after Bonferroni. Write the paragraph connecting the family-wise-error view to the selection-bonus view of [4.1 Q2](../part-04-validation-model-selection/04-1-generalization-problem.qmd) — two languages, one phenomenon — and state which controls what in practice.
+
+## 7. Summary
+
+- Tuning is selection; selection is optimism; the outer loop (nested CV or a virgin test set) is the only honest scoreboard.
+- `best_score_` is a marketing number; the nested estimate is the performance claim; deploy the refit-on-all-data winner.
+- Grid/random: log-spaced scales, few meaningful dimensions, random search for big spaces; the one-SE rule buys robustness for free.
+- Every data-dependent step — scaling, selection, imputation — lives inside the fold pipeline.
+- Selection bonus ≈ s·√(2 ln M): grows with score noise and candidate count; budget score noise (bigger validation folds) and candidate count deliberately.
+- Comparison of tuned procedures needs identical budgets, pairing, and multiplicity awareness — the [3.7](../part-03-classification-glm/03-7-model-comparison.qmd) rules at full depth.
+- Parts 2–4 are complete: you can build models, price their uncertainty, and choose among them honestly. Next, [Part 5](../part-05-regularization-high-dimensions/05-1-feature-selection.qmd) turns regularization into a first-class citizen — the shrinkage dials this page kept referencing.

@@ -1,0 +1,383 @@
+---
+title: "2.3 Accuracy of the Coefficients"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scipy
+    - statsmodels
+    - patsy
+---
+
+A slope estimate is a random variable — a different sample gives a different line. This page quantifies *how much* it moves: standard errors, t-tests on coefficients, and confidence intervals. This is the inference layer that separates "there's a slope" from "we know the slope to ±0.2."
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+Under the model $y = \beta_0 + \beta_1 x + \varepsilon$ with homoscedastic, independent errors, the slope estimator has standard error
+
+$$\text{SE}(\hat{\beta}_1) = \frac{\hat{\sigma}}{\sqrt{\sum_i (x_i - \bar x)^2}} = \frac{\hat\sigma}{s_x\sqrt{n}} \qquad\text{where } \hat{\sigma}^2 = \frac{\text{RSS}}{n - 2}$$
+
+Three levers, all visible in the formula: more noise (σ) widens; more spread in x ($s_x$) narrows; more points ($\sqrt n$) narrows. The coefficient's t-statistic and CI follow the universal pattern from [1.4](../part-01-statistics-bridge/01-4-statistical-inference.qmd):
+
+$$t = \frac{\hat\beta_1}{\text{SE}(\hat\beta_1)}, \qquad \hat\beta_1 \pm t_{0.975,\,n-2}\,\text{SE}(\hat\beta_1)$$
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(0)
+x = rng.uniform(0, 10, 40)
+y = 2 + 0.7 * x + rng.normal(0, 2, 40)
+
+X = sm.add_constant(x)                       # add the intercept column
+model = sm.OLS(y, X).fit()
+
+print(model.params.round(4))                 # [intercept, slope]
+print(model.bse.round(4))                    # standard errors
+print(f"t(slope) = {model.tvalues[1]:.3f},  p = {model.pvalues[1]:.5f}")
+print(model.conf_int().round(3))             # 95% CIs for [intercept, slope]
+```
+
+Same information, human-readable — and the residual-based estimate of σ:
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+rng = np.random.default_rng(0)
+x = rng.uniform(0, 10, 40)
+y = 2 + 0.7 * x + rng.normal(0, 2, 40)
+model = sm.OLS(y, sm.add_constant(x)).fit()
+
+print(model.summary().tables[1])             # the coefficient table
+
+n = len(x)
+rss = np.sum(model.resid**2)
+sigma2_hat = rss / (n - 2)
+print(f"residual-based σ̂ = {np.sqrt(sigma2_hat):.3f}   (simulation truth: 2.0)")
+```
+
+**Verify the formula by brute force** — the SE is just the SD of the estimator across hypothetical samples:
+
+```{pyodide}
+#| fig-width: 6.5
+#| fig-height: 3
+import numpy as np
+import statsmodels.api as sm
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(1)
+slopes = []
+for _ in range(3000):
+    xb = rng.uniform(0, 10, 40)
+    yb = 2 + 0.7 * xb + rng.normal(0, 2, 40)
+    slopes.append(sm.OLS(yb, sm.add_constant(xb)).fit().params[1])
+slopes = np.array(slopes)
+
+# one representative sample's formula SE
+x = rng.uniform(0, 10, 40)
+y = 2 + 0.7 * x + rng.normal(0, 2, 40)
+fit = sm.OLS(y, sm.add_constant(x)).fit()
+formula_se = fit.bse[1]
+
+fig, ax = plt.subplots(figsize=(6.5, 3))
+ax.hist(slopes, bins=40, color="steelblue")
+ax.axvline(0.7, color="red", label="true slope")
+ax.axvline(0.7 - formula_se, color="k", ls="--", label="±1 formula SE")
+ax.axvline(0.7 + formula_se, color="k", ls="--")
+ax.legend()
+ax.set_title("Sampling distribution of β̂₁ vs formula SE")
+plt.show()
+print(f"empirical SD = {slopes.std():.4f}   formula SE = {formula_se:.4f}")
+```
+
+## 2. Concept Questions
+
+1. Two datasets have identical σ and n, but dataset A's x spans 0–100 and B's spans 0–1. Which has the more precise slope, and which term of the SE formula says so?
+2. What exactly is $H_0$ when `P>|t|` for a slope is 0.03? And what is *not* being tested?
+3. Why do we divide RSS by $n-2$ (not $n$) to estimate σ²?
+4. Your 95% CI for a slope is (0.02, 0.11). A reviewer says "the effect is tiny." What's the correct reply?
+5. If you double *all* y values, what happens to $\hat\beta_1$, its SE, its t-statistic, and its p-value?
+
+<details>
+<summary>Answers</summary>
+
+1. **A** — via $s_x$ (x-spread) in the denominator: the same noise, stretched over a wider x-range, is harder to confuse with a slope. Note it is the *spread*, not the range per se — a single far point adds range without usable spread (and adds leverage instead).
+2. $H_0: \beta_1 = 0$ — "no linear relationship with this predictor, *in this model*," tested with data this size. Not tested: the effect's practical importance (0.03 doesn't mean "large"), causality, or the effect conditional on predictors *not* in the model.
+3. Two parameters ($\beta_0, \beta_1$) were *fitted from the same residuals*, consuming 2 degrees of freedom; residuals from a fitted line are systematically smaller than true ε. Dividing by $n - p - 1$ (here p = 1) corrects the optimism — the same logic as $n-1$ for a variance ([1.1](../part-01-statistics-bridge/01-1-descriptive-statistics.qmd)).
+4. "Statistically significant but small, and the *estimate* is 0.02–0.11 y-units per unit x." Significance ≠ importance; the CI *is* the effect-size statement — argue importance against the interval's *values*, not its exclusion of zero.
+5. $\hat\beta_1$ and SE double (both scale with y's units) → t and p unchanged. Slope SEs live in y-units: 2× the outcome units, 2× the uncertainty — but the same *evidence*. (This scale-invariance of t is why p-values don't answer "is the effect big.")
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from scipy import stats
+print(stats.t.ppf(0.975, df=38).round(4))     # 2.0244 — n=40 line's critical value
+print(stats.t.ppf(0.975, df=8).round(4))      # 2.3060 — small n pays
+x = np.arange(1., 11.)
+print(round(np.sqrt(np.sum((x - x.mean())**2)), 3))   # Sxx^0.5 = spread lever
+```
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+rng = np.random.default_rng(2)
+# quadrupling n halves the SE (sqrt law)
+for n in [25, 100]:
+    x = rng.uniform(0, 10, n)
+    y = 1 + 0.5 * x + rng.normal(0, 3, n)
+    se = sm.OLS(y, sm.add_constant(x)).fit().bse[1]
+    print(f"n={n:>3}: SE(slope) = {se:.4f}")
+```
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+rng = np.random.default_rng(3)
+# noiser data -> wider SEs, same t logic
+for sigma in [1.0, 4.0]:
+    x = rng.uniform(0, 10, 60)
+    y = 1 + 0.5 * x + rng.normal(0, sigma, 60)
+    fit = sm.OLS(y, sm.add_constant(x)).fit()
+    print(f"σ={sigma}: slope={fit.params[1]:.3f}  SE={fit.bse[1]:.3f}  t={fit.tvalues[1]:.2f}")
+```
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+from scipy import stats
+rng = np.random.default_rng(4)
+# under a TRUE null, t-statistics are ~t(n-2) distributed
+t_stats = []
+for _ in range(4000):
+    x = rng.uniform(0, 1, 20)
+    y = rng.normal(0, 1, 20)               # no slope in truth
+    t_stats.append(sm.OLS(y, sm.add_constant(x)).fit().tvalues[1])
+t_stats = np.array(t_stats)
+print("P(|t| > 2.101) =", (np.abs(t_stats) > stats.t.ppf(0.975, 18)).mean().round(3))
+print("SD of t:", t_stats.std().round(3), " (t(18) SD =", round(np.sqrt(18/16), 3), ")")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** For the data below, compute SE(β̂₁) **by hand** from the formula $\hat\sigma / s_x\sqrt n$ (using residuals for σ̂), then match it against `model.bse[1]`. Construct the 95% CI manually and compare with `conf_int()`.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+from scipy import stats
+
+rng = np.random.default_rng(5)
+x = rng.uniform(0, 10, 30)
+y = 4 - 0.6 * x + rng.normal(0, 1.5, 30)
+
+fit = sm.OLS(y, sm.add_constant(x)).fit()
+n = len(x)
+sigma_hat = np.sqrt(np.sum(fit.resid**2) / (n - 2))
+se_manual = sigma_hat / (x.std(ddof=1) * np.sqrt(n))
+print(f"manual SE = {se_manual:.4f}   statsmodels SE = {fit.bse[1]:.4f}")
+
+t_crit = stats.t.ppf(0.975, df=n - 2)
+ci_manual = (fit.params[1] - t_crit * se_manual, fit.params[1] + t_crit * se_manual)
+print("manual CI:", tuple(round(v, 4) for v in ci_manual))
+print("sm CI:    ", tuple(round(v, 4) for v in fit.conf_int()[1]))
+```
+
+Identical to 3 decimals. The formula's three levers are now concrete: σ̂ from residuals, spread from $s_x$, and $\sqrt n$. (Column name "x1" is statsmodels' generic name when X is a bare array.)
+</details>
+
+**Exercise 2.** Show empirically that a **wider x-range buys precision for free**: fix σ = 3, n = 30, true slope 0.5; compare the empirical SD of β̂₁ over 3,000 simulations when x ~ U(0, 1) vs x ~ U(0, 10). Verify the ratio matches the theory ratio $s_{x,B}/s_{x,A}$.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(6)
+sds = {}
+for tag, lo, hi in [("narrow (0,1)", 0, 1), ("wide (0,10)", 0, 10)]:
+    slopes = []
+    for _ in range(3000):
+        x = rng.uniform(lo, hi, 30)
+        y = 0.5 * x + rng.normal(0, 3, 30)
+        slopes.append(sm.OLS(y, sm.add_constant(x)).fit().params[1])
+    sds[tag] = np.std(slopes)
+    print(f"{tag}: empirical SD = {np.std(slopes):.4f}")
+
+print("empirical ratio:", round(sds["narrow (0,1)"] / sds["wide (0,10)"], 3))
+print("theory ratio   :", round((10/np.sqrt(12)) / (1/np.sqrt(12)), 3))
+```
+
+A 10× wider design makes the slope estimate ~10× more precise at the *same* cost per observation. This is the experimental-design lever: spread your inputs (or your doses, or your temperatures) before you buy more replicates.
+</details>
+
+**Exercise 3.** An experimenter runs the regression below and reports: "slope p = 0.31, so x has no effect; but the R² is 0.4, so the model is strong." Reconcile the two statements. Then demonstrate the resolution: simulate data where x has zero *linear* effect but determines the *variance* of y, and show what p-value and R² each report.
+
+<details>
+<summary>Solution</summary>
+
+The two statements can coexist: R² measures *explained variance* (any source — including x's effect on spread), while the slope p-value tests a *mean-shift* of y per unit x. x can move the distribution strongly (its spread) with zero mean shift:
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(7)
+x = rng.uniform(0, 10, 500)
+y = rng.normal(0, 0.2 + 0.3 * x, 500)          # mean constant, spread grows with x
+
+fit = sm.OLS(y, sm.add_constant(x)).fit()
+print(f"slope p-value = {fit.pvalues[1]:.3f}")
+print(f"R²            = {fit.rsquared:.3f}")
+
+lo, hi = x < 5, x >= 5
+print(f"SD(y) low-x half:  {y[lo].std():.3f}")
+print(f"SD(y) high-x half: {y[hi].std():.3f}   <- x strongly shapes the distribution")
+```
+
+Both statements are "right" and answer different questions — the experimenter's sentence glued them together. The fix is reporting what was tested: for variance effects, model the spread explicitly (heteroscedastic models, GLMs [3.6](../part-03-classification-glm/03-6-generalized-linear-models.qmd)), not the mean.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Formula SEs rest on all four classical assumptions** (linearity, independence, homoscedasticity, rough normality for the *t* reference). Heteroscedasticity or correlated errors invalidate the SEs *even when the slope estimate stays unbiased* — the point estimate and its uncertainty fail independently ([2.10](02-10-regression-assumptions.qmd)).
+- **Heteroscedasticity-robust (HC) SEs** are one line in statsmodels — `fit(cov_type="HC3")` — and are a sensible default for observational cross-sectional data.
+- **Multiple predictors change the SE story**: $\text{SE}(\hat\beta_j)$ now depends on *collinearity* — the variance inflation factor ([2.5](02-5-multiple-linear-regression.qmd)); a coefficient can be noisy because its partners are redundant, not because n is small.
+- **The intercept's SE** is usually the largest (it lives at the edge, $x = 0$): don't be alarmed, and don't interpret its p-value as a test of "does the model work."
+- **p = 0.049 vs 0.051** — no meaningful boundary; report effects with CIs and treat thresholds as conventions ([1.4](../part-01-statistics-bridge/01-4-statistical-inference.qmd)).
+- **statsmodels column names**: bare arrays give generic `x1, x2...`; use DataFrames or formulas (`smf.ols`) for self-documenting output.
+
+### Read & Refactor AI Code
+
+This AI-generated inference report has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(8)
+x = rng.uniform(0, 10, 25)
+y = 2 + 0.8 * x + rng.normal(0, 3, 25)
+
+fit = sm.OLS(y, sm.add_constant(x)).fit()
+
+# BUG 1: interpretation of the intercept test
+print(f"intercept p = {fit.pvalues[0]:.3f} -> 'the model has no value'")
+
+# BUG 2: p-value read as effect size
+print(f"slope p = {fit.pvalues[1]:.4f} -> 'huge effect'")
+
+# BUG 3: CI built with z instead of t, df ignored
+z_crit = 1.96
+ci = (fit.params[1] - z_crit * fit.bse[1], fit.params[1] + z_crit * fit.bse[1])
+print("95% CI:", tuple(round(v, 3) for v in ci))
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **Intercept p-value misread**: it tests whether the line's value *at x = 0* differs from 0 — usually meaningless (x = 0 outside data) and never a verdict on the model.
+2. **p ≠ effect size**: with n = 25 and σ = 3 this p-value coexists with a CI like (0.1, 1.5) — potentially important or trivial. Report β̂ ± CI.
+3. **z instead of t**: at n − 2 = 23 df the t-critical value is 2.069, not 1.96 — small samples widen; use `conf_int()` (or t-quantile) so the interval is honest.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(8)
+x = rng.uniform(0, 10, 25)
+y = 2 + 0.8 * x + rng.normal(0, 3, 25)
+fit = sm.OLS(y, sm.add_constant(x)).fit()
+
+ci = fit.conf_int()[1]
+print(f"slope = {fit.params[1]:.3f}, 95% CI ({ci[0]:.3f}, {ci[1]:.3f}), p = {fit.pvalues[1]:.4f}")
+print("Reading: per +1 in x, y changes by roughly 0.1 to 1.5 units (point est 0.8).")
+print("Intercept is the x=0 anchor, not a model test; check x-range before reading it.")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Derive $\text{SE}(\hat\beta_1) = \hat\sigma / \sqrt{\sum (x_i - \bar x)^2}$ in two steps: (a) write $\hat\beta_1$ as a weighted sum of the $y_i$ with weights $w_i = (x_i - \bar x)/S_{xx}$, and (b) apply the independent-errors variance rule from [1.3](../part-01-statistics-bridge/01-3-probability-essentials.qmd). Which property of the weights ($\sum w_i = 0$) makes β̂₀ drop out?
+
+<details>
+<summary>Hint</summary>
+
+$\hat\beta_1 = \sum w_i y_i$ exactly; variances add for independent errors and intercept enters only through the centered cross-product.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+(a) $\hat\beta_1 = \frac{\sum (x_i - \bar x) y_i}{S_{xx}}$ (the $-\bar y$ term vanishes since $\sum (x_i - \bar x) = 0$) — a linear combination $\sum w_i y_i$ with $w_i = (x_i - \bar x)/S_{xx}$. (b) With independent homoscedastic errors: $\text{Var}(\hat\beta_1) = \sum w_i^2 \sigma^2 = \sigma^2 \frac{\sum (x_i - \bar x)^2}{S_{xx}^2} = \sigma^2 / S_{xx}$. The same centering ($\sum w_i = 0$) makes $\hat\beta_1$'s sampling distribution *independent* of where β₀ sits — the two estimates' covariance is zero under normality (basis of independent slope/intercept CIs). This is the seed of the full covariance matrix $\sigma^2 (X^\top X)^{-1}$ for multiple regression ([2.5](02-5-multiple-linear-regression.qmd)).
+</details>
+
+**Q2.** Estimate the sampling distribution of β̂₁ *by bootstrap* for the Exercise 1 data and compare: (a) bootstrap SD vs formula SE, (b) bootstrap percentile CI vs t-CI. Now regenerate the data with heteroscedastic noise ($\sigma \propto x$) and repeat. Which comparison breaks, and what is the bootstrap version measuring that the formula no longer estimates?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(9)
+
+def boot_slope(x, y, B=4000, seed=0):
+    r = np.random.default_rng(seed)
+    idx = r.integers(0, len(x), size=(B, len(x)))
+    slopes = [sm.OLS(y[i], sm.add_constant(x[i])).fit().params[1] for i in idx]
+    return np.array(slopes)
+
+# homoscedastic case
+x = rng.uniform(0, 10, 30)
+y = 4 - 0.6 * x + rng.normal(0, 1.5, 30)
+fit = sm.OLS(y, sm.add_constant(x)).fit()
+bs = boot_slope(x, y)
+print(f"hetero=off: formula SE = {fit.bse[1]:.3f} | boot SD = {bs.std():.3f}")
+
+# heteroscedastic case
+y2 = 4 - 0.6 * x + rng.normal(0, 1, 30) * (0.2 + 0.4 * x)
+fit2 = sm.OLS(y2, sm.add_constant(x)).fit()
+bs2 = boot_slope(x, y2)
+print(f"hetero=on : formula SE = {fit2.bse[1]:.3f} | boot SD = {bs2.std():.3f}")
+```
+
+Homoscedastic: the two agree (formula valid). Heteroscedastic: they diverge — the formula assumes one σ, the bootstrap *re-encounters* the actual error structure in the resamples, so it estimates the real sampling variability. The bootstrap is the general-purpose audit of any formula SE; when they disagree, trust the bootstrap and fix the assumptions (robust SEs or a GLM).
+</details>
+
+## 6. Complex Questions
+
+**C1 (coefficient accuracy × [0.5 Data splitting](../part-00-python-foundations/00-5-data-splitting.qmd)).** Fit the same SLR on 200 different 80/20 splits; collect slope estimates and their formula SEs each time. Plot SE(slope) against the *x-spread of the training split*. What relationship emerges, how does it connect to the SE formula, and why does stratifying or blocking matter more for slope stability than for intercept stability?
+
+**C2 (coefficient accuracy × [2.5 Multiple regression](02-5-multiple-linear-regression.qmd) preview).** Generate $y = 2x_1 + 0 \cdot x_2 + \varepsilon$ with $x_2 = 0.95 x_1 + \text{noise}$ (collinear partners). Compare the SE of the $x_1$ coefficient in (a) the single-predictor model and (b) the two-predictor model. Quantify the inflation and explain it as redundancy: the data cannot tell the two "explanations" apart, so uncertainty per coefficient explodes — the multicollinearity story of [2.5](02-5-multiple-linear-regression.qmd).
+
+## 7. Summary
+
+- $\text{SE}(\hat\beta_1) = \hat\sigma/(s_x\sqrt n)$: less noise, wider x-spread, more n — tighter slopes.
+- t = β̂/SE against $H_0{:}\,\beta = 0$; the CI, not the p-value, is the effect-size statement.
+- σ̂ uses $n - p - 1$ df: fitted parameters consumed the residual information.
+- t-tests are scale-invariant (double y → double β̂, SE; same t) — they measure evidence, not size.
+- Formula SEs assume linearity, independence, homoscedasticity; robust SEs and the bootstrap are the practical audits.
+- Wide x-design is the cheapest precision you will ever buy.
+- One coefficient is one part of the model; next page scores the *whole fit*: [2.4 Accuracy of the full model](02-4-accuracy-of-model.qmd).

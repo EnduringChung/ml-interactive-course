@@ -1,9 +1,348 @@
 ---
-title: "Coming soon"
+title: "2.6 Categorical Predictors"
 tier: 1
 engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - statsmodels
+    - patsy
 ---
 
-This page has not been published yet. It is scheduled in the [build order](/index.qmd) and will follow the same seven-section template as every other page.
+Real predictors are often labels: tissue type, treatment arm, batch, site. Regression is numeric machinery, so categories must become **numbers first** — dummy (indicator) variables. Get the encoding right and everything from [2.5](02-5-multiple-linear-regression.qmd) applies unchanged; get it wrong and you build the classic **dummy-variable trap**.
 
-Check back soon — progress is tracked in the [course home](/index.qmd).
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+A categorical predictor with $k$ levels enters the model as **$k - 1$ dummy columns**: each is a 0/1 flag for one level, with one level left out as the **baseline** (reference). The coefficients are *offsets from the baseline*:
+
+$$y = \beta_0 + \beta_1 D_{\text{B}} + \beta_2 D_{\text{C}} + \varepsilon$$
+
+means: group A (baseline) has mean $\beta_0$; groups B and C are shifted by $\beta_1, \beta_2$ from A. Why $k-1$, not $k$? With all $k$ dummies *plus* an intercept, the columns sum to the intercept column — perfect collinearity ([2.5](02-5-multiple-linear-regression.qmd)) — the **dummy variable trap**.
+
+```{pyodide}
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+
+rng = np.random.default_rng(0)
+n = 90
+df = pd.DataFrame({
+    "tissue": rng.choice(["normal", "tumorA", "tumorB"], n),
+})
+df["expr"] = 10 + 2.5 * (df["tissue"] == "tumorA") + 4.0 * (df["tissue"] == "tumorB") \
+             + rng.normal(0, 1.5, n)
+
+fit = smf.ols("expr ~ C(tissue)", data=df).fit()      # C() marks it categorical
+print(fit.params.round(3))
+print(fit.bse.round(3))
+```
+
+Reading: intercept = **normal** (baseline) mean; each tumor coefficient = offset from normal. Verify against group means — they must match exactly (this model is just three group means):
+
+```{pyodide}
+import pandas as pd
+import numpy as np
+rng = np.random.default_rng(0)
+n = 90
+df = pd.DataFrame({"tissue": rng.choice(["normal", "tumorA", "tumorB"], n)})
+df["expr"] = 10 + 2.5 * (df["tissue"] == "tumorA") + 4.0 * (df["tissue"] == "tumorB") \
+             + rng.normal(0, 1.5, n)
+
+print(df.groupby("tissue")["expr"].mean().round(3))
+print("group means and dummy coefficients are two views of one model")
+```
+
+The same encoding, done manually — so the machinery has no mystery:
+
+```{pyodide}
+import pandas as pd
+import numpy as np
+rng = np.random.default_rng(1)
+df = pd.DataFrame({"tissue": rng.choice(["A", "B", "C"], 12)})
+
+dummies = pd.get_dummies(df["tissue"], prefix="t", dtype=float)
+manual = dummies.drop(columns="t_A")           # drop baseline yourself
+print(pd.concat([df, manual], axis=1).head(6))
+print("k=3 levels -> k-1=2 columns; 'A' is absorbed into the intercept")
+```
+
+## 2. Concept Questions
+
+1. A variable `season` has 4 levels. How many dummy columns in a model *with* intercept? Without intercept?
+2. You change the baseline from "control" to "drugB". Which numbers in the output change, which stay identical, and which *scientific* conclusions may change?
+3. A colleague encodes `low/medium/high` severity as 0/1/2 and enters it linearly. What exactly does that assume, and when is it acceptable?
+4. Why is the *p-value of the baseline level* never in the coefficient table, and how do you test whether the categorical variable matters *as a whole*?
+5. `pd.get_dummies` without `drop_first=True` inside a model with intercept — what happens, and why did statsmodels' `C()` not trap you?
+
+<details>
+<summary>Answers</summary>
+
+1. **3 with intercept** (one baseline absorbed), **4 without** (each level gets its own mean, no baseline needed — the "cell-means" parameterization).
+2. Coefficients (now offsets from drugB) and the intercept change; **fitted values, R², F-test, residuals are identical** — same model space. Conclusions change only if you were *interpreting* the baseline-specific contrasts: pairwise comparisons are recomputed, the model's fit is untouched.
+3. It assumes equal *spacing* of effects per step and a monotone linear trend: high−medium = medium−low. Acceptable when the ordinal scale is genuinely near-evenly spaced in effect (or you only need a trend test); otherwise lose nothing by dummies (k−1 columns) and gain freedom.
+4. The baseline has no coefficient — it *is* the intercept (its p-value tests whether the baseline mean is 0, almost never the question). To test the variable overall: the F-test dropping all its dummies (`anova_lm(reduced, full)` from [2.5](02-5-multiple-linear-regression.qmd)), or a likelihood-ratio test.
+5. With all k dummies + intercept, columns are collinear (sum of dummies = 1 = intercept) — the trap; OLS is non-identified and software either errors or silently arbitrary-solves. `C()` automatically leaves out the (alphabetically) first level. If you build dummies manually, `drop_first=True` (or drop one yourself) is the discipline.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import pandas as pd, numpy as np
+s = pd.Series(["ctrl", "low", "high", "ctrl", "low"])
+print(pd.get_dummies(s, dtype=int))
+print(pd.get_dummies(s, drop_first=True, dtype=int))   # baseline = alphabetically first ("ctrl")
+```
+
+```{pyodide}
+import numpy as np, statsmodels.api as sm
+# two dummies by hand for 3 groups
+rng = np.random.default_rng(2)
+g = rng.choice(["A", "B", "C"], 60)
+y = 5 + 2 * (g == "B") - 1 * (g == "C") + rng.normal(0, 1, 60)
+D = np.c_[(g == "B").astype(float), (g == "C").astype(float)]
+fit = sm.OLS(y, sm.add_constant(D)).fit()
+print(fit.params.round(3))      # [5, 2, -1] + noise — hand-built encoding recovered
+```
+
+```{pyodide}
+import numpy as np, statsmodels.formula.api as smf, pandas as pd
+rng = np.random.default_rng(3)
+df = pd.DataFrame({"g": rng.choice(["X", "Y", "Z"], 90)})
+df["y"] = 4 + 1.5 * (df["g"] == "Y") + 1.5 * (df["g"] == "Z") + rng.normal(0, 1, 90)
+f1 = smf.ols("y ~ C(g, Treatment(reference='X'))", data=df).fit()
+f2 = smf.ols("y ~ C(g, Treatment(reference='Z'))", data=df).fit()
+print(f1.params.round(3).to_dict())
+print(f2.params.round(3).to_dict())    # different baselines, same fit, same R2
+print(f1.rsquared == f2.rsquared)
+```
+
+```{pyodide}
+import numpy as np, statsmodels.api as sm
+# the trap, witnessed: rank-deficient design
+rng = np.random.default_rng(4)
+g = rng.choice(["A", "B", "C"], 30)
+D = np.c_[(g=="A").astype(float), (g=="B").astype(float), (g=="C").astype(float)]
+print("rank:", np.linalg.matrix_rank(sm.add_constant(D)), "of", 4, "columns")
+fit = sm.OLS(np.random.default_rng(5).normal(0,1,30), sm.add_constant(D)).fit()
+print(fit.params.round(3))     # note: one level silently dropped/absorbed by pinv
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** For the three-tissue dataset, run the analysis three ways: (a) `C(tissue)` with default baseline, (b) explicit `Treatment(reference=...)` choosing "tumorB", (c) no-intercept cell-means (`expr ~ C(tissue) - 1`). Show that all three produce identical fitted values and R², and write out the pairwise mean differences implied by (b)'s coefficients to verify they agree with (a) after arithmetic.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+
+rng = np.random.default_rng(0)
+n = 90
+df = pd.DataFrame({"tissue": rng.choice(["normal", "tumorA", "tumorB"], n)})
+df["expr"] = 10 + 2.5 * (df["tissue"] == "tumorA") + 4.0 * (df["tissue"] == "tumorB") \
+             + rng.normal(0, 1.5, n)
+
+fa = smf.ols("expr ~ C(tissue)", data=df).fit()
+fb = smf.ols("expr ~ C(tissue, Treatment(reference='tumorB'))", data=df).fit()
+fc = smf.ols("expr ~ C(tissue) - 1", data=df).fit()
+
+print("same R²:", np.allclose(fa.rsquared, fb.rsquared), np.allclose(fa.rsquared, fc.rsquared))
+print("(a):", fa.params.round(3).to_dict())
+print("(b):", fb.params.round(3).to_dict())
+print("(c):", fc.params.round(3).to_dict())
+
+means = df.groupby("tissue")["expr"].mean()
+print("B-vs-normal from (b): intercept + tumorA-coef =",
+      round(fb.params.iloc[0] + fb.params["C(tissue, Treatment(reference='tumorB'))[T.tumorA]"], 3),
+      "| direct mean diff:", round(means["tumorA"] - means["tumorB"], 3))
+```
+
+One model space, three parameterizations. (c) is the most readable (coefficients *are* group means) but loses the baseline-contrast SEs; (a)/(b) make specific contrasts cheap. Choose the parameterization whose *default outputs* are the contrasts you care about.
+</details>
+
+**Exercise 2 — ANOVA connection.** One-way ANOVA is exactly the categorical-predictor regression above. Verify it: run `smf.ols("expr ~ C(tissue)")`, then compute the F-statistic for "tissue matters" three ways — (a) the model's overall F when tissue is the only predictor, (b) `anova_lm` comparing with/without the factor, (c) a one-way ANOVA (`statsmodels.stats.oneway.anova_oneway` or scipy `f_oneway`). All three must agree.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+from statsmodels.stats.anova import anova_lm
+from scipy import stats
+
+rng = np.random.default_rng(0)
+n = 90
+df = pd.DataFrame({"tissue": rng.choice(["normal", "tumorA", "tumorB"], n)})
+df["expr"] = 10 + 2.5 * (df["tissue"] == "tumorA") + 4.0 * (df["tissue"] == "tumorB") \
+             + rng.normal(0, 1.5, n)
+
+fit = smf.ols("expr ~ C(tissue)", data=df).fit()
+print("(a) overall F:", round(fit.fvalue, 3), " p:", f"{fit.f_pvalue:.3e}")
+
+red = smf.ols("expr ~ 1", data=df).fit()
+print("(b) anova_lm F:", anova_lm(red, fit).iloc[1][["F", "Pr(>F)"]].round(4).to_dict())
+
+groups = [g["expr"].to_numpy() for _, g in df.groupby("tissue")]
+F, p = stats.f_oneway(*groups)
+print("(c) scipy f_oneway F:", round(F, 3), " p:", f"{p:.3e}")
+```
+
+Regression is the general machine; ANOVA is the special case where every predictor is categorical. Learning them as one object (rather than two rituals) pays off the moment you mix numeric + categorical predictors — which plain ANOVA cannot do.
+</details>
+
+**Exercise 3.** Mix numeric and categorical: fit `expr ~ age + C(tissue)` on the extended cohort below. Interpret each coefficient in one subject-matter sentence, then produce *predicted means* for each tissue at age = 50 by hand from the coefficients and verify against `get_prediction`. Finally, explain what this model assumes about the age effect across tissues — and name the page where that assumption gets relaxed.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+
+rng = np.random.default_rng(1)
+n = 150
+df = pd.DataFrame({
+    "tissue": rng.choice(["normal", "tumorA", "tumorB"], n),
+    "age":    rng.uniform(30, 80, n),
+})
+df["expr"] = (8 + 0.1 * df["age"]
+              + 2.5 * (df["tissue"] == "tumorA")
+              + 4.0 * (df["tissue"] == "tumorB")
+              + rng.normal(0, 1.5, n))
+
+fit = smf.ols("expr ~ age + C(tissue)", data=df).fit()
+print(fit.params.round(3))
+
+new = pd.DataFrame({"age": [50, 50, 50],
+                    "tissue": ["normal", "tumorA", "tumorB"]})
+print(new.assign(pred=fit.predict(new).round(3)))
+
+# by hand: intercept + 0.1*age + tissue offset
+b = fit.params
+hand = (b["Intercept"] + 0.1 * 50
+        + b.get("C(tissue)[T.tumorA]", 0) * 1
+        + b.get("C(tissue)[T.tumorB]", 0) * 1)
+print("hand check (tumorB):", round(hand, 3))
+```
+
+The model assumes the **same age slope in every tissue** — parallel age-lines, offset by tissue. Whether that holds is exactly the interaction question: [2.7 Interaction terms](02-7-interaction-terms.qmd).
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Baseline choice is a reporting decision**: choose the level your audience contrasts against (control/healthy), not whatever comes first alphabetically. Software defaults will happily make "drug" the baseline and "placebo" the contrast.
+- **The dummy-variable trap** is the most common hand-built-design bug: all k dummies + intercept. With `get_dummies`, pass `drop_first=True` for modeling (keep the full version for display).
+- **Unseen levels at predict time**: a category in test data that never appeared in training has no coefficient — sklearn OneHotEncoder(handle_unknown="infrequent_if_exist") vs silent NaN in statsmodels. Plan for level drift in productionized models.
+- **High-cardinality categories** (patient ID, gene symbol with 20k levels) explode the design matrix — target encoding or hierarchical/mixed models are the remedies, not 20k dummies.
+- **Ordinal ≠ nominal**: if order is meaningful and roughly evenly spaced in effect, a single 0/1/2 column can be more parsimonious; but always compare against the k−1 dummy version — the data, not the codebook, decides.
+- **Interactions with dummies** are the natural next step: they let *each group have its own slope* — precisely [2.7](02-7-interaction-terms.qmd).
+
+### Read & Refactor AI Code
+
+This AI-generated model has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+import pandas as pd
+import statsmodels.api as sm
+
+rng = np.random.default_rng(2)
+n = 120
+df = pd.DataFrame({"site": rng.choice(["A", "B", "C"], n)})
+df["y"] = 10 + 3 * (df["site"] == "B") + 5 * (df["site"] == "C") + rng.normal(0, 2, n)
+
+# BUG 1: numeric codes for a nominal category
+df["site_code"] = df["site"].map({"A": 0, "B": 1, "C": 2})
+fit1 = sm.OLS(df["y"], sm.add_constant(df["site_code"])).fit()
+print(fit1.params.round(3), "<- forces a line through the group means")
+
+# BUG 2: all dummies + intercept
+D = pd.get_dummies(df["site"], dtype=float)          # no drop_first
+fit2 = sm.OLS(df["y"], sm.add_constant(D)).fit()
+print(fit2.params.round(3))
+
+# BUG 3: interpretation of the baseline coefficient
+print("site A has NO effect since it has no coefficient")
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **Numeric codes impose fake arithmetic**: the model fits a *line* through codes 0,1,2 — assuming C = 2×B's effect and ordering the labels. With nominal categories this is meaningless structure. Fix: dummies via `C(site)` (or justify numeric coding only for genuinely ordinal, evenly spaced scales).
+2. **All three dummies + intercept = singular design** (rank deficiency; the trap). statsmodels' pinv silently absorbs one level — non-reproducible parameterization. Fix: `drop_first=True` or formula `C(site)`.
+3. **"Baseline has no effect" misreads the parameterization**: A's level is in the *intercept*; the tested contrasts are B−A and C−A. To ask "does site matter at all", F-test the dummies jointly.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+from statsmodels.stats.anova import anova_lm
+
+rng = np.random.default_rng(2)
+n = 120
+df = pd.DataFrame({"site": rng.choice(["A", "B", "C"], n)})
+df["y"] = 10 + 3 * (df["site"] == "B") + 5 * (df["site"] == "C") + rng.normal(0, 2, n)
+
+fit = smf.ols("y ~ C(site)", data=df).fit()          # proper dummy encoding
+print(fit.params.round(3))
+red = smf.ols("y ~ 1", data=df).fit()
+print("site matters overall:", anova_lm(red, fit).iloc[1]["Pr(>F)"] < 0.05)
+print(df.groupby("site")["y"].mean().round(2).to_dict(), "<- the three group means")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Prove that encoding k categories with k−1 dummies + intercept spans exactly the same *space of fitted values* as k separate group means, and that the OLS fit in both parameterizations assigns each group its own sample mean. What does this imply about residuals, R², and the model's assumptions?
+
+<details>
+<summary>Hint</summary>
+
+Write the design matrix; show each row picks out one group's parameter; the least-squares problem decomposes per group.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Every observation's prediction is "its group's parameter" in both parameterizations, so the column space is the set of piecewise-constant-on-groups vectors — dimension k in both (k−1 dummies + intercept ≡ k cell means). RSS minimization decouples by group: within group g, minimize $\sum_{i \in g}(y_i - c_g)^2$, solved by $\bar y_g$. Hence identical fitted values, residuals, RSS, R², and *zero within-group structure assumed* — this model makes no assumptions beyond "each group has a mean"; it cannot express group-specific slopes (no numeric predictors interacting) or shared trends. That's why adding a numeric predictor to dummies ([Exercise 3](#)) is a genuine modeling step, and letting the numeric slope vary by group is [2.7](02-7-interaction-terms.qmd).
+</details>
+
+**Q2.** A collaborator fits `y ~ C(biobank_site)` on 40 sites and finds two sites with p < 0.05 offset coefficients, then reports "site effects identified." Critique using [1.4](../part-01-statistics-bridge/01-4-statistical-inference.qmd) and [2.5](02-5-multiple-linear-regression.qmd): what family-wise issue arises, what does the joint F-test say and why does it differ, and design the defensible analysis (which test, which correction, which plot).
+
+<details>
+<summary>Solution</summary>
+
+(a) **Selection + multiplicity**: picking the 2 of 40 site coefficients with p < 0.05 is examining 40 contrasts; even under all-null, expect ~2 "hits" — exactly what was found. The per-coefficient p-values are unconditional; post-hoc selected ones need correction (Tukey/Bonferroni across site contrasts, or FDR). (b) **The joint F-test** (drop all 39 dummies) tests "any site differences" with one honest alpha; if it's non-significant, the two "hits" are almost surely noise — the joint test pools all the site information and is the primary test. (c) Defensible: report the joint F (and effect-size spread of site offsets, e.g. SD of BLUPs), then *if* interest persists in specific sites, test those pre-specified contrasts with multiplicity correction; plot site offsets with their CIs (forest/ caterpillar plot) rather than asterisk-hunting a coefficient table. Mechanistically note also that with many small sites, individual SEs are large — significance at tiny sites is fragile by construction.
+</details>
+
+## 6. Complex Questions
+
+**C1 (categorical × [2.5 confounding](02-5-multiple-linear-regression.qmd)).** Simulate a study where treatment assignment *depends on site* (site 1 gives drug 80% of the time, site 3 gives 20%) and the drug effect is homogeneous. Show that (a) the naive drug coefficient is confounded, (b) adding site dummies removes most of the bias, (c) residual bias persists through chance imbalance in small sites. Then quantify: run 500 simulations and histogram the adjusted-coefficient estimates — this is "regression adjustment as a bias-reducer, not a bias-eraser."
+
+**C2 (categorical × [0.3 pandas](../part-00-python-foundations/00-3-pandas.qmd)).** Take the wide expression table from [0.3 Exercise 3](../part-00-python-foundations/00-3-pandas.qmd), melt it long, add a fake batch label, and test batch effect per gene: fit `value ~ batch` for each of the 5 genes with a loop of formulas. Which genes show batch effects at the joint-F level? Then write the two-sentence methods paragraph you'd put in a paper — this pattern (long-format + per-gene regression + joint F) is the skeleton of differential-expression pipelines like the T2 workflow in Part 12.
+
+## 7. Summary
+
+- Categories enter regression as k−1 dummies against a chosen baseline; coefficients are offsets from it.
+- All dummies + intercept = the trap (singular design); `C()` and `drop_first=True` are the habits.
+- Baseline choice changes the printed contrasts, never the fit; pick the baseline your audience reasons in.
+- Numeric coding of nominal labels fabricates order and spacing — a model, not a convenience.
+- One-way ANOVA is this page's regression with a single categorical predictor; the machinery mixes freely with numeric predictors.
+- Numeric + categorical with a *shared* slope assumes parallel effects — the assumption [2.7 Interaction terms](02-7-interaction-terms.qmd) exists to interrogate.

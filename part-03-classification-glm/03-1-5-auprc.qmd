@@ -1,9 +1,394 @@
 ---
-title: "Coming soon"
+title: "3.1.5 AUPRC for Skewed Datasets"
 tier: 1
 engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - matplotlib
 ---
 
-This page has not been published yet. It is scheduled in the [build order](/index.qmd) and will follow the same seven-section template as every other page.
+When positives are rare (1% disease, 0.1% hits in a screen), ROC-AUC keeps flattering weak classifiers — the huge negative pool absorbs false alarms invisibly. The **precision–recall curve** and its area (**AUPRC** / average precision) put the *cost of false alarms in a sparse world* back in the picture.
 
-Check back soon — progress is tracked in the [course home](/index.qmd).
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+Sweeping the threshold from strict to loose traces a curve in **precision** (PPV = TP/(TP+FP)) vs **recall** (TPR) space. The area under it — computed as sklearn's *average precision*,
+
+$$\text{AP} = \sum_n (R_n - R_{n-1})\, P_n$$
+
+i.e., each precision value weighted by the *increase in recall* it purchased — is the standard scalar (AUPRC).
+
+Two facts make AUPRC the right lens under skew:
+
+1. **The baseline is the prevalence**, not 0.5: a random classifier's PR curve hovers at precision = prevalence. AUPRC = 0.55 at 1% prevalence is *massive*; AUC = 0.55 would be negligible.
+2. **False positives are priced in the metric**: at low prevalence, each FP slashes precision immediately (denominator TP+FP), while in ROC-land an FP just nudges FPR by 1/(huge N).
+
+A small worked example, by hand — 5 positives, 5 negatives, ranked by score:
+
+| rank | score | label | precision@k | recall@k |
+|---|---|---|---|---|
+| 1 | .9 | + | 1.000 | 0.2 |
+| 2 | .8 | + | 1.000 | 0.4 |
+| 3 | .7 | − | 0.667 | 0.4 |
+| 4 | .6 | + | 0.750 | 0.6 |
+| 5 | .5 | − | 0.600 | 0.6 |
+| 6 | .4 | + | 0.667 | 0.8 |
+| 7 | .3 | − | 0.571 | 0.8 |
+| 8 | .2 | − | 0.500 | 0.8 |
+| 9 | .1 | − | 0.444 | 0.8 |
+| 10 | .0 | + | 0.500 | 1.0 |
+
+$$\text{AP} = 0.2(1.0) + 0.2(1.0) + 0.2(0.750) + 0.2(0.667) + 0.2(0.500) = 0.783$$
+
+Each of the 5 recall *increments* (0.2) is weighted by the precision at which it was achieved. Same ranking's ROC-AUC (concordant pairs, [3.1](03-1-classification-fundamentals.qmd)) = 18/25 = **0.72** — the two lenses already disagree.
+
+```{pyodide}
+import numpy as np
+from sklearn.metrics import precision_recall_curve, average_precision_score, roc_auc_score
+
+s = np.array([0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0])
+y = np.array([1, 1, 0, 1, 0, 1, 0, 0, 0, 1])
+
+prec, rec, thr = precision_recall_curve(y, s)
+ap = average_precision_score(y, s)
+
+print("precisions:", prec.round(3))
+print("recalls:   ", rec.round(3))
+print(f"AP  = {ap:.4f}   (hand: 0.7833)")
+print(f"AUC = {roc_auc_score(y, s):.4f}   (hand: 0.72)")
+```
+
+**The flattering-ROC demonstration** — 2% prevalence, a barely-informative score:
+
+```{pyodide}
+#| fig-width: 8
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import (roc_curve, roc_auc_score,
+                             precision_recall_curve, average_precision_score)
+
+rng = np.random.default_rng(0)
+n_pos, n_neg = 20, 980
+y = np.r_[np.ones(n_pos), np.zeros(n_neg)]
+s = np.r_[rng.normal(0.56, 0.1, n_pos), rng.normal(0.5, 0.1, n_neg)]  # tiny signal
+
+fpr, tpr, _ = roc_curve(y, s)
+prec, rec, _ = precision_recall_curve(y, s)
+
+fig, axes = plt.subplots(1, 2, figsize=(8, 3.4))
+axes[0].plot(fpr, tpr)
+axes[0].plot([0, 1], [0, 1], ls="--", color="gray")
+axes[0].set_title(f"ROC  AUC = {roc_auc_score(y, s):.3f} — looks decent")
+axes[1].plot(rec, prec)
+axes[1].axhline(0.02, ls="--", color="gray", label="chance = prevalence")
+axes[1].set_title(f"PR  AP = {average_precision_score(y, s):.3f} — barely above chance")
+axes[1].legend()
+fig.tight_layout()
+plt.show()
+```
+
+## 2. Concept Questions
+
+1. Why is a random classifier's PR baseline *the prevalence* while its ROC baseline is the diagonal?
+2. Two datasets have identical classifier quality; one has 1% prevalence, one 30%. Which metric is comparable across them — AUC, AP, or neither?
+3. AP = 0.35 at 5% prevalence: translate that into "how much better than random" in one sentence.
+4. Your model's PR curve is strictly below the prevalence line everywhere. What does that tell you, and what single transformation rescues the model?
+5. Why does AP have no nice probabilistic interpretation like AUC's concordance probability?
+
+<details>
+<summary>Answers</summary>
+
+1. Random scoring means precision ≈ prevalence at *every* recall level (each retrieved batch is prevalence-random), so the PR "curve" is the horizontal line y = prevalence. In ROC space, random scoring moves TPR and FPR together — the diagonal.
+2. **AUC** (it's a within-pair probability, prevalence-independent in expectation). AP is prevalence-dependent *by design* — its baseline moves with prevalence — so absolute AP values don't transfer across datasets with different class balance. Neither is a substitute for reporting the dataset's prevalence alongside.
+3. Random retrieval gets precision 0.05; this model's precision-recall trade is worth AP = 0.35, i.e. its average precision across recall levels is **7× the random baseline** — strong for a 1-in-20 problem.
+4. Precision below prevalence at all recalls means the score is **anti-ranked**: top-scored items are *less* likely to be positive than random. Negate the scores (or flip the sign of the decision function) and the same information becomes a good model — always check this before discarding a model.
+5. AUC counts a specific, symmetric random experiment (draw one of each, who wins?). AP is a weighted sum of precisions with data-dependent weights (recall increments) — a different, asymmetric summary with no single natural random-pair story; its "meaning" is operational: expected precision averaged over recall levels you choose to chase.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.metrics import average_precision_score
+y  = np.array([1, 0, 1, 0, 0, 0, 0, 0, 0, 0])
+s1 = np.array([0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.0])  # decent rank
+s2 = s1[::-1]                                                       # anti-ranked!
+print("AP(s1):", round(average_precision_score(y, s1), 3))
+print("AP(s2):", round(average_precision_score(y, s2), 3), " <- below prevalence 0.2")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.metrics import average_precision_score
+rng = np.random.default_rng(1)
+y = np.r_[np.ones(10), np.zeros(990)].astype(int)
+s = rng.uniform(0, 1, 1000)                     # pure noise
+ap = average_precision_score(y, s)
+print("AP noise:", round(ap, 4), " ≈ prevalence", round(y.mean(), 4))
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.metrics import precision_recall_curve
+y = np.array([1, 1, 0, 1, 0, 0])
+s = np.array([0.9, 0.8, 0.7, 0.6, 0.5, 0.4])
+prec, rec, thr = precision_recall_curve(y, s)
+print("precision:", prec.round(3))     # length = n_points; last entry (1, 0) anchor
+print("recall:   ", rec.round(3))
+print("thresholds:", thr.round(2))     # one fewer: no threshold below the lowest score
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.metrics import average_precision_score, roc_auc_score
+# same ranking, different calibration: AP/AUC identical
+y = np.array([1, 1, 0, 1, 0, 0, 1, 0])
+s1 = np.array([0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2])
+s2 = s1 ** 2                                    # squashed, order preserved
+print(round(average_precision_score(y, s1), 4), round(average_precision_score(y, s2), 4))
+print(round(roc_auc_score(y, s1), 4), round(roc_auc_score(y, s2), 4))
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** By hand, build the full precision–recall table for the ranked list below (compute P@k, R@k for every k), compute AP from the table, and verify against `average_precision_score`. Then state the single threshold (top-k) you would choose if the budget allows exactly 3 follow-ups, and its precision.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.metrics import average_precision_score
+
+s = np.array([0.95, 0.90, 0.85, 0.80, 0.75, 0.70, 0.65, 0.60])
+y = np.array([1,    0,    1,    1,    0,    1,    0,    1])
+
+order = np.argsort(-s)
+ys = y[order]
+n_pos = ys.sum()
+
+rows = []
+tp = 0
+AP = 0.0
+prev_rec = 0.0
+for k, yi in enumerate(ys, start=1):
+    tp += yi
+    prec = tp / k
+    rec = tp / n_pos
+    AP += (rec - prev_rec) * prec            # the definition
+    prev_rec = rec
+    rows.append((k, int(yi), round(prec, 3), round(rec, 3)))
+
+for r in rows:
+    print("k=%d label=%d  P=%.3f  R=%.3f" % r)
+print(f"AP by hand = {AP:.4f}   sklearn = {average_precision_score(y, s):.4f}")
+print("Top-3 budget: precision = 2/3 =", round(2/3, 3))
+```
+
+The budget answer is a *decision* the curve exists to inform: with 3 slots you catch 2 of 5 positives (precision 0.67); the curve lets management see exactly what the 4th and 5th slot would buy.
+</details>
+
+**Exercise 2.** Prevalence surgery: fix one classifier and one score distribution; vary prevalence from 0.5% to 40% by subsampling negatives, and plot AUC and AP against prevalence. Which curve moves, which holds steady, and what does this experiment say about comparing your AP to a published AP from a different cohort?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_auc_score, average_precision_score
+
+rng = np.random.default_rng(2)
+n_pos = 200
+s_pos = rng.normal(0.6, 0.12, n_pos)
+s_neg_pool = rng.normal(0.5, 0.12, 40000)
+
+prevalences = [0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.4]
+aucs, aps = [], []
+for p in prevalences:
+    n_neg = int(n_pos * (1 - p) / p)
+    s_neg = rng.choice(s_neg_pool, n_neg, replace=False)
+    y = np.r_[np.ones(n_pos), np.zeros(n_neg)]
+    s = np.r_[s_pos, s_neg]
+    aucs.append(roc_auc_score(y, s))
+    aps.append(average_precision_score(y, s))
+
+fig, ax = plt.subplots(figsize=(7, 3.2))
+ax.semilogx(np.array(prevalences) * 100, aucs, marker="o", label="AUC")
+ax.semilogx(np.array(prevalences) * 100, aps, marker="s", label="AP")
+ax.set(xlabel="prevalence (%)", title="Same classifier, different prevalence")
+ax.legend()
+plt.show()
+```
+
+AUC is flat (prevalence-free by construction); AP falls as prevalence falls — the baseline sinks with it. Consequence: AP values are **cohort-specific**; compare APs only within the same prevalence regime, or convert to "multiple of prevalence baseline" (AP / prevalence) for a rough cross-cohort normalized statement.
+</details>
+
+**Exercise 3.** Metric face-off on a realistic screen: build a 1%-positive dataset with a mildly informative score; compute (a) accuracy at 0.5, (b) balanced accuracy, (c) AUC, (d) AP, (e) precision at recall = 0.5. Rank the metrics by how *usefully* each describes the model for a screening manager who can only follow up 50 samples. Justify the ranking in two sentences per metric.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.metrics import (accuracy_score, balanced_accuracy_score,
+                             roc_auc_score, average_precision_score,
+                             precision_recall_curve)
+
+rng = np.random.default_rng(3)
+n_pos = 30
+y = np.r_[np.ones(n_pos), np.zeros(2970)].astype(int)
+s = np.r_[rng.normal(0.55, 0.1, n_pos), rng.normal(0.5, 0.1, 2970)]
+pred = (s >= 0.5).astype(int)
+
+prec, rec, thr = precision_recall_curve(y, s)
+i_half = np.argmin(np.abs(rec - 0.5))
+
+print(f"(a) accuracy       = {accuracy_score(y, pred):.4f}")
+print(f"(b) balanced acc   = {balanced_accuracy_score(y, pred):.4f}")
+print(f"(c) AUC            = {roc_auc_score(y, s):.4f}")
+print(f"(d) AP             = {average_precision_score(y, s):.4f}")
+print(f"(e) precision@R=0.5 = {prec[i_half]:.4f}")
+```
+
+Usefulness ranking for the manager: (e) precision@recall-0.5 — an *operating point*, exactly what "we follow up 50" means; (d) AP — the full-curve summary, prevalence-anchored; (c) AUC — ranks well but abstracts away the FP flood; (b) balanced accuracy — treats classes symmetrically when the budget doesn't; (a) accuracy — tells the manager nothing (it's the prevalence in disguise). The general law: the closer a metric sits to the actual decision (budget, costs, threshold), the more decisions it can improve.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Three names, one thing (mostly)**: AUPRC (area under PR curve), AP (sklearn's interpolated area), mean average precision (mAP — averaged over queries, the retrieval convention). sklearn's `average_precision_score` uses the recall-increment weighting — not the trapezoidal rule — so hand-trapezoiding your PR points gives slightly different numbers (the worked table uses the sklearn definition; the trapezoid variant appears in Appendix A.7's worked example).
+- **AP is not comparable across cohorts with different prevalence** (Exercise 2) — report prevalence next to every AP, always.
+- **The last point of the PR curve**: `precision_recall_curve` appends the anchor (recall 0, precision 1); the thresholds array is one shorter — off-by-one errors when zip()-ing live here.
+- **Interpolated "best PR" curves** (as in some leaderboards) paint an upper envelope that no actual threshold achieves; be explicit which convention you report.
+- **AUPRC noise**: with few positives the curve is jagged and AP's sampling variance is large — bootstrap it ([1.5](../part-01-statistics-bridge/01-5-resampling-intuition.qmd)) before declaring one model better than another.
+- **PR wins under skew; ROC still wins for**: cost-symmetric ranking questions, prevalence-robust reporting, and comparing against chance (0.5) — the metrics answer different questions; report both under skew.
+
+### Read & Refactor AI Code
+
+This AI-generated "screen performance" report has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.metrics import (accuracy_score, roc_auc_score,
+                             precision_recall_curve)
+
+rng = np.random.default_rng(4)
+y = np.r_[np.ones(15), np.zeros(1485)].astype(int)      # 1% prevalence
+s = np.r_[rng.normal(0.52, 0.1, 15), rng.normal(0.5, 0.1, 1485)]
+pred = (s >= 0.5).astype(int)
+
+# BUG 1: headline
+print("accuracy:", round(accuracy_score(y, pred), 4))
+
+# BUG 2: PR computed on hard predictions
+prec, rec, _ = precision_recall_curve(y, pred)
+print("AP on hard preds:", round(float(np.trapezoid(prec, rec)), 3))
+
+# BUG 3: cross-cohort comparison
+print("our AP 0.07 vs their published AP 0.35 -> 'they are 5x better'")
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Accuracy at 1% prevalence** ≈ 0.99 for anything — replace with AP/precision@budget and always print the prevalence.
+2. **PR machinery on 0/1 predictions**: at most two distinct thresholds exist; the "curve" is a line and trapz is not the AP definition (and on hard labels it's meaningless). Feed continuous scores to `average_precision_score`.
+3. **Cross-cohort AP comparison without prevalences**: their cohort may be 30% positive (AP baseline 0.30) while yours is 1% (baseline 0.01) — 0.07 may be the *stronger* result. Normalize (AP/prevalence) or recompute both on a common prevalence.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.metrics import average_precision_score, precision_score
+
+rng = np.random.default_rng(4)
+y = np.r_[np.ones(15), np.zeros(1485)].astype(int)
+s = np.r_[rng.normal(0.52, 0.1, 15), rng.normal(0.5, 0.1, 1485)]
+
+ap = average_precision_score(y, s)
+top50 = np.argsort(-s)[:50]
+pred50 = np.zeros_like(y)
+pred50[top50] = 1
+prec_at_50 = precision_score(y, pred50)
+print(f"prevalence {y.mean():.3f}")
+print(f"AP = {ap:.4f}  ({ap / y.mean():.1f}x the random baseline)")
+print(f"precision if we follow up the top 50: {prec_at_50:.3f} vs baseline 0.01")
+print("Cross-cohort claims: only after normalizing both APs by prevalence.")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Prove the AP formula $\text{AP} = \sum_n (R_n - R_{n-1})P_n$ equals the precision *averaged over the recall axis* for the step-function PR curve, and show that for a single threshold operating point (R₀, P₀) the formula contributes $R_0 P_0 = TP_0 / N_+$ — connecting AP to the raw hit count. What does this imply about AP's sensitivity to the *last* positives retrieved (high recall, low precision region)?
+
+<details>
+<summary>Hint</summary>
+
+Write each recall increment as ΔTP/N₊ and multiply by precision = TP/(TP+FP) at that step.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+$R_n - R_{n-1} = \Delta TP_n / N_+$ and $P_n = TP_n/(TP_n + FP_n)$, so each term counts positives gained weighted by their purity; summed, AP = (1/N₊) Σ ΔTP·P = mean precision per positive retrieved. For a model that puts all TPs first at one shot: one increment with $R_0 = TP_0/N_+$, $P_0 = 1$, contributing $TP_0/N_+$ = fraction of positives found perfectly. Consequence: the tail matters — retrieving the final positives at precision ~prevalence adds $(R=1 - R_{prev}) \times \text{prevalence}$-ish mass; with 5 positives, each late hit adds ~0.2 × 0.1 = 0.02. AP rewards getting *most* positives *cleanly*; it is forgiving of the last scrappy recoveries exactly in proportion to how few positives remain — a feature under skew, and the reason AP > AUC Rankings shuffles rarely change AP's tail.
+</details>
+
+**Q2.** Your team must choose between Model A (AP = 0.21, AUC = 0.85) and Model B (AP = 0.24, AUC = 0.80) at 2% prevalence, with a fixed budget of 100 follow-ups per 10,000 screened. Design the decision experiment: what single metric or plot settles it, how do you quantify uncertainty (bootstrap), and how should the budget constraint enter the comparison? Implement it.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(5)
+# 10,000 screened, 2% prevalence; two score models
+y = np.r_[np.ones(200), np.zeros(9800)].astype(int)
+sA = np.r_[rng.normal(0.55, 0.12, 200), rng.normal(0.5, 0.12, 9800)]
+sB = np.r_[rng.normal(0.60, 0.25, 200), rng.normal(0.5, 0.25, 9800)]  # sharper top, worse tail
+
+def topk_hits(s, y, k=100):
+    return y[np.argsort(-s)[:k]].sum()
+
+print("hits in top-100: A =", topk_hits(sA, y), " B =", topk_hits(sB, y))
+
+boot = []
+for _ in range(2000):
+    idx = rng.integers(0, len(y), len(y))
+    diff = topk_hits(sB[idx], y[idx]) - topk_hits(sA[idx], y[idx])
+    boot.append(diff)
+lo, hi = np.percentile(boot, [2.5, 97.5])
+print(f"B - A top-100 hits: 95% CI ({lo:.0f}, {hi:.0f})")
+```
+
+The budget turns the comparison into **precision@k** (top-100 hits) — AUC and AP both summarize the whole curve, but only k = 100 will be *operated*. The bootstrap CI on the hit difference says whether B's sharper head is real or noise (here B wins at the operating point despite losing on AUC — a decisive, budget-aware answer). Generalize the pattern: choose the metric that mirrors the deployment constraint, then attach uncertainty to that metric, not to a curve-wide scalar that no one will ever operate.
+</details>
+
+## 6. Complex Questions
+
+**C1 (AUPRC × [3.1 metrics](03-1-classification-fundamentals.qmd) × [1.4 inference](../part-01-statistics-bridge/01-4-statistical-inference.qmd)).** Generate 200 resampled test sets (bootstrap the same test data) and compute AP and AUC distributions for one fixed model. Which metric's CI is wider at 1% prevalence, and does the ordering of two competing models (by either metric) survive the uncertainty? Write the reporting rule that follows: when do you need the bootstrap before comparing two classifiers, and what sample size of positives makes single-number AP comparisons defensible?
+
+**C2 (AUPRC × [12.x multiple testing](#) preview).** A biomarker screen tests 20,000 candidates and reports "14 significant hits." Reinterpret the screen as a classifier: define scores, prevalence, and AP for the hit list, then compute the precision you'd need for the list to beat *random* selection by a factor of 10. Connect to the FDR viewpoint: precision of a hit list at fixed size *is* 1 − FDR of that list — the two vocabularies are the same object seen from the ranking and the testing side.
+
+## 7. Summary
+
+- Under class skew, PR curves price false alarms honestly; ROC's huge negative pool hides them.
+- AP = Σ Δrecall × precision: mean precision weighted by positives gained; baseline = prevalence.
+- AUC stays comparable across prevalences; AP does not — report prevalence beside every AP.
+- Below-baseline PR curve = anti-ranked scores: flip before you discard.
+- The metric that mirrors the deployment constraint (precision@budget) beats any curve-wide scalar for decisions.
+- With few positives, bootstrap AP differences before believing them.
+- With both metric families in hand, ask the orthogonal question — why not just use linear regression on 0/1 labels? — [3.2 Why not linear regression for categories?](03-2-why-not-linear-regression.qmd)

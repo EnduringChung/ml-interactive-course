@@ -1,0 +1,328 @@
+---
+title: "2.2 Simple Linear Regression"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - matplotlib
+    - scipy
+---
+
+Simple linear regression fits a straight line $\hat{y} = \hat{\beta}_0 + \hat{\beta}_1 x$ by least squares. It is the reference point for every model in this course: transparent, closed-form, and already rich enough to demonstrate estimation, uncertainty, and mis-use.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+**Least squares** chooses coefficients minimizing the residual sum of squares $\text{RSS} = \sum_i (y_i - \hat\beta_0 - \hat\beta_1 x_i)^2$. Minimizing in each parameter (set derivatives to zero) gives the closed forms:
+
+$$\hat{\beta}_1 = \frac{\sum_i (x_i - \bar{x})(y_i - \bar{y})}{\sum_i (x_i - \bar{x})^2} = r\,\frac{s_y}{s_x}, \qquad \hat{\beta}_0 = \bar{y} - \hat{\beta}_1 \bar{x}$$
+
+The slope is the correlation rescaled into y-units per x-unit ([1.2](../part-01-statistics-bridge/01-2-relationships.qmd)); the line always passes through $(\bar x, \bar y)$.
+
+```{pyodide}
+import numpy as np
+
+rng = np.random.default_rng(0)
+x = rng.uniform(0, 10, 50)
+y = 3.0 + 1.2 * x + rng.normal(0, 2, 50)
+
+# Three roads to the same fit:
+b1_manual = np.sum((x - x.mean()) * (y - y.mean())) / np.sum((x - x.mean())**2)
+b0_manual = y.mean() - b1_manual * x.mean()
+b1_pf, b0_pf = np.polyfit(x, y, 1)                 # highest power first!
+b0_sk, b1_sk = None, None
+from sklearn.linear_model import LinearRegression
+model = LinearRegression().fit(x.reshape(-1, 1), y)  # sklearn wants 2-D X
+b0_sk, b1_sk = model.intercept_, model.coef_[0]
+
+print(f"manual:     y = {b0_manual:.3f} + {b1_manual:.3f} x")
+print(f"polyfit:    y = {b0_pf:.3f} + {b1_pf:.3f} x")
+print(f"sklearn:    y = {b0_sk:.3f} + {b1_sk:.3f} x")
+```
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.5
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(0)
+x = rng.uniform(0, 10, 50)
+y = 3.0 + 1.2 * x + rng.normal(0, 2, 50)
+model = LinearRegression().fit(x.reshape(-1, 1), y)
+
+xg = np.linspace(0, 10, 100)
+fig, ax = plt.subplots(figsize=(7, 3.5))
+ax.scatter(x, y, s=25, alpha=0.7, label="data")
+ax.plot(xg, model.predict(xg.reshape(-1, 1)), color="red", lw=2, label="least-squares line")
+ax.set(xlabel="x", ylabel="y", title=f"ŷ = {model.intercept_:.2f} + {model.coef_[0]:.2f}·x")
+ax.legend()
+plt.show()
+```
+
+**Reading the coefficients.** $\hat\beta_1$: predicted change in $y$ per one-unit increase in $x$. $\hat\beta_0$: prediction at $x = 0$ — meaningful only if 0 is in (or near) the data's range; otherwise it is an extrapolated anchor, not a "baseline effect."
+
+## 2. Concept Questions
+
+1. Why does the least-squares line always pass through $(\bar{x}, \bar{y})$?
+2. Data in x = Fahrenheit, y = Celsius is fit with slope $\hat\beta_1$. Refit in x = Kelvin. What happens to the slope and intercept?
+3. Your slope is 4.2 with r = 0.3. What is $s_y / s_x$ telling you here, and would you call this a "strong" effect?
+4. Two students fit the same data; one forgets the intercept term (forces $\hat\beta_0 = 0$). Whose slope changes, and in which direction is it biased if $\bar y$ and $\bar x$ are both positive?
+5. What is the RSS of the perfect-intercept model ($\hat\beta_1 = 0$)? (Connects to [2.1](02-1-regression-setup.qmd) Q1.)
+
+<details>
+<summary>Answers</summary>
+
+1. $\hat\beta_0 = \bar y - \hat\beta_1 \bar x$ rearranges to $\bar y = \hat\beta_0 + \hat\beta_1 \bar x$ — a direct consequence of the first-order condition in $\beta_0$ (residuals sum to zero).
+2. Kelvin = Fahrenheit-scaled shift: $x_K = (x_F + 459.67) \times \frac{5}{9}$. Slope rescales by the x-unit factor: $\hat\beta_1^{(K)} = \hat\beta_1^{(F)} \cdot \frac{9}{5}$; intercept absorbs the shift via the point $(\bar x, \bar y)$. Slope is unit-sensitive; correlation r is not.
+3. $s_y/s_x = 4.2/0.3 = 14$ — the slope is large only because y varies 14× more than x. "Strong" is about r (or standardized slope), not $\hat\beta_1$ alone: r = 0.3 is a weak linear signal with a steep unit conversion. Always report effect in context: 4.2 y-units per x-unit *with uncertainty*.
+4. Without an intercept, $\hat\beta_1$ must do double duty (slope + level), and the first-order condition $\sum r_i = 0$ is lost. With positive $\bar x, \bar y$, the no-intercept slope is biased upward — it's pulled toward $y/x$ ratios rather than the local slope. Force an intercept unless a theory demands the line pass through the origin (and then still check).
+5. $\text{RSS} = \sum(y_i - \bar y)^2 = \text{TSS}$ — the mean-model. Every slope model is judged by how much it shrinks this number; that comparison becomes $R^2$ in [2.4](02-4-accuracy-of-model.qmd).
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+x = np.array([1., 2., 3., 4., 5.])
+y = np.array([2.1, 3.9, 6.2, 8.0, 9.8])
+b1, b0 = np.polyfit(x, y, 1)
+print(b0.round(3), b1.round(3))            # ≈ 0.04, 1.96 (y ≈ 2x)
+print(np.polyval([b1, b0], 6).round(3))    # predict at 6 — note argument order!
+r = np.corrcoef(x, y)[0, 1]
+print((r * y.std(ddof=1) / x.std(ddof=1)).round(3))   # slope = r·sy/sx — the identity
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(1)
+# perfect linear data: zero residuals
+x = np.arange(10.)
+y = 5 - 2 * x
+b1, b0 = np.polyfit(x, y, 1)
+print(b0, b1)                               # 5.0, -2.0 exactly
+resid = y - (b0 + b1 * x)
+print(np.abs(resid).max())                  # ~1e-14 — floating-point dust, not 0.0
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(2)
+# the line passes through (x̄, ȳ)
+x = rng.uniform(0, 5, 30)
+y = 1 + 0.5 * x + rng.normal(0, 1, 30)
+b1, b0 = np.polyfit(x, y, 1)
+print((b0 + b1 * x.mean()).round(6), y.mean().round(6))   # equal — always
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(3)
+# scaling x leaves standardized fit invariant
+x = rng.uniform(0, 10, 40)
+y = 2 + 0.8 * x + rng.normal(0, 1, 40)
+b1a, b0a = np.polyfit(x, y, 1)
+b1b, b0b = np.polyfit(2.54 * x, y, 1)        # x in different units (cm vs inches)
+print(b1a.round(3), (b1b * 2.54).round(3))   # slopes match after unit conversion
+print(b0a.round(3), b0b.round(3))            # intercepts don't — anchor depends on x=0
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Compute the least-squares slope and intercept **from scratch** (sums only, no polyfit/sklearn) for the dataset below, then verify against `np.polyfit`. Report RSS and compare it to the TSS of the intercept-only model.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+y = np.array([2.3, 3.5, 4.2, 5.9, 6.6, 7.4])
+
+xbar, ybar = x.mean(), y.mean()
+Sxy = np.sum((x - xbar) * (y - ybar))
+Sxx = np.sum((x - xbar)**2)
+b1 = Sxy / Sxx
+b0 = ybar - b1 * xbar
+print(f"manual:  b0 = {b0:.4f}, b1 = {b1:.4f}")
+
+b1_pf, b0_pf = np.polyfit(x, y, 1)
+print(f"polyfit: b0 = {b0_pf:.4f}, b1 = {b1_pf:.4f}")
+
+rss = np.sum((y - (b0 + b1 * x))**2)
+tss = np.sum((y - ybar)**2)
+print(f"RSS = {rss:.4f}, TSS = {tss:.4f}, R2 = {1 - rss/tss:.4f}")
+```
+
+RSS ≪ TSS here: the line explains most of the variation. That ratio — computed again with proper degrees of freedom — becomes $R^2$ and $R^2_{\text{adj}}$ in [2.4](02-4-accuracy-of-model.qmd).
+</details>
+
+**Exercise 2.** Regression to the mean, experienced: simulate 200 parents' heights and children's heights as `child = 0.7*parent + 68 + noise` (units: inches). Fit child ~ parent. Report the slope and predicted child height for a parent at 62 in and at 76 in. Explain — in one sentence each — why the predictions sit closer to the population mean than the inputs, and why this is a *statistical* fact and not a biological force.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(7)
+parent = rng.normal(68, 3, 200)
+child = 0.7 * parent + 68 + rng.normal(0, 2, 200)
+b1, b0 = np.polyfit(parent, child, 1)
+print(f"slope = {b1:.2f}  (the simulation truth is 0.7)")
+for p in [62, 76]:
+    print(f"parent {p} in -> predicted child {b0 + b1*p:.1f} in")
+```
+
+Predictions are pulled toward $\bar y$ because slope < 1: a parent 4 in below the mean is predicted only ~2.8 in below-average child. The mechanism is pure statistics — the parent's deviation partially reflects *parent-side luck* (noise), which doesn't repeat in the child. Any noisy pair with $|\rho| < 1$ regresses to the mean; misreading it as causal "correction" is the classic historical error (Galton's own).
+</details>
+
+**Exercise 3.** Prediction interval preview by simulation: fit the line on n = 40 points ($\sigma = 2$ known truth), then simulate the *empirical distribution* of predictions at x = 5 over 2,000 re-generated training sets. Report the SD of predictions and compare it to (a) the SD of a single new observation at x = 5 (≈ σ) and (b) the SE of the mean response. Which interval is wider — confidence or prediction — and why?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(8)
+
+preds = []
+for _ in range(2000):
+    x = rng.uniform(0, 10, 40)
+    y = 2 + 0.7 * x + rng.normal(0, 2, 40)
+    b1, b0 = np.polyfit(x, y, 1)
+    preds.append(b0 + b1 * 5)
+preds = np.array(preds)
+
+print(f"SD of fitted mean at x=5:        {preds.std():.3f}")
+print(f"SD of one new observation:       ≈ σ = 2.0")
+print(f"ratio (new obs / mean response): {2.0/preds.std():.1f}×  wider")
+```
+
+The fitted *mean* response at x = 5 is much more stable than any individual point: individual outcomes add irreducible σ on top of the mean's uncertainty. Hence the **prediction interval** (for a new y) is always wider than the **confidence interval** (for the mean) — quantified properly in [2.3–2.4](02-3-accuracy-of-coefficients.qmd).
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **`np.polyfit` returns highest-degree first** (`[slope, intercept]` for deg 1) — reversing them is a top silent bug. `np.polyval([b1, b0], x_new)` matches.
+- **sklearn wants 2-D X**: `model.fit(x, y)` with 1-D `x` raises — `x.reshape(-1, 1)` or `x[:, None]` ([0.2](../part-00-python-foundations/00-2-numpy.qmd) broadcasting).
+- **Extrapolation** — the line continues with full confidence beyond the data; the *only* protection is range-checking ([2.1](02-1-regression-setup.qmd)).
+- **Outliers have leverage proportional to $(x - \bar x)^2$** — far-in-x points can rotate the whole line (Anscombe III in [1.2](../part-01-statistics-bridge/01-2-relationships.qmd)); check the fit with and without suspects.
+- **Slope ≠ effect without design**: in observational data $\hat\beta_1$ is an *association per unit x*; confounding can give any sign ([2.5](02-5-multiple-linear-regression.qmd), [2.6](02-6-categorical-predictors.qmd)).
+- **Correlation of residuals is the real assumption** — independence, not normality, is what makes the classic SEs valid; time-order or cluster structure breaks it quietly ([2.10](02-10-regression-assumptions.qmd)).
+
+### Read & Refactor AI Code
+
+This AI-generated fit-and-report has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+
+rng = np.random.default_rng(9)
+x = rng.uniform(0, 100, 60)            # e.g., temperature in °F
+y = 10 + 0.5 * x + rng.normal(0, 5, 60)
+
+# BUG 1
+b0, b1 = np.polyfit(x, y, 1)
+print(f"slope = {b0:.3f}, intercept = {b1:.3f}")
+
+# BUG 2: residual check computed with reversed coefficients
+preds = b0 + b1 * x
+resid = preds - y
+print("residual mean:", resid.mean().round(3))
+
+# BUG 3: goodness measured by correlation of fitted vs observed... computed on sorted pairs
+order = np.argsort(x)
+r_fitted = np.corrcoef(x[order], preds[order])[0, 1]
+print("r(fitted vs x):", r_fitted.round(3), "-> 'excellent model!'")
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **polyfit order reversed**: it returns `[highest-degree, ..., constant]`, so `b0` here is the *slope* and `b1` the *intercept* — every printed label lies. Fix: `b1, b0 = np.polyfit(...)` or unpack with names.
+2. **Reversed-coefficient prediction** then residuals: garbage in, garbage out; also the residual-mean check only works when the intercept is present (it should be ≈ 0 numerically). Fix names, then check.
+3. **Self-congratulatory metric**: corr(fitted, x) is always ≈ ±1 by construction — it measures the *line's steepness*, not fit quality. Fix: compare against y (residual-based: RSS vs TSS, or corr(ŷ, y)).
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(9)
+x = rng.uniform(0, 100, 60)
+y = 10 + 0.5 * x + rng.normal(0, 5, 60)
+
+b1, b0 = np.polyfit(x, y, 1)            # highest power first
+print(f"intercept = {b0:.3f}, slope = {b1:.3f}")
+
+preds = b0 + b1 * x
+resid = y - preds                        # truth minus fit
+print("residual mean:", resid.mean().round(6))    # ≈ 0 by construction
+
+r_model = np.corrcoef(preds, y)[0, 1]
+print("corr(ŷ, y) =", r_model.round(3),
+      " R2 =", round(1 - np.sum(resid**2)/np.sum((y - y.mean())**2), 3))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Prove that regressing standardized $y^* $ on standardized $x^*$ yields slope = r and intercept = 0, and derive from it the identity $\hat\beta_1 = r\, s_y / s_x$. Why does this make the slope **unit-sensitive** while r is not?
+
+<details>
+<summary>Hint</summary>
+
+Standardized variables have mean 0, variance 1; apply the closed-form slope.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+With $x^* = (x-\bar x)/s_x$, $y^* = (y - \bar y)/s_y$: slope $= \frac{\sum x_i^* y_i^*}{\sum x_i^{*2}} = \frac{(n-1)\,\text{cov}(x^*,y^*)}{(n-1)\,\text{var}(x^*)} = r$ (both variances are 1); intercept $= \bar y^* - r\bar x^* = 0$. Rescaling $y^* \to y$ multiplies the slope by $s_y$; rescaling $x^* \to x$ divides it by $s_x$ — giving $\hat\beta_1 = r s_y/s_x$. So $\hat\beta_1$ mixes a *dimensionless* association strength (r) with a *unit conversion* ($s_y/s_x$): change x to centimeters and the slope divides by 2.54 with no change in reality. This is why cross-study comparisons report standardized coefficients or r, and why "bigger slope = stronger effect" is meaningless across unit systems.
+</details>
+
+**Q2.** Under what exact conditions does the least-squares slope equal the *causal* effect of x on y? Use a simulation where x is correlated with an unobserved driver of y to show $\hat\beta_1$ ≠ true effect, and connect the size of the gap to the confounder's correlation with x and y.
+
+<details>
+<summary>Solution</summary>
+
+Causal equality requires **no confounding**: $\mathbb{E}[\varepsilon \mid x] = 0$ — the error (which contains all other causes) uncorrelated with x; in a randomized experiment this holds by design, in observational data it's an assumption. Simulation:
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(10)
+z = rng.normal(0, 1, 100_000)          # hidden confounder
+x = 0.8 * z + rng.normal(0, 1, 100_000)
+y = 2.0 * x + 1.5 * z + rng.normal(0, 1, 100_000)   # true x-effect = 2.0
+b1, b0 = np.polyfit(x, y, 1)
+print(f"naive slope: {b1:.3f}  (true causal effect: 2.0)")
+print(f"gap driven by corr(z,x)={0.8:.1f} and z-coefficient {1.5}")
+```
+
+The naive slope overshoots: part of z's influence on y rides in through corr(x, z). First-order intuition: $\hat\beta_1 \approx \text{true} + \beta_z \cdot \delta$ where δ is the x–confounder association. The general cure is adjusting for measured confounders ([2.5](02-5-multiple-linear-regression.qmd), [2.6](02-6-categorical-predictors.qmd)); unmeasured ones limit every observational claim.
+</details>
+
+## 6. Complex Questions
+
+**C1 (SLR × [1.5 Resampling](../part-01-statistics-bridge/01-5-resampling-intuition.qmd)).** Bootstrap the slope of the Exercise 1 dataset (5,000 resamples) and compare the bootstrap SD of $\hat\beta_1$ to the formula-based SE from [2.3](02-3-accuracy-of-coefficients.qmd). Now inject one high-leverage outlier (x = 40, y = 10) and redo both. Which SE detects the fragility first, and what does this say about formula-SE trust on real data?
+
+**C2 (SLR × [0.3 pandas](../part-00-python-foundations/00-3-pandas.qmd)).** Load the cohort-style frame: 4 groups with *different* slopes on a shared x. Fit (a) one pooled line, (b) separate lines per group via `groupby`. Under what parameter constellation does the pooled slope equal a (weighted) average of group slopes, and when can its *sign* contradict all of them? (This is Simpson's paradox armed with slopes — resolved with dummies in [2.6](02-6-categorical-predictors.qmd).)
+
+## 7. Summary
+
+- Least squares has closed forms; the line passes through $(\bar x, \bar y)$; slope = $r\,s_y/s_x$.
+- `np.polyfit` orders coefficients highest-power-first; sklearn wants 2-D X — mechanical details that produce silent bugs.
+- Intercept = prediction at x = 0: interpret only when 0 is in-range.
+- Slope is unit-sensitive, r is not; neither is causal without design or adjustment.
+- Regression to the mean follows from any $|r| < 1$ — statistical, not substantive.
+- Confidence interval (mean response) is always narrower than prediction interval (new point): irreducible σ sits on top.
+- A line is a *claim*; next page asks how precisely the data pins that claim down: [2.3 Accuracy of the coefficients](02-3-accuracy-of-coefficients.qmd).

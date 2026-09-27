@@ -1,9 +1,479 @@
 ---
-title: "Coming soon"
+title: "4.3 Cross-Validation"
 tier: 1
 engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - matplotlib
 ---
 
-This page has not been published yet. It is scheduled in the [build order](/index.qmd) and will follow the same seven-section template as every other page.
+Cross-validation (CV) keeps the validation idea but recycles the data: split into K folds, hold each out in turn, average. Every row is validated exactly once and trains K−1 times — more precise estimates from the same data, at K times the compute. It is the default referee of applied machine learning.
 
-Check back soon — progress is tracked in the [course home](/index.qmd).
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+**K-fold protocol**: partition rows into K disjoint folds (shuffled, ideally stratified). For k = 1..K: fit on all folds except k, predict fold k, record the metric. Report the mean (and spread) of the K values.
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import KFold
+
+X = np.arange(10)
+kf = KFold(n_splits=5, shuffle=True, random_state=0)
+for i, (tr, va) in enumerate(kf.split(X)):
+    print(f"fold {i}: valid = {sorted(va)}")
+print("each row validated exactly once; trains 4 times")
+```
+
+The full loop, explicitly, then the one-liner that does the same:
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import KFold, cross_val_score
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(0)
+x = rng.uniform(0, 1, (120, 1))
+y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, 0.3, 120)
+
+def features(X):
+    return np.c_[X, X**2, X**3]
+
+kf = KFold(5, shuffle=True, random_state=1)
+manual = []
+for tr_idx, va_idx in kf.split(x):
+    fit = LinearRegression().fit(features(x[tr_idx]), y[tr_idx])
+    pred = fit.predict(features(x[va_idx]))
+    manual.append(np.mean((y[va_idx] - pred)**2))
+
+auto = -cross_val_score(LinearRegression(), features(x), y, cv=kf,
+                        scoring="neg_mean_squared_error")
+print("manual fold MSEs:", np.round(manual, 4))
+print("cross_val_score: ", np.round(auto, 4))
+print(f"5-fold CV MSE = {np.mean(auto):.4f} ± {np.std(auto):.4f}")
+```
+
+**Classification needs stratified folds** (class proportions preserved per fold — [0.5](../part-00-python-foundations/00-5-data-splitting.qmd)):
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import KFold, StratifiedKFold, cross_val_score
+from sklearn.linear_model import LogisticRegression
+
+rng = np.random.default_rng(1)
+y = np.r_[np.ones(30), np.zeros(270)].astype(int)
+X = rng.normal(0, 1, (300, 2))
+
+plain = KFold(5, shuffle=True, random_state=2)
+strat = StratifiedKFold(5, shuffle=True, random_state=2)
+for name, splitter in [("plain KFold", plain), ("StratifiedKFold", strat)]:
+    frac = [y[va].mean() for _, va in splitter.split(X, y)]
+    print(f"{name}: fold positive rates = {np.round(frac, 3)}")
+```
+
+**LOOCV** — the K = n extreme: every point validated once, training on n−1. Nearly no bias from undertraining, but expensive and with correlated folds:
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import cross_val_score, LeaveOneOut, KFold
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(2)
+x = rng.uniform(0, 1, (60, 1))
+y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, 0.3, 60)
+def features(X):
+    return np.c_[X, X**2, X**3]
+
+loo = -cross_val_score(LinearRegression(), features(x), y,
+                       cv=LeaveOneOut(), scoring="neg_mean_squared_error")
+k5 = -cross_val_score(LinearRegression(), features(x), y,
+                      cv=KFold(5, shuffle=True, random_state=3),
+                      scoring="neg_mean_squared_error")
+print(f"LOOCV MSE = {loo.mean():.4f}   5-fold CV MSE = {k5.mean():.4f}")
+```
+
+## 2. Concept Questions
+
+1. What exactly does "5-fold CV estimate = 0.31 ± 0.04" estimate, and which model (trained on what fraction of data) does the ± describe?
+2. Why is K-fold CV *not* K times more precise than a single validation split, despite using K folds?
+3. LOOCV is nearly unbiased for the error of models trained on n−1 points. Name its two practical costs.
+4. You're comparing two models with fold-wise CV errors. Why must the fold splits be *identical* across models, and what test formalizes the comparison?
+5. Repeated CV (e.g., 10× 5-fold) — what does repetition add, and what doesn't it fix?
+
+<details>
+<summary>Answers</summary>
+
+1. It estimates the expected test error of the *procedure* "fit this model type to 4/5 of data" — i.e., of models trained on 80% of the data. The final deployed model (trained on 100%) will typically be slightly *better*; the estimate carries that small pessimism ([4.2](../part-04-validation-model-selection/04-2-validation-set.qmd)).
+2. The K fold errors share training data (any two training sets overlap in K−2 folds) and evaluate on the same finite dataset — the fold errors are strongly *positively correlated*, so their mean's variance doesn't shrink like independent estimates would (no 1/K). Repetition with fresh shuffles reduces, but never eliminates, this.
+3. Compute (n fits, each on n−1 rows — infeasible for expensive models) and high fold-correlation: the LOOCV mean has low bias but its variance isn't correspondingly tiny, so per-fold SEs are misleading. Also no stratification granularity at K = n for classification (some folds have 1 positive).
+4. Fold difficulty (which easy/hard rows land together) shifts all models' scores on a given split — pairing cancels it. With identical folds, compare fold-wise differences with a paired t-test ([3.7](../part-03-classification-glm/03-7-model-comparison.qmd)); with different random splits, you're comparing two noisy marginals.
+5. Repetition with different shuffles averages out *partition luck*, tightening the estimate (the SD across repeats estimates the partition-noise). It does NOT fix: selection inflation (picking the winner among many models by CV), leakage, or distribution shift — those are pipeline diseases, not partition noise.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import KFold
+X = np.arange(12)
+for K in [2, 3, 4, 6]:
+    sizes = [len(va) for _, va in KFold(K, shuffle=False).split(X)]
+    print(f"K={K}: fold sizes {sizes}")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import GroupKFold
+# grouped rows: 3 patients × 4 visits
+X = np.arange(12).reshape(-1, 1)
+groups = np.repeat([1, 2, 3], 4)
+for tr, va in GroupKFold(3).split(X, groups=groups):
+    print("valid patients:", sorted(set(groups[va])))
+print("a patient never appears in both train and validation")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import TimeSeriesSplit
+X = np.arange(10).reshape(-1, 1)
+for i, (tr, va) in enumerate(TimeSeriesSplit(4).split(X)):
+    print(f"split {i}: train = {tr[-3:]}, valid = {va}")
+print("training always precedes validation — no future leakage")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import cross_val_score, KFold
+from sklearn.linear_model import LinearRegression
+rng = np.random.default_rng(3)
+x = rng.uniform(0, 1, (100, 1))
+y = np.sin(2*np.pi*x).ravel() + rng.normal(0, 0.3, 100)
+def f(X): return np.c_[X, X**2, X**3]
+for K in [3, 5, 10]:
+    s = -cross_val_score(LinearRegression(), f(x), y,
+                         cv=KFold(K, shuffle=True, random_state=0),
+                         scoring="neg_mean_squared_error")
+    print(f"K={K:>2}: CV MSE {s.mean():.4f} ± {s.std():.4f}")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Variance anatomy: estimate the true test error of a degree-3 model (fit on 80% of n = 120) via (a) one 5-fold CV, (b) 20 repeats of 5-fold CV, (c) 200 independent 80/20 splits. For each, report the estimate and an empirical SD across 300 repetitions of the whole scheme. Which scheme's repetition-SD is smallest, and what does the comparison say about what CV does and doesn't recycle?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.model_selection import cross_val_score, KFold, train_test_split
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(4)
+x = rng.uniform(0, 1, (120, 1))
+y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, 0.3, 120)
+def f(X): return np.c_[X, X**2, X**3]
+
+def scheme_a():
+    return -cross_val_score(LinearRegression(), f(x), y,
+                            cv=KFold(5, shuffle=True, random_state=1),
+                            scoring="neg_mean_squared_error").mean()
+
+def scheme_b():
+    return np.mean([-cross_val_score(LinearRegression(), f(x), y,
+                     cv=KFold(5, shuffle=True, random_state=s),
+                     scoring="neg_mean_squared_error").mean() for s in range(20)])
+
+def scheme_c():
+    vals = []
+    for s in range(1):
+        X_tr, X_va, y_tr, y_va = train_test_split(x, y, test_size=0.2, random_state=s)
+        m = LinearRegression().fit(f(X_tr), y_tr)
+        vals.append(np.mean((y_va - m.predict(f(X_va)))**2))
+    return vals[0]
+
+for name, scheme, reps in [("one 5-fold", scheme_a, 300),
+                           ("20x 5-fold", scheme_b, 300),
+                           ("single 80/20", scheme_c, 300)]:
+    ests = [scheme() for _ in range(reps)]
+    print(f"{name:12s} mean = {np.mean(ests):.4f}  across-repetition SD = {np.std(ests):.5f}")
+```
+
+All three estimate nearly the same thing and their means agree; the SD ranking (single split worst, one 5-fold in the middle, 20× repeats best) quantifies the partition-noise that CV partially — but not fully — recycles. Diminishing returns set in: 20 repeats ≈ 100 fits for a modest tightening, because folds within a repeat are correlated.
+</details>
+
+**Exercise 2.** Model selection by CV, done right and wrong: among degrees 1–12 on sinusoidal data (n = 100), (a) select the degree minimizing 5-fold CV MSE; (b) report that minimum as the performance; (c) also compute the *true* error of the CV-selected degree (big fresh test). Repeat over 200 datasets: compare the distribution of (b) against (c), and against the true error of the *fixed* degree-3 model. Quantify the optimism of (b) and the quality of CV as a *selector*.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.model_selection import cross_val_score, KFold
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(5)
+def f(X, d):
+    return np.c_[[X**j for j in range(1, d + 1)]].T
+
+sel_reported, sel_true, fixed_true = [], [], []
+for ds in range(200):
+    r = np.random.default_rng(1000 + ds)
+    x = r.uniform(0, 1, 100)
+    y = np.sin(2 * np.pi * x) + r.normal(0, 0.3, 100)
+    cv_scores = []
+    for d in range(1, 13):
+        s = -cross_val_score(LinearRegression(), f(x, d), y,
+                             cv=KFold(5, shuffle=True, random_state=ds),
+                             scoring="neg_mean_squared_error").mean()
+        cv_scores.append(s)
+    best_d = int(np.argmin(cv_scores)) + 1
+    sel_reported.append(min(cv_scores))
+
+    xte = r.uniform(0, 1, 20000)
+    yte = np.sin(2 * np.pi * xte) + r.normal(0, 0.3, 20000)
+    m = LinearRegression().fit(f(x, best_d), y)
+    sel_true.append(np.mean((yte - m.predict(f(xte, best_d)))**2))
+    m3 = LinearRegression().fit(f(x, 3), y)
+    fixed_true.append(np.mean((yte - m3.predict(f(xte, 3)))**2))
+
+print(f"(b) reported min-CV score:      {np.mean(sel_reported):.4f}")
+print(f"(c) true error of CV selection: {np.mean(sel_true):.4f}")
+print(f"    true error of fixed deg-3:  {np.mean(fixed_true):.4f}")
+print(f"selection optimism (b)-(c) = {np.mean(sel_reported)-np.mean(sel_true):+.4f}")
+```
+
+The reported minimum sits *below* the selected model's true error — that gap is selection optimism, paid for searching 12 candidates. Meanwhile CV-as-selector works well: the selected degrees' true errors beat (or nearly match) fixed degree-3, because CV's noise per candidate is small enough that the true winner usually scores near the top. Two hats, one tool: a good *selector*, an optimistic *reporter* — never let it wear both hats at once ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd) formalizes the fix).
+</details>
+
+**Exercise 3.** Grouped biological data done properly: 40 patients × 5 visits (200 rows); the signal is at the patient level. Compare three evaluation schemes for a logistic model: (a) row-level StratifiedKFold(5) — patients split across folds; (b) GroupKFold(5) by patient; (c) GroupKFold with LOO-patients (40 folds). Report each scheme's mean CV AUC and across-fold SD, then evaluate the *winning-by-(a)* model's performance on truly unseen patients. Which scheme's number would you put in a paper claiming "generalizes to new patients"?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.model_selection import StratifiedKFold, GroupKFold, cross_val_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import roc_auc_score
+
+rng = np.random.default_rng(6)
+n_pat, n_vis = 40, 5
+pat_effect = rng.normal(0, 1.5, n_pat)
+rows = []
+for p in range(n_pat):
+    for v in range(n_vis):
+        x1 = 0.8 * pat_effect[p] + rng.normal(0, 1)
+        x2 = rng.normal(0, 1)
+        y = 0  # assigned below via probability using pat_effect
+        prob = 1 / (1 + np.exp(-(1.5 * pat_effect[p] + 0.5 * x2)))
+        y = int(rng.uniform() < prob)
+        rows.append((p, x1, x2, y))
+arr = np.array(rows)
+groups, X, y = arr[:, 0].astype(int), arr[:, 1:3], arr[:, 3].astype(int)
+
+for name, splitter, kw in [
+    ("(a) row-stratified", StratifiedKFold(5, shuffle=True, random_state=0), {}),
+    ("(b) GroupKFold(5)", None, dict(groups=groups)),
+]:
+    if name.startswith("(a)"):
+        scores = cross_val_score(LogisticRegression(max_iter=4000), X, y,
+                                 cv=splitter, scoring="roc_auc")
+    else:
+        gkf = GroupKFold(5)
+        scores = cross_val_score(LogisticRegression(max_iter=4000), X, y,
+                                 cv=gkf.split(X, y, groups=groups), scoring="roc_auc")
+    print(f"{name}: AUC {scores.mean():.3f} ± {scores.std():.3f}")
+
+# (c) leave-one-patient-out
+from sklearn.model_selection import LeaveOneGroupOut
+logo = LeaveOneGroupOut()
+scores = cross_val_score(LogisticRegression(max_iter=4000), X, y,
+                         cv=logo.split(X, y, groups=groups), scoring="roc_auc")
+print(f"(c) LOPO patients:   AUC {scores.mean():.3f} ± {scores.std():.3f}")
+```
+
+Scheme (a) lets each patient's rows appear in both train and validation — the model memorizes patient-level drift and reports inflated AUC ("generalizes" only to *new visits of known patients*). Schemes (b)/(c) answer the new-patient question and their numbers are visibly lower and more honest. The evaluation unit must match the deployment claim: row-level questions (rare in medicine) vs patient-level questions (the usual).
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **K choice folklore**: K = 5 or 10 balance bias (training fraction 1−1/K) against compute and fold-correlation. K = 2 gives the most independent folds; LOOCV the least (and is noisier per-unit-cost for unstable learners).
+- **Preprocessing belongs inside the folds** — `Pipeline` + `cross_val_score` is the mechanical guarantee ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd)); a scaler fit before `cross_val_score` silently invalidates the whole table.
+- **Fold-level SEs understate uncertainty** (correlated folds); for error bars on the CV mean, use repeated CV across random partitions or bootstrap over rows — not sd(fold scores)/√K alone.
+- **CV estimates procedures, not fitted models** — after CV, refit on all data for deployment; the CV number is the performance *claim*, the full-data fit is the *artifact* ([4.2](../part-04-validation-model-selection/04-2-validation-set.qmd) post-selection note).
+- **Group/cluster leakage** is the silent killer of biomarker papers: same patient, same batch, same unit across folds ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd) bug #3, [Exercise 3](#)).
+- **Time series**: shuffle-free `TimeSeriesSplit` or rolling-origin schemes; random K-fold CV on temporal data answers a question nobody deploys against.
+- **Feature selection inside CV only**: screening features on the full dataset before CV is leakage — the fold must not know which features exist until it trains ([2.8 Exercise 3](../part-02-linear-regression/02-8-nonlinear-transformations.qmd)).
+
+### Read & Refactor AI Code
+
+This AI-generated evaluation has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.model_selection import cross_val_score, KFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+
+X, y = make_classification(n_samples=500, n_features=10, random_state=7)
+
+# BUG 1: scale on ALL data before CV
+Xs = StandardScaler().fit_transform(X)
+kf = KFold(5, shuffle=True, random_state=0)
+scores = cross_val_score(LogisticRegression(max_iter=4000), Xs, y, cv=kf)
+print("CV acc:", scores.mean().round(4))
+
+# BUG 2: unshuffled KFold on sorted-by-class data
+X_sorted = X[np.argsort(y)]
+y_sorted = y[np.argsort(y)]
+scores2 = cross_val_score(LogisticRegression(max_iter=4000), X_sorted, y_sorted,
+                          cv=KFold(5, shuffle=False))
+print("unshuffled CV acc:", scores2.mean().round(4), "per-fold:", scores2.round(3))
+
+# BUG 3: select features on full data, then CV the survivors
+corr = np.abs([np.corrcoef(X[:, j], y)[0, 1] for j in range(10)])
+top = np.argsort(-corr)[:5]
+scores3 = cross_val_score(LogisticRegression(max_iter=4000), Xs[:, top], y, cv=kf)
+print("CV after full-data feature selection:", scores3.mean().round(4))
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Pre-CV scaling**: every fold's training statistics include validation rows. Pipeline inside CV.
+2. **Unshuffled folds on sorted data**: some folds see one class only; several folds can't even fit. Shuffle (or stratify).
+3. **Feature selection outside CV**: the folds' validation rows voted on which features matter — leakage. Selection must live inside the fold pipeline.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.feature_selection import SelectKBest, f_classif
+
+X, y = make_classification(n_samples=500, n_features=10, random_state=7)
+kf = StratifiedKFold(5, shuffle=True, random_state=0)
+
+pipe = make_pipeline(StandardScaler(), LogisticRegression(max_iter=4000))
+print("honest CV acc:", cross_val_score(pipe, X, y, cv=kf).mean().round(4))
+
+pipe_fs = make_pipeline(StandardScaler(),
+                        SelectKBest(f_classif, k=5),
+                        LogisticRegression(max_iter=4000))
+print("selection INSIDE the pipeline, CV acc:",
+      cross_val_score(pipe_fs, X, y, cv=kf).mean().round(4))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Estimate the fold-correlation of 5-fold CV errors empirically: generate 400 datasets; for each, compute the 5 fold MSEs of a fixed model; extract the average pairwise correlation of fold errors. Use the observed ρ to explain why the SE of the CV mean is √((1 + 4ρ)/5)·SD(fold)/√5-ish rather than SD(fold)/√5, and compute the inflation factor at your measured ρ.
+
+<details>
+<summary>Hint</summary>
+
+For the mean of K equicorrelated estimates, Var(mean) = (σ²/K)(1 + (K−1)ρ).
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Measure the correlation across datasets: standardize each dataset's fold errors, pool, and correlate fold positions.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.model_selection import KFold
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(8)
+z = []
+for rep in range(400):
+    x = rng.uniform(0, 1, 100)
+    y = np.sin(2*np.pi*x) + rng.normal(0, 0.3, 100)
+    F = np.c_[x, x**2, x**3]
+    errs = []
+    for tr, va in KFold(5, shuffle=True, random_state=rep).split(x):
+        m = LinearRegression().fit(F[tr], y[tr])
+        errs.append(np.mean((y[va] - m.predict(F[va]))**2))
+    e = np.array(errs)
+    z.append((e - e.mean()) / e.std())
+Z = np.array(z)                      # 400 x 5, standardized per dataset
+C = np.corrcoef(Z, rowvar=False)
+rho = C[np.triu_indices(5, 1)].mean()
+print(f"average pairwise fold-error correlation: rho ≈ {rho:.3f}")
+print(f"SE inflation factor vs naive sqrt(K) law: {np.sqrt(1 + 4 * rho):.2f}x")
+```
+
+Typical ρ lands well above 0 — folds share rows and the same underlying fit. The naive SD/√K understates the CV mean's uncertainty by the inflation factor; repeated-CV or bootstrap-over-rows error bars are the honest alternative ([Q2 of 4.2](../part-04-validation-model-selection/04-2-validation-set.qmd) for the single-split analogue).
+</details>
+
+**Q2.** You have n = 80 rows, an unstable learner (KNN k = 1), and must choose between LOOCV and 5-fold repeated 10 times as your error estimator. Simulate the truth (fresh test sets) and compare both estimators' bias and variance across 200 datasets. Confirm or refute the folklore "LOOCV has low bias but high variance for unstable learners" and state which you'd use for (a) unstable learners, (b) stable learners (linear regression).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.model_selection import cross_val_score, LeaveOneOut, KFold
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(9)
+def dataset(r, n=80):
+    x = r.uniform(0, 1, (n, 1))
+    y = np.sin(2*np.pi*x).ravel() + r.normal(0, 0.2, n)
+    return x, y
+
+loo_v, k5_v, truth_v = [], [], []
+for rep in range(200):
+    r = np.random.default_rng(rep)
+    x, y = dataset(r)
+    xte = r.uniform(0, 1, 5000)
+    yte = np.sin(2*np.pi*xte) + r.normal(0, 0.2, 5000)
+    knn1 = KNeighborsRegressor(1).fit(x, y)
+    truth_v.append(np.mean((yte - knn1.predict(xte.reshape(-1,1)))**2))
+    loo_v.append(-cross_val_score(KNeighborsRegressor(1), x, y,
+                                  cv=LeaveOneOut(),
+                                  scoring="neg_mean_squared_error").mean())
+    k5_v.append(np.mean([-cross_val_score(KNeighborsRegressor(1), x, y,
+                       cv=KFold(5, shuffle=True, random_state=s),
+                       scoring="neg_mean_squared_error").mean() for s in range(10)]))
+
+for name, v in [("LOOCV", loo_v), ("10x5-fold", k5_v)]:
+    print(f"{name:10s} bias {np.mean(v)-np.mean(truth_v):+.4f}  SD {np.std(v):.4f}")
+```
+
+For the unstable k = 1 learner, LOOCV trains on n−1 ≈ n (low bias) but its per-fold predictions are maximally jumpy and folds nearly identical — high variance across datasets. Repeated 5-fold trades a hair of bias (training on 80%) for substantially lower variance — better for unstable learners, matching the folklore. For *stable* learners (linear regression), the variance difference largely evaporates and LOOCV's minimal bias is attractive (compute permitting). The estimator must be matched to the learner's stability — one more decision CV forces you to own.
+</details>
+
+## 6. Complex Questions
+
+**C1 (CV × [3.7 comparison](../part-03-classification-glm/03-7-model-comparison.qmd) × [12.x multiplicity](../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.qmd) preview).** Ten models, five-fold CV, pairwise McNemar on pooled out-of-fold predictions = 45 comparisons. Simulate null data (no signal) and count how many pairs come out "significant" at p < 0.05. Apply Bonferroni (α/45) and re-count. Connect the result to why model-comparison tables in the wild overclaim — and write the protocol sentence your future papers will include.
+
+**C2 (CV × [2.4 R²](../part-02-linear-regression/02-4-accuracy-of-model.qmd)).** Out-of-sample R² from K-fold CV: implement fold-wise $R^2 = 1 - \text{MSE}_{fold}/\text{Var}_{fold}(y)$ vs pooled $1 - \sum \text{resid}^2 / \sum (y - \bar{y}_{pooled})^2$ on the same CV predictions. Show the two can differ noticeably on small folds, decide which is the defensible summary for (a) balanced folds, (b) drifting fold composition, and produce the exact sklearn-equivalent computation (`cross_val_predict` + `r2_score`) to check your arithmetic.
+
+## 7. Summary
+
+- K-fold CV: every row validated once; report mean fold error ± honest uncertainty (fold correlation!, repeats).
+- Stratify classification folds; group by patient/batch when deployment means new groups; never shuffle time.
+- Preprocessing, feature selection, *everything data-dependent* lives inside the fold pipeline.
+- CV is a fine selector and an optimistic reporter of its own minimum — separation of hats is [4.6]'s law.
+- LOOCV: low bias, high compute, high estimator variance for unstable learners; 5/10-fold is the working default.
+- Fold-level SEs understate; repeat partitions or bootstrap rows for error bars.
+- The U-curve of [4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd) has a decomposition — bias² + variance + σ² — that explains *why* the minimum sits where it does: [4.4 The bias–variance trade-off](../part-04-validation-model-selection/04-4-bias-variance.qmd).

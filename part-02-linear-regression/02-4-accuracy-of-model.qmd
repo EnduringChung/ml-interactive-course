@@ -1,9 +1,404 @@
 ---
-title: "Coming soon"
+title: "2.4 Accuracy of the Full Model"
 tier: 1
 engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - statsmodels
+    - patsy
+    - scikit-learn
 ---
 
-This page has not been published yet. It is scheduled in the [build order](/index.qmd) and will follow the same seven-section template as every other page.
+Beyond individual coefficients, we judge the whole fit: how close are predictions to reality (RSE), and what fraction of the response's variation does the model explain ($R^2$)? Both have in-sample and out-of-sample versions — and the gap between them is the heart of model evaluation.
 
-Check back soon — progress is tracked in the [course home](/index.qmd).
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+Two classic in-sample summaries of a fit with $p$ predictors and $n$ observations:
+
+$$\text{RSE} = \sqrt{\frac{\text{RSS}}{n - p - 1}} \quad\text{(typical prediction miss, in y-units)} \qquad R^2 = 1 - \frac{\text{RSS}}{\text{TSS}} \quad\text{(fraction of variance explained)}$$
+
+where $\text{RSS} = \sum (y_i - \hat y_i)^2$ and $\text{TSS} = \sum (y_i - \bar y)^2$. RSE is absolute (compare to σ), $R^2$ is relative (compare to the mean-model's floor of 0 and the perfect fit's ceiling of 1).
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(0)
+x = rng.uniform(0, 10, 50)
+y = 2 + 0.8 * x + rng.normal(0, 1.5, 50)
+fit = sm.OLS(y, sm.add_constant(x)).fit()
+
+n, p = len(x), 1
+rss = np.sum(fit.resid**2)
+tss = np.sum((y - y.mean())**2)
+
+print("from scratch:")
+print(f"  RSE = {np.sqrt(rss/(n - p - 1)):.4f}   R2 = {1 - rss/tss:.4f}")
+print("statsmodels:")
+print(f"  RSE = {np.sqrt(fit.mse_resid):.4f}   R2 = {fit.rsquared:.4f}")
+print(f"  residual σ (simulation truth: 1.5)")
+```
+
+**The variance-explained identity.** With an intercept, total variation splits exactly:
+
+$$\underbrace{\sum (y_i - \bar y)^2}_{\text{TSS}} = \underbrace{\sum (\hat y_i - \bar y)^2}_{\text{ESS, explained}} + \underbrace{\sum (y_i - \hat y_i)^2}_{\text{RSS, unexplained}}$$
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+rng = np.random.default_rng(0)
+x = rng.uniform(0, 10, 50)
+y = 2 + 0.8 * x + rng.normal(0, 1.5, 50)
+fit = sm.OLS(y, sm.add_constant(x)).fit()
+
+yhat = fit.fittedvalues
+tss = np.sum((y - y.mean())**2)
+ess = np.sum((yhat - y.mean())**2)
+rss = np.sum(fit.resid**2)
+print(f"TSS = {tss:.3f}")
+print(f"ESS + RSS = {ess + rss:.3f}     <- exact decomposition (with intercept)")
+print(f"ESS/TSS = {ess/tss:.4f}  =  R² = {fit.rsquared:.4f}")
+```
+
+**In-sample vs out-of-sample $R^2$** — the same formula on test data, where it can go *negative*:
+
+```{pyodide}
+#| fig-width: 6.5
+#| fig-height: 3
+import numpy as np
+import statsmodels.api as sm
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(1)
+train_r2, test_r2, sizes = [], [], range(5, 61, 5)
+for n_tr in sizes:
+    vals_tr, vals_te = [], []
+    for _ in range(300):
+        x = rng.uniform(0, 10, n_tr)
+        y = 2 + 0.8 * x + rng.normal(0, 1.5, n_tr)
+        x_tr, x_te, y_tr, y_te = train_test_split(x, y, test_size=0.3, random_state=1)
+        f = sm.OLS(y_tr, sm.add_constant(x_tr)).fit()
+        pred_te = f.params[0] + f.params[1] * x_te
+        vals_tr.append(1 - np.sum(f.resid**2)/np.sum((y_tr - y_tr.mean())**2))
+        vals_te.append(1 - np.sum((y_te - pred_te)**2)/np.sum((y_te - y_te.mean())**2))
+    train_r2.append(np.mean(vals_tr)); test_r2.append(np.mean(vals_te))
+
+fig, ax = plt.subplots(figsize=(6.5, 3))
+ax.plot(list(sizes), train_r2, marker="o", label="in-sample R² (optimistic)")
+ax.plot(list(sizes), test_r2, marker="s", label="out-of-sample R²")
+ax.axhline(0, color="gray", lw=0.8)
+ax.set(xlabel="training size n", ylabel="R²", title="Small n: out-of-sample R² can be < 0")
+ax.legend()
+plt.show()
+```
+
+## 2. Concept Questions
+
+1. Your model's RSE is 3.2 and y ranges from 40 to 60. Is this a good model? What extra number do you need?
+2. Why is in-sample $R^2$ *never decreased* by adding a predictor — even a column of pure noise?
+3. What does out-of-sample $R^2 < 0$ mean, and which two models does it compare?
+4. RSE divides by $n - p - 1$ while RMSE divides by $n$. Which is the honest estimate of σ, and when do they converge?
+5. Your in-sample $R^2 = 0.9$, test $R^2 = 0.55$. Name the phenomenon and two standard remedies.
+
+<details>
+<summary>Answers</summary>
+
+1. Depends on σ, not the range alone: RSE ≈ σ means you're at the noise floor ([2.1](02-1-regression-setup.qmd)); RSE ≫ σ means real structure is unexplained. Range (40–60 → SD maybe ~4) gives context: missing 3.2 when the total SD is ~4 is barely better than predicting the mean. You need an estimate of σ (replicates, domain knowledge).
+2. Least squares *minimizes* RSS, so RSS weakly decreases with any added column — noise columns get tiny fitted coefficients that shave a little RSS. $R^2$'s denominator doesn't move. This monotone creep is why adjusted $R^2$ (or CV) exists; more in [2.5](02-5-multiple-linear-regression.qmd)/Part 5.
+3. The test-set version compares your model against **the test set's own mean**: $R^2_{\text{test}} = 1 - \sum (y_{te} - \hat y_{te})^2 / \sum (y_{te} - \bar y_{te})^2$. Negative = your model predicts worse than just predicting the test mean — the model (fit elsewhere) has *negative transfer* to this distribution or is simply terrible.
+4. RSE (df-corrected) estimates σ̂ unbiasedly; RMSE(n) is the descriptive in-sample miss. They converge as $n \gg p$. Report RSE (or test RMSE), not in-sample RMSE, when the audience cares about truth.
+5. **Overfitting** (in-sample optimism). Remedies: more data, regularization/simpler model (Part 5), and honest evaluation via CV ([4.3](../part-04-validation-model-selection/04-3-cross-validation.qmd)).
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+y = np.array([3., 5., 7., 9.]); yhat = np.array([3.5, 4.5, 7.5, 8.5])
+rss = np.sum((y - yhat)**2); tss = np.sum((y - y.mean())**2)
+print(rss, tss)                                # 2.0, 20.0
+print(1 - rss/tss)                             # 0.9
+print(np.mean((y - yhat)**2))                  # 0.5 = in-sample MSE
+```
+
+```{pyodide}
+import numpy as np
+# mean-model: R2 exactly 0 in-sample
+rng = np.random.default_rng(2)
+y = rng.normal(10, 2, 100)
+yhat = np.full(100, y.mean())
+r2 = 1 - np.sum((y - yhat)**2) / np.sum((y - y.mean())**2)
+print(r2)                                      # 0.0 (up to float dust)
+```
+
+```{pyodide}
+import numpy as np
+# R2 is invariant to linear rescaling of y, RMSE is not
+rng = np.random.default_rng(3)
+x = rng.uniform(0, 1, 200); y = 2 + 3*x + rng.normal(0, 1, 200)
+r2a = 1 - np.sum((y - (2 + 3*x))**2)/np.sum((y - y.mean())**2)
+r2b = 1 - np.sum((5*y - (10 + 15*x))**2)/np.sum((5*y - 5*y.mean())**2)
+print(r2a.round(6), r2b.round(6))              # identical
+print(np.sqrt(np.mean((y-(2+3*x))**2)).round(4), np.sqrt(np.mean((5*y-(10+15*x))**2)).round(4))
+```
+
+```{pyodide}
+import numpy as np
+# negative out-of-sample R2: fit on x in [0,1], test on x in [5,6]
+rng = np.random.default_rng(4)
+x_tr = rng.uniform(0, 1, 50); y_tr = 1 + 2*x_tr + rng.normal(0, .3, 50)
+b1 = np.polyfit(x_tr, y_tr, 1)
+x_te = rng.uniform(5, 6, 50); y_te = 1 + 2*x_te + rng.normal(0, .3, 50)
+pred = b1[1] + b1[0]*x_te
+r2_te = 1 - np.sum((y_te - pred)**2)/np.sum((y_te - y_te.mean())**2)
+print("test R2:", round(r2_te, 3), " <- catastrophic extrapolation (2.1's warning, priced)")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** For the cohort-style data below, fit `y ~ x` and compute in a single pass: RSS, TSS, ESS, in-sample R², RSE, and the df-corrected vs naive RMSE. Verify TSS = ESS + RSS to 8 decimals.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(5)
+x = rng.uniform(20, 80, 60)
+y = 50 + 0.35 * x + rng.normal(0, 4, 60)
+fit = sm.OLS(y, sm.add_constant(x)).fit()
+
+yhat = fit.fittedvalues
+rss = np.sum((y - yhat)**2)
+tss = np.sum((y - y.mean())**2)
+ess = np.sum((yhat - y.mean())**2)
+n, p = len(x), 1
+
+print(f"TSS - (ESS+RSS) = {tss - ess - rss:.2e}   (≈ 0: decomposition holds)")
+print(f"in-sample R²   = {1 - rss/tss:.4f}  (statsmodels: {fit.rsquared:.4f})")
+print(f"RSE            = {np.sqrt(rss/(n - p - 1)):.4f}")
+print(f"RMSE (naive)   = {np.sqrt(rss/n):.4f}")
+```
+
+RSE slightly exceeds naive RMSE because the df correction charges the model for the parameters it fitted. With n = 60, p = 1 the difference is tiny; with n = 8, p = 4 it is violent — one more reason small-n fits deserve RSE, not RMSE.
+</details>
+
+**Exercise 2.** Demonstrate the **noise-collector theorem**: for the data above, append (a) a genuine second predictor correlated with the signal, (b) a pure-noise column, and (c) five pure-noise columns. Track in-sample R² and 5-fold out-of-sample R² across the four models. Which number climbs monotonically, and which tells the truth?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+from sklearn.model_selection import cross_val_score
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(6)
+n = 60
+x1 = rng.uniform(0, 10, n)
+y = 2 + 0.8 * x1 + rng.normal(0, 2, n)
+x2 = 0.6 * x1 + rng.normal(0, 1, n)             # carries real signal too
+noise = rng.normal(0, 1, (n, 5))
+
+for tag, X in [("x1 only", x1.reshape(-1,1)),
+               ("x1 + x2", np.c_[x1, x2]),
+               ("x1 + noise1", np.c_[x1, noise[:, 0]]),
+               ("x1 + noise5", np.c_[x1, noise])]:
+    fit_in = sm.OLS(y, sm.add_constant(X)).fit()
+    cv = cross_val_score(LinearRegression(), X, y, cv=5, scoring="r2")
+    print(f"{tag:12s}  in-sample R² = {fit_in.rsquared:.4f}   "
+          f"5-fold R² = {cv.mean():+.4f}")
+```
+
+In-sample R² only ever rises — five noise columns "explain" variance that pure chance aligned with y. CV R² is flat or falling: out-of-sample, the noise coefficients are random directions that add variance, not signal. This single experiment is the entire business case for honest validation (Part 4) and for adjusted metrics/penalties (Part 5).
+</details>
+
+**Exercise 3.** Build `regression_report(y_true, y_pred, k_params)` returning a dict with MSE, RMSE, RSE (df-corrected), MAE, and out-of-sample R² computed against the **given** y's mean. Test it in three regimes — good model, underfit model, extrapolated predictions — and write one sentence naming each regime from the numbers alone.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+def regression_report(y_true, y_pred, k_params):
+    resid = y_true - y_pred
+    n = len(y_true)
+    mse = np.mean(resid**2)
+    return {
+        "MSE": mse,
+        "RMSE": np.sqrt(mse),
+        "RSE": np.sqrt(np.sum(resid**2) / (n - k_params - 1)),
+        "MAE": np.mean(np.abs(resid)),
+        "R2_oos": 1 - np.sum(resid**2) / np.sum((y_true - y_true.mean())**2),
+    }
+
+rng = np.random.default_rng(7)
+x = rng.uniform(0, 10, 200)
+y = 1 + 0.5 * x + rng.normal(0, 1, 200)
+
+good = 1 + 0.5 * x + rng.normal(0, 1, 200)          # right form, fresh noise
+under = np.full(200, y.mean())                       # mean-only
+extrap = 1 + 0.5 * (x + 20)                          # right line, wrong domain
+
+for name, pred in [("good", good), ("underfit", under), ("extrapolated", extrap)]:
+    rep = regression_report(y, pred, k_params=1)
+    print(name, {k: round(v, 3) for k, v in rep.items()})
+```
+
+Reading: "good" has RSE ≈ 1 ≈ σ and healthy positive R²; "underfit" has R² ≈ 0 (no better than the mean); "extrapolated" has *negative* R² and an RMSE far above σ — the fit is fine but the domain is wrong. Numbers diagnose regimes only when you know what σ and R² = 0 mean.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **$R^2$ has no universal "good"** — it compares against *your* response's variance. In noisy biology, $R^2 = 0.2$ can be a triumph; in controlled physics, 0.95 can be embarrassing. Context or σ, always.
+- **Out-of-sample $R^2$ is computed against the *test* mean** — a different denominator than training. Two reported R²s with different test sets are not directly comparable; prefer test RMSE/MSE for comparisons.
+- **Adjusted $R^2$** charges each predictor with a df penalty: $1 - (1 - R^2)\frac{n-1}{n-p-1}$; it can *decrease* when noise columns join. It's a better in-sample guide, but CV is the real referee.
+- **Comparing $R^2$ across transformed responses** ($y$ vs $\log y$) is invalid — different denominators, different games. Compare test RMSE *on the same scale* (back-transform with care: exponentiating log-predictions biases; use smearing or accept the median-level prediction).
+- **RSE estimates σ only under correct specification** — a quadratic truth fit with a line inflates σ̂ ([2.10](02-10-regression-assumptions.qmd)); your "noise floor" estimate absorbs your model's bias.
+- **$R^2$ says nothing about calibration in y**: predictions can be well-correlated with y yet systematically offset; plot ŷ vs y ([0.4](../part-00-python-foundations/00-4-visualization-eda.qmd)).
+
+### Read & Refactor AI Code
+
+This AI-generated model report has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
+
+rng = np.random.default_rng(8)
+x = rng.uniform(0, 10, 100)
+y = 2 + 0.5 * x + rng.normal(0, 1, 100)
+
+model = LinearRegression().fit(x.reshape(-1, 1), y)
+
+# BUG 1: R2 on the training data reported as performance
+print("R2:", round(r2_score(y, model.predict(x.reshape(-1, 1))), 4))
+
+# BUG 2: compare R2 of models on y vs log(y)
+y_log = np.log(y + 10)
+model_log = LinearRegression().fit(x.reshape(-1, 1), y_log)
+print("R2 log-scale:", round(r2_score(y_log, model_log.predict(x.reshape(-1, 1))), 4),
+      "-> 'log model better!'")
+
+# BUG 3: RMSE averaged across folds
+fold_rmse = [1.1, 0.9, 1.0, 1.2]
+print("CV RMSE:", np.mean(fold_rmse).round(3))
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **Training R² as performance**: always the best-case number; report CV or holdout.
+2. **R² across different response scales**: R²(y) and R²(log y) have different denominators (variance of y vs of log y) — the comparison is meaningless. Compare RMSE on one common scale (here: predict log, exponentiate, RMSE in y-space).
+3. **Averaging RMSEs across folds**: average fold MSEs, take the root ([2.1](02-1-regression-setup.qmd)).
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import cross_val_predict, KFold
+
+rng = np.random.default_rng(8)
+x = rng.uniform(0, 10, 100)
+y = 2 + 0.5 * x + rng.normal(0, 1, 100)
+
+X = x.reshape(-1, 1)
+kf = KFold(5, shuffle=True, random_state=0)
+
+pred = cross_val_predict(LinearRegression(), X, y, cv=kf)
+print("CV RMSE (y-scale):   ", round(float(np.sqrt(np.mean((y - pred)**2))), 4))
+
+pred_log = np.exp(cross_val_predict(LinearRegression(), X, np.log(y + 10), cv=kf)) - 10
+print("log-model CV RMSE:   ", round(float(np.sqrt(np.mean((y - pred_log)**2))), 4),
+      "<- same scale, honest comparison")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Prove TSS = ESS + RSS for least squares with an intercept, starting from $y_i - \bar y = (\hat y_i - \bar y) + (y_i - \hat y_i)$ and showing the cross-term vanishes. Which first-order condition kills the cross-term, and why does the identity *fail* without an intercept (or with ridge, Part 5)?
+
+<details>
+<summary>Hint</summary>
+
+Expand the sum of squares; the cross-term is $\sum (\hat y_i - \bar y)(y_i - \hat y_i)$.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Expand: $\sum(y_i-\bar y)^2 = \sum(\hat y_i - \bar y)^2 + \sum(y_i - \hat y_i)^2 + 2\sum(\hat y_i - \bar y)(y_i - \hat y_i)$. The cross-term equals $2\,\hat{y}^\top (I - H) y$-type expressions; concretely, OLS with intercept implies residuals are orthogonal to the fitted values: $\sum \hat r_i \hat y_i = 0$ (follows from $\sum \hat r_i = 0$ and $\sum \hat r_i x_i = 0$, the two first-order conditions). Hence ESS $= \sum \hat y_i^2 - n\bar y^2$ and TSS = ESS + RSS. Without an intercept the condition $\sum \hat r_i = 0$ is lost, so fitted values need not be orthogonal to residuals — and $R^2$ computed as 1 − RSS/TSS can even go negative *in-sample*. Regularized fits (ridge) similarly aren't orthogonal projections, so the decomposition and the tidy R² story are OLS-with-intercept privileges.
+</details>
+
+**Q2.** Two models on the same n = 40 dataset: A has in-sample R² = 0.70 with 1 predictor; B has in-sample R² = 0.74 with 8 predictors. (a) Compute adjusted R² for both. (b) Then decide the winner *by CV*, implementing it. (c) At what sample size would B's raw R² edge become credible? Answer with code and one paragraph.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.model_selection import cross_val_score
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(9)
+n = 40
+x1 = rng.uniform(0, 10, n)
+y = 1 + 0.6 * x1 + rng.normal(0, 2, n)
+X_A = x1.reshape(-1, 1)
+X_B = np.c_[x1, rng.normal(0, 1, (n, 7))]      # 7 noise columns
+
+def adj_r2(r2, n, p):
+    return 1 - (1 - r2) * (n - 1) / (n - p - 1)
+
+r2_A = 1 - np.sum((y - LinearRegression().fit(X_A, y).predict(X_A))**2)/np.sum((y - y.mean())**2)
+r2_B = 1 - np.sum((y - LinearRegression().fit(X_B, y).predict(X_B))**2)/np.sum((y - y.mean())**2)
+print(f"raw R2:      A = {r2_A:.4f}  B = {r2_B:.4f}")
+print(f"adjusted R2: A = {adj_r2(r2_A, n, 1):.4f}  B = {adj_r2(r2_B, n, 8):.4f}")
+
+cv_A = cross_val_score(LinearRegression(), X_A, y, cv=5, scoring="r2").mean()
+cv_B = cross_val_score(LinearRegression(), X_B, y, cv=5, scoring="r2").mean()
+print(f"5-fold R2:   A = {cv_A:.4f}  B = {cv_B:.4f}")
+
+for n_big in [200, 1000]:
+    x1b = rng.uniform(0, 10, n_big)
+    yb = 1 + 0.6 * x1b + rng.normal(0, 2, n_big)
+    XB = np.c_[x1b, rng.normal(0, 1, (n_big, 7))]
+    r2b = 1 - np.sum((yb - LinearRegression().fit(XB, yb).predict(XB))**2)/np.sum((yb - yb.mean())**2)
+    print(f"n={n_big}: B raw R2 = {r2b:.4f}")
+```
+
+(a) Adjusted R² flips the ranking: B's 8 parameters must earn their keep and don't. (b) CV agrees — B adds nothing out-of-sample. (c) The noise columns' spurious gains shrink like 7/n: only at n in the hundreds does B's raw-R² edge fall below noise level. Lesson: raw in-sample R² gains of ≈ (extra predictors)/n are the signature of pure chance, not signal.
+</details>
+
+## 6. Complex Questions
+
+**C1 (full-model accuracy × [1.5 Resampling](../part-01-statistics-bridge/01-5-resampling-intuition.qmd)).** Bootstrap the *in-sample R²* of the Exercise 2 "x1 + noise5" model (resample rows, refit, recompute R²). Compare its bootstrap distribution to the *CV* R² distribution. One is centered high and narrow, the other low and honest — explain why resampling rows cannot cure in-sample optimism (the same rows that fit are the rows evaluated), and what this implies for what bootstrap CIs of *performance* statistics mean.
+
+**C2 (full-model accuracy × [2.3 Coefficient accuracy](02-3-accuracy-of-coefficients.qmd)).** Generate 200 datasets: n = 30, true slope 0.5, σ = 1. For each, record (a) p-value of the slope, (b) in-sample R², (c) test R² on a fresh 10,000-point set. Estimate: among datasets with p < 0.05, the median test R²; among p ≥ 0.05 likewise. What does this "significance ⇒ magnitude?" experiment teach about the relationship between the two accuracy lenses ([2.3] vs this page)?
+
+## 7. Summary
+
+- RSE = absolute miss (in σ units); R² = relative variance explained; both in-sample summaries.
+- TSS = ESS + RSS exactly (with intercept OLS) — R² is the explained share.
+- In-sample R² rises with *any* added column; adjusted R² charges for parameters; CV tells the truth.
+- Out-of-sample R² uses the test mean as its yardstick and can be negative — worse than the mean.
+- Never compare R² across different response scales; compare same-scale RMSE.
+- RSE ≈ σ means you've hit the noise floor — stop tuning, get better data.
+- The fit's *average* accuracy is settled; next page scales the model to many predictors — with collinearity and confounding in tow: [2.5 Multiple linear regression](02-5-multiple-linear-regression.qmd).

@@ -1,0 +1,406 @@
+---
+title: "3.1 Classification Fundamentals"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - matplotlib
+---
+
+Classification predicts a **categorical** response. The output of a classifier is really two things: a **score** (a probability-like number per case) and a **decision rule** (a threshold converting scores to labels). Confusing the two is the root of most classification-metric confusion — this page separates them and builds the metric toolkit: confusion matrix, sensitivity/specificity, precision/recall, F1, and ROC.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+Every classifier worth using exposes scores. The **confusion matrix** tabulates decisions vs truth:
+
+|  | Predicted + | Predicted − |
+|---|---|---|
+| **Actually +** | TP (hit) | FN (miss) |
+| **Actually −** | FP (false alarm) | TN (correct rejection) |
+
+From it, the quartet that all others are ratios of:
+
+$$\text{Sensitivity/Recall/TPR} = \frac{TP}{TP + FN} \quad \text{Specificity/TNR} = \frac{TN}{TN + FP}$$
+$$\text{Precision/PPV} = \frac{TP}{TP + FP} \quad \text{FPR} = \frac{FP}{FP + TN}$$
+
+Accuracy folds everything into one number — and hides everything, too ([3.1.5](03-1-5-auprc.qmd) is dedicated to that trap).
+
+```{pyodide}
+import numpy as np
+
+y_true = np.array([1, 1, 1, 1, 1, 0, 0, 0, 0, 0])
+y_pred = np.array([1, 0, 1, 1, 0, 0, 0, 1, 0, 0])
+
+tp = int(np.sum((y_true == 1) & (y_pred == 1)))
+fn = int(np.sum((y_true == 1) & (y_pred == 0)))
+fp = int(np.sum((y_true == 0) & (y_pred == 1)))
+tn = int(np.sum((y_true == 0) & (y_pred == 0)))
+
+print(f"TP={tp} FN={fn} FP={fp} TN={tn}")
+print(f"recall (sensitivity) = {tp/(tp+fn):.3f}")     # 3/5
+print(f"specificity          = {tn/(tn+fp):.3f}")     # 4/5
+print(f"precision            = {tp/(tp+fp):.3f}")     # 3/4
+print(f"accuracy             = {(tp+tn)/10:.3f}")     # 7/10
+```
+
+**Scores + threshold.** Moving the threshold slides cases across the decision boundary — trading recall for precision/specificity along a fixed frontier:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+
+scores = np.array([0.93, 0.81, 0.74, 0.66, 0.55, 0.48, 0.41, 0.33, 0.21, 0.09])
+labels = np.array([1, 1, 0, 1, 0, 1, 0, 0, 0, 0])
+
+fig, ax = plt.subplots(figsize=(7, 3.2))
+for t, style in [(0.5, "-"), (0.3, "--"), (0.7, ":")]:
+    preds = (scores >= t).astype(int)
+    rec = preds[labels == 1].mean()
+    prec = preds[preds == 1].mean() if preds.sum() else float("nan")
+    ax.axvline(t, ls=style, alpha=0.6, label=f"t={t}: recall={rec:.2f}, prec={prec:.2f}")
+ax.scatter(scores, np.zeros_like(scores), c=labels, cmap="bwr", s=60)
+ax.set_yticks([])
+ax.set_xlabel("classifier score")
+ax.set_title("Threshold slides along the same score frontier")
+ax.legend(loc="upper right", fontsize=8)
+plt.show()
+```
+
+**ROC** sweeps the threshold and plots TPR against FPR; the area under it (AUC) has a beautiful interpretation — the probability a random positive is scored above a random negative:
+
+```{pyodide}
+#| fig-width: 6.5
+#| fig-height: 3.5
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, roc_auc_score
+
+scores = np.array([0.93, 0.81, 0.74, 0.66, 0.55, 0.48, 0.41, 0.33, 0.21, 0.09])
+labels = np.array([1, 1, 0, 1, 0, 1, 0, 0, 0, 0])
+
+fpr, tpr, thr = roc_curve(labels, scores)
+auc = roc_auc_score(labels, scores)
+
+# hand-verification: concordant pairs / total pairs
+pos, neg = scores[labels == 1], scores[labels == 0]
+wins = sum(p > n for p in pos for n in neg)
+ties = sum(p == n for p in pos for n in neg)
+print(f"AUC (sklearn): {auc:.4f}   hand: {(wins + 0.5 * ties) / (len(pos) * len(neg)):.4f}")
+
+fig, ax = plt.subplots(figsize=(5.5, 3.5))
+ax.plot(fpr, tpr, marker="o", ms=4)
+ax.plot([0, 1], [0, 1], ls="--", color="gray", label="chance")
+ax.set(xlabel="FPR", ylabel="TPR", title=f"ROC (AUC = {auc:.3f})")
+ax.legend()
+plt.show()
+```
+
+## 2. Concept Questions
+
+1. A screening test has sensitivity 0.99 and specificity 0.90. In plain words, what do those two numbers promise — and what do they *not* tell you about a positive result?
+2. Why can accuracy be uninformative while sensitivity/specificity stay excellent? Construct the extreme case.
+3. Your classifier's scores get *monotonically squashed* (e.g. all scores squared, order preserved). Which metrics change: accuracy at t = 0.5? AUC? AP?
+4. Precision and recall pull in opposite directions as the threshold moves. State what each one's denominators "cost" and why no single number captures both.
+5. Two models have identical AUC. Are they interchangeable? Name one axis on which they can differ.
+
+<details>
+<summary>Answers</summary>
+
+1. Promise: 99% of diseased people test positive (few misses); 90% of healthy people test negative. *Not promised*: that a positive result means disease — that's PPV, which depends on prevalence (the Bayes result of [1.3](../part-01-statistics-bridge/01-3-probability-essentials.qmd): at 0.1% prevalence it's ~1%... here: 0.99·0.001/(0.99·0.001+0.10·0.999) ≈ 0.98%).
+2. Extreme case: 1% prevalence, "always predict healthy" — accuracy 99%, sensitivity 0. The two class-conditional rates (sensitivity/specificity) are computed *within* true classes, so they're immune to prevalence; accuracy isn't. Report both families or use prevalence-aware metrics.
+3. Squashing destroys the *absolute* score scale but not the ranking. Accuracy at a fixed threshold can change arbitrarily (t = 0.5 lands somewhere new); **AUC is invariant** (it uses ranks only); AP likewise (rank-based). Threshold-dependent metrics care about calibration; ranking metrics don't.
+4. Precision's denominator (TP+FP) pays for every false alarm the threshold admits; recall's (TP+FN) pays for every miss. Loosening the threshold admits both more TPs and more FPs — recall ↑, precision typically ↓. Their trade-off *is* the operating curve; F1 summarizes it at one point, losing the shape.
+5. No — AUC measures ranking quality only. They can differ wildly in **calibration** (does 0.8 mean 80%?), which matters for cost decisions and downstream probability uses; also in score *distribution* (threshold placement) and per-region behavior (one may win high-specificity operating points, the other high-sensitivity).
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.metrics import confusion_matrix, accuracy_score, recall_score, precision_score
+y_true = np.array([0, 1, 1, 0, 1, 0, 1, 1])
+y_pred = np.array([0, 1, 0, 0, 1, 1, 1, 0])
+print(confusion_matrix(y_true, y_pred))          # [[2,1],[2,3]] — rows = truth
+print("acc:", round(accuracy_score(y_true, y_pred), 3))
+print("recall:", round(recall_score(y_true, y_pred), 3))      # 3/5
+print("precision:", round(precision_score(y_true, y_pred), 3))# 3/4
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.metrics import f1_score, balanced_accuracy_score
+y_true = np.array([1]*50 + [0]*950)
+y_pred = np.array([1]*5 + [0]*45 + [0]*950)     # catches 5 of 50 positives
+print("accuracy:", round((y_pred == y_true).mean(), 4))          # ≈ 0.952 — looks great!
+print("recall:", recall := 5/50)
+print("F1:", round(f1_score(y_true, y_pred), 4))
+print("balanced acc:", round(balanced_accuracy_score(y_true, y_pred), 4))
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.metrics import roc_auc_score
+rng = np.random.default_rng(0)
+y = rng.integers(0, 2, 400)
+perfect = y.copy()
+noise = rng.uniform(0, 1, 400)
+print("AUC of true labels as scores:", roc_auc_score(y, perfect))       # 1.0
+print("AUC of random scores:", round(roc_auc_score(y, noise), 3), " ≈ 0.5")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.metrics import roc_curve
+y = np.array([1, 1, 1, 0, 0, 0])
+s = np.array([0.9, 0.8, 0.7, 0.6, 0.5, 0.4])
+fpr, tpr, thr = roc_curve(y, s)
+print("thresholds:", thr.round(2))       # note: first entry = inf; one per distinct score
+print("TPR:", tpr.round(2)); print("FPR:", fpr.round(2))
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** From the ranked list below, compute **by hand** (paper or code, no sklearn) the confusion matrix at threshold 0.5, then TPR/FPR at every possible threshold, the full ROC, and AUC via concordant pairs. Verify every number against sklearn.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.metrics import roc_curve, roc_auc_score
+
+s = np.array([0.9, 0.85, 0.8, 0.7, 0.65, 0.6, 0.5, 0.4, 0.3, 0.2])
+y = np.array([1,   0,    1,   1,   0,    1,   0,   1,   0,   0])
+
+# threshold 0.5: predict + if s >= 0.5
+pred = (s >= 0.5).astype(int)
+tp = ((y == 1) & (pred == 1)).sum(); fn = ((y == 1) & (pred == 0)).sum()
+fp = ((y == 0) & (pred == 1)).sum(); tn = ((y == 0) & (pred == 0)).sum()
+print(f"t=0.5: TP={tp} FN={fn} FP={fp} TN={tn}")
+
+# sweep all thresholds by hand
+order = np.argsort(-s)
+ys, ss = y[order], s[order]
+P, N = (y == 1).sum(), (y == 0).sum()
+tpr, fpr = [0], [0]
+for yi in ys:
+    tpr.append(tpr[-1] + (yi == 1) / P)
+    fpr.append(fpr[-1] + (yi == 0) / N)
+print("hand TPR path:", np.round(tpr, 3))
+print("hand FPR path:", np.round(fpr, 3))
+
+fpr_sk, tpr_sk, _ = roc_curve(y, s)
+auc_path = np.trapezoid(np.array(tpr), np.array(fpr))
+print("AUC from hand path (trapezoid):", round(float(auc_path), 4))
+
+# AUC by concordant pairs
+pos, neg = s[y == 1], s[y == 0]
+auc_hand = sum(p > n for p in pos for n in neg) / (len(pos) * len(neg))
+print(f"AUC hand = {auc_hand:.4f}  sklearn = {roc_auc_score(y, s):.4f}")
+```
+
+The sweep logic — walk down the ranked list, accumulating hits and false alarms — is the same walk every ROC/PR implementation takes. Owning it once demystifies the curves forever.
+</details>
+
+**Exercise 2.** Show the threshold-cost trade in dollars: a screening context has FN cost = $2000 (missed disease), FP cost = $100 (needless follow-up), TN/FN-free = $0. Using the scores from Section 1, compute expected cost at thresholds 0.1–0.9 (step 0.1) and find the cost-optimal threshold. Compare it to the Youden-optimal threshold (max TPR − FPR) and explain when/why the two disagree.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.metrics import roc_curve
+
+scores = np.array([0.93, 0.81, 0.74, 0.66, 0.55, 0.48, 0.41, 0.33, 0.21, 0.09])
+labels = np.array([1, 1, 0, 1, 0, 1, 0, 0, 0, 0])
+COST_FN, COST_FP = 2000, 100
+
+best_cost, best_t = np.inf, None
+for t in np.arange(0.05, 0.95, 0.05):
+    pred = scores >= t
+    cost = COST_FN * ((labels == 1) & ~pred).sum() + COST_FP * ((labels == 0) & pred).sum()
+    if cost < best_cost:
+        best_cost, best_t = cost, t
+
+fpr, tpr, thr = roc_curve(labels, scores)
+j = tpr - fpr
+youden_t = thr[np.argmax(j)]
+print(f"cost-optimal threshold:  {best_t:.2f} (cost ${best_cost})")
+print(f"Youden-optimal threshold: {youden_t:.2f}")
+```
+
+Youden treats error types symmetrically; real costs almost never are. With FN 20× costlier than FP, the optimal threshold *drops* (screen loose, confirm hard). Metric choice is a decision-theory choice — there is no threshold-free "best."
+</details>
+
+**Exercise 3.** Cross-validated metric honesty: generate a moderate-signal classification dataset (n = 300, 20% positives), and compare in-sample vs 5-fold-CV values of accuracy, balanced accuracy, F1, and AUC for a logistic classifier. Which metric's in-sample–CV gap is largest, and why does AUC's gap behave differently from accuracy's?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score, KFold
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, roc_auc_score
+
+X, y = make_classification(n_samples=300, n_features=6, weights=[0.8, 0.2],
+                           class_sep=0.8, random_state=3)
+model = LogisticRegression(max_iter=2000).fit(X, y)
+kf = KFold(5, shuffle=True, random_state=1)
+
+for label, scorer, fn in [("accuracy", "accuracy", accuracy_score),
+                 ("balanced acc", "balanced_accuracy", balanced_accuracy_score),
+                 ("F1", "f1", f1_score)]:
+    in_s = fn(y, model.predict(X))
+    cv = cross_val_score(LogisticRegression(max_iter=2000), X, y, cv=kf, scoring=scorer).mean()
+    print(f"{label:13s} in-sample = {in_s:.3f}   CV = {cv:.3f}")
+
+auc_in = roc_auc_score(y, model.predict_proba(X)[:, 1])
+auc_cv = cross_val_score(LogisticRegression(max_iter=2000), X, y, cv=kf,
+                         scoring="roc_auc").mean()
+print(f"{'AUC':13s} in-sample = {auc_in:.3f}   CV = {auc_cv:.3f}")
+```
+
+All in-sample numbers are optimistic; the *ranking* of metrics is preserved but the gaps differ with each metric's sensitivity to the specific borderline cases the model tuned on. AUC's gap tracks the same overfitting — the lesson is not "trust one metric" but "compute every metric out-of-sample," the discipline Part 4 industrializes.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **`confusion_matrix` row/column convention**: sklearn rows = true, columns = predicted. Transposed matrices are a classic silent error — print it once, label it forever.
+- **AUC pairs with ties count 0.5** (the hand formula above); scores from a coarse model (few distinct values, e.g. a 5-bin risk score) lose AUC resolution through ties.
+- **`predict` vs `predict_proba`**: `predict` uses the (possibly inappropriate) 0.5 threshold; decision problems usually want `predict_proba` + your own threshold from costs (Exercise 2).
+- **Macro vs micro vs weighted averaging of F1** across classes: macro treats a 2% class equally with the 98% class (each class one vote); micro ≈ accuracy. Know which your library reports by default.
+- **AUC ignores calibration** — great for ranking, dangerous if someone downstream multiplies your scores into decisions as if they were probabilities; calibration gets its own treatment in [3.7](03-7-model-comparison.qmd).
+- **Class imbalance doesn't bias AUC as an *estimate of ranking skill*, but its *sampling noise* grows as the positive count shrinks** — with 10 positives, one swap changes AUC by 0.02+ ([1.4](../part-01-statistics-bridge/01-4-statistical-inference.qmd) logic applies to metrics too).
+
+### Read & Refactor AI Code
+
+This AI-generated evaluation has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.metrics import (confusion_matrix, accuracy_score,
+                             roc_auc_score, recall_score)
+
+rng = np.random.default_rng(1)
+y_true = np.r_[np.ones(20), np.zeros(980)].astype(int)     # 2% positives
+scores = rng.uniform(0, 1, 1000)                            # uninformative scores!
+y_pred = (scores >= 0.5).astype(int)
+
+# BUG 1: headline metric
+print("accuracy:", round(accuracy_score(y_true, y_pred), 3), "-> 'excellent!'")
+
+# BUG 2: sensitivity computed with wrong pos_label
+print("recall:", round(recall_score(y_true, y_pred), 3))
+
+# BUG 3: AUC computed on hard predictions
+print("AUC:", round(roc_auc_score(y_true, y_pred), 3))
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **Accuracy on 2%-positive data** is ~98% even for a coin-flip classifier — the number certifies nothing. Use prevalence-aware metrics (recall/precision/F1/AP — see [3.1.5](03-1-5-auprc.qmd)) alongside.
+2. **Recall is 0** — the "model" catches no positives at all; the line as printed would show it, but the 'excellent!' framing (bug 1) hides the contradiction. Never let one flattering metric sit next to a damning one without comment.
+3. **AUC on hard 0/1 predictions** throws away the ranking within thresholds — with 0/1 scores, AUC degenerates to balanced accuracy and ties dominate. Feed continuous scores to ranking metrics.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.metrics import accuracy_score, recall_score, roc_auc_score
+
+rng = np.random.default_rng(1)
+y_true = np.r_[np.ones(20), np.zeros(980)].astype(int)
+scores = rng.uniform(0, 1, 1000)
+y_pred = (scores >= 0.5).astype(int)
+
+print(f"accuracy {accuracy_score(y_true, y_pred):.3f} "
+      f"(prevalence {(y_true == 1).mean():.2f} — compare to the 'always negative' baseline!)")
+print(f"recall {recall_score(y_true, y_pred):.3f} <- the model finds almost nothing")
+print(f"AUC on scores {roc_auc_score(y_true, scores):.3f} ≈ 0.5: no ranking signal")
+print("Verdict: the 'excellent' accuracy is the prevalence in disguise.")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Derive AUC as the **Mann–Whitney U statistic**: show that AUC = U/(n₊n₋) where U counts concordant positive-negative pairs (ties as ½), and use this to (a) prove AUC = 0.5 under exchangeable scores, (b) construct the null SD of AUC (≈ √((n₊+n₋+1)/(12·n₊·n₋))) and compute how many positives you need for AUC ± 0.05 at n₋ = 500.
+
+<details>
+<summary>Hint</summary>
+
+Each positive-negative pair contributes 1, ½, or 0 to the numerator; under the null each pair is a fair coin.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+By definition of the empirical ROC, each threshold pair (TPR, FPR) increment is (1/n₊, 1/n₋); the area integrates the *fraction* of pairs with score₊ > score₋ — exactly U/(n₊n₋). (a) Under H₀ (scores exchangeable across labels) each pair is concordant/discordant with probability ½ ⇒ E[AUC] = ½. (b) Var per pair ≈ 1/12 (variance of a fair three-way ±1/½/0 trial scaled); SD(AUC) ≈ √((n₊+n₋+1)/(12n₊n₋)). Setting 1.96·SD ≤ 0.05 with n₋ = 500: n₊ ≈ 1.96²·501/(12·500·0.05²) ≈ 128 positives. Moral: the 10-positive biomarker studies quoted with 3-decimal AUCs are noise — cite the interval, not the point.
+</details>
+
+**Q2.** A colleague argues: "We shouldn't fix the threshold at 0.5; we should report sensitivity and specificity at *their best* threshold on the test set." Give the two failures of this plan (optimism and interpretation), then implement the honest version: choose the threshold on a validation split, *freeze* it, report test-set sensitivity/specificity at the frozen threshold, and compare the two procedures' reported numbers over 200 resamples.
+
+<details>
+<summary>Solution</summary>
+
+Failures: (1) **Selection optimism** — picking the threshold that maximizes test performance then reporting that same performance is tuning on the test set ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd)); the reported best point is an extreme order statistic, biased upward. (2) **Interpretation** — the "best" point is noise-selected per dataset; across studies the reported sensitivity/specificity are not the same operating point, so they're not comparable or replicable. Honest version:
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(2)
+def run(seed):
+    r = np.random.default_rng(seed)
+    scores = np.r_[r.normal(0.6, 0.15, 100), r.normal(0.4, 0.15, 300)]
+    y = np.r_[np.ones(100), np.zeros(300)]
+    idx = r.permutation(len(y))
+    va, te = idx[:160], idx[160:]
+
+    best_t, best_j = 0.5, -np.inf
+    for t in np.linspace(0.2, 0.8, 61):
+        pred = scores[va] >= t
+        tpr = pred[y[va] == 1].mean(); fpr = pred[y[va] == 0].mean()
+        if tpr - fpr > best_j:
+            best_j, best_t = tpr - fpr, t
+
+    pred = scores[te] >= best_t
+    return pred[y[te] == 1].mean(), 1 - pred[y[te] == 0].mean()
+
+res = np.array([run(s) for s in range(200)])
+print("frozen-threshold test sens/spec means:",
+      res[:, 0].mean().round(3), res[:, 1].mean().round(3))
+```
+
+The frozen threshold generalizes; the per-dataset-max procedure would report visibly rosier pairs on average (run both to see the gap). One threshold, chosen where tuning is allowed, applied where it isn't — the Part 4 ethic in miniature.
+</details>
+
+## 6. Complex Questions
+
+**C1 (metrics × [1.3 Bayes](../part-01-statistics-bridge/01-3-probability-essentials.qmd)).** A classifier has sensitivity 0.9 and specificity 0.95. Plot PPV as a function of prevalence from 0.1% to 50% (log x-axis). Mark the prevalence at which PPV crosses 50%, and connect the curve to the F1-vs-AP discussion in [3.1.5](03-1-5-auprc.qmd): which *metric family* bakes prevalence in, and which keeps it out — and which does your reporting audience actually need?
+
+**C2 (metrics × [0.5 Splitting](../part-00-python-foundations/00-5-data-splitting.qmd) × [4.3](../part-04-validation-model-selection/04-3-cross-validation.qmd) preview).** Generate a dataset with 2% positives and fit logistic regression; compute recall at the 0.5 threshold on (a) the full training set, (b) each of 10 stratified CV folds, (c) 10 folds *without* stratification. Report the spread of recall across folds in (b) vs (c) and tie it to the stratification lessons of [0.5](../part-00-python-foundations/00-5-data-splitting.qmd) — then predict what happens to the unstratified recall when prevalence drops to 0.5%.
+
+## 7. Summary
+
+- A classifier = scores + threshold; the confusion matrix is where decisions meet truth.
+- Sensitivity/specificity are prevalence-immune; precision and accuracy are not — know which question each answers.
+- AUC = probability a random positive outranks a random negative; rank-based, threshold-free, calibration-blind.
+- Thresholds are decision-theory: costs set them, validation selects them, test sets only measure them.
+- On imbalanced data, accuracy flatters; balanced accuracy/F1/AP keep you honest.
+- All metrics inherit sampling noise — small positive counts make small AUC differences meaningless.
+- When positives get truly rare, even ROC starts flattering: the precision–recall view is next — [3.1.5 AUPRC for skewed datasets](03-1-5-auprc.qmd).

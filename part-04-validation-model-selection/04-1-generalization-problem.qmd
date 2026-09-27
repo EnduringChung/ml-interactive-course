@@ -1,9 +1,435 @@
 ---
-title: "Coming soon"
+title: "4.1 The Generalization Problem"
 tier: 1
 engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - matplotlib
 ---
 
-This page has not been published yet. It is scheduled in the [build order](/index.qmd) and will follow the same seven-section template as every other page.
+Training error is a promise the model makes to itself; test error is the promise it keeps to you. The gap between them — **optimism** — grows with model flexibility and shrinks with data. This page makes the gap visible, measurable, and predictable: the organizing problem of statistical learning.
 
-Check back soon — progress is tracked in the [course home](/index.qmd).
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+Three error quantities, precisely:
+
+- **Training (in-sample) error**: average loss on the data the model was fitted to. Always optimistic — the fit adapted to this data's noise.
+- **Test (out-of-sample) error**: average loss on fresh data from the same process. The honest quantity — what deployment will see.
+- **Generalization gap** (optimism): test − training. Grows with *flexibility* (more parameters, smaller k, deeper trees...), shrinks with n.
+
+The signature experiment — one figure that contains the entire course:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.6
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+n = 40
+x = np.sort(rng.uniform(0, 1, n))
+y = np.sin(2 * np.pi * x) + rng.normal(0, 0.3, n)
+xte = np.linspace(0, 1, 2000)
+yte = np.sin(2 * np.pi * xte) + rng.normal(0, 0.3, 2000)
+
+degrees = range(1, 13)
+train_mse, test_mse = [], []
+for d in degrees:
+    c = np.polyfit(x, y, d)
+    train_mse.append(np.mean((y - np.polyval(c, x))**2))
+    test_mse.append(np.mean((yte - np.polyval(c, xte))**2))
+
+fig, ax = plt.subplots(figsize=(7, 3.6))
+ax.plot(degrees, train_mse, marker="o", ms=4, label="training MSE")
+ax.plot(degrees, test_mse, marker="s", ms=4, label="test MSE")
+ax.axhline(0.3**2, color="gray", ls=":", label="noise floor σ²")
+ax.set(yscale="log", xlabel="polynomial degree (flexibility)", ylabel="MSE",
+       title="The U-curve: training error only falls; test error bottoms then explodes")
+ax.legend()
+plt.show()
+print("training MSE monotone ↓; test MSE minimized at degree",
+      int(np.argmin(test_mse)) + 1)
+```
+
+The same story with a *continuous* flexibility dial (KNN's k) — train error rises monotonically with k while test is U-shaped:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.neighbors import KNeighborsRegressor
+
+rng = np.random.default_rng(1)
+n = 80
+x = np.sort(rng.uniform(0, 1, n)).reshape(-1, 1)
+y = np.sin(2 * np.pi * x.ravel()) + rng.normal(0, 0.3, n)
+xte = np.linspace(0, 1, 2000).reshape(-1, 1)
+yte = np.sin(2 * np.pi * xte.ravel()) + rng.normal(0, 0.3, 2000)
+
+ks = np.arange(1, 41)
+tr, te = [], []
+for k in ks:
+    f = KNeighborsRegressor(k).fit(x, y)
+    tr.append(np.mean((y - f.predict(x))**2))
+    te.append(np.mean((yte - f.predict(xte))**2))
+
+fig, ax = plt.subplots(figsize=(7, 3.4))
+ax.plot(ks, tr, marker="o", ms=3, label="training MSE")
+ax.plot(ks, te, marker="s", ms=3, label="test MSE")
+ax.axhline(0.09, color="gray", ls=":", label="σ²")
+ax.set(xlabel="k (inverse flexibility)", ylabel="MSE", title="KNN: same U-curve, mirrored dial")
+ax.legend()
+plt.show()
+```
+
+## 2. Concept Questions
+
+1. Why is training error *guaranteed* non-increasing in polynomial degree, while test error is not?
+2. State the direction of each effect on optimism: doubling the number of fitted parameters; doubling n; increasing noise σ.
+3. Your colleague reports train MSE 0.02, test MSE 0.21, σ² ≈ 0.09. Diagnose the model in one sentence and name the two standard remedies.
+4. KNN's k and polynomial degree are both flexibility dials — which direction is "more flexible" in each, and why are their U-curves mirror images?
+5. A model with training error *above* the noise floor tells you what, immediately?
+
+<details>
+<summary>Answers</summary>
+
+1. Least squares projects y onto a *growing* column space: each added polynomial term can only reduce RSS ([2.8 Q1](../part-02-linear-regression/02-8-nonlinear-transformations.qmd)). Test error pays for each parameter twice — once through variance in estimating it — so beyond the true structure it climbs.
+2. More parameters → more optimism; more n → less (each parameter is better pinned, and the fit has less room to chase noise); larger σ → more optimism *in absolute terms* (more noise available to chase) while the noise floor itself also rises.
+3. Overfitting: the gap (0.19) is ≫ the distance to the floor (0.12) — the model has high variance. Remedies: reduce flexibility (lower degree, larger k, regularization) or gather more data; verify by CV either way.
+4. Polynomials: flexibility ↑ with degree (more terms). KNN: flexibility ↑ as k ↓ (locality). So the KNN U-curve is traversed right-to-left relative to the polynomial's — mirror images of the same phenomenon.
+5. **Underfitting** (bias-dominated): the model can't even reach the noise floor, so no amount of validation care will help — increase flexibility before optimizing anything else. It's the cheap, immediate diagnostic people forget.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(2)
+n = 20
+y = rng.normal(0, 1, n)
+X = rng.normal(0, 1, (n, 20))        # p = n!
+from sklearn.linear_model import LinearRegression
+fit = LinearRegression().fit(X, y)
+print("train R2:", round(fit.score(X, y), 4))     # 1.0 — perfect fit, zero signal
+X_new = rng.normal(0, 1, (5000, 20))
+y_new = rng.normal(0, 1, 5000)
+print("test R2:", round(fit.score(X_new, y_new), 4))   # catastrophically negative
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.neighbors import KNeighborsClassifier
+rng = np.random.default_rng(3)
+X = rng.normal(0, 1, (100, 2))
+y = rng.integers(0, 2, 100)          # pure noise labels
+Xte = rng.normal(0, 1, (2000, 2)); yte = rng.integers(0, 2, 2000)
+for k in [1, 5, 50, 99]:
+    f = KNeighborsClassifier(k).fit(X, y)
+    print(f"k={k:>2}: train {f.score(X, y):.3f}  test {f.score(Xte, yte):.3f}")
+```
+
+```{pyodide}
+import numpy as np
+rng = np.random.default_rng(4)
+# optimism grows as n shrinks (same model family)
+for n in [40, 200, 2000]:
+    x = rng.uniform(0, 1, n)
+    y = np.sin(2*np.pi*x) + rng.normal(0, 0.3, n)
+    c = np.polyfit(x, y, 6)
+    xte = rng.uniform(0, 1, 10000)
+    yte = np.sin(2*np.pi*xte) + rng.normal(0, 0.3, 10000)
+    tr = np.mean((y - np.polyval(c, x))**2)
+    te = np.mean((yte - np.polyval(c, xte))**2)
+    print(f"n={n:>5}: train {tr:.4f}  test {te:.4f}  gap {te-tr:.4f}")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import LinearRegression
+rng = np.random.default_rng(5)
+# underfitting: train error ABOVE the noise floor
+x = np.linspace(0, 1, 200).reshape(-1, 1)
+y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, 0.05, 200)
+fit = LinearRegression().fit(x, y)
+print(f"train MSE {np.mean((y - fit.predict(x))**2):.4f} >> σ² = {0.05**2:.4f}")
+print("-> model too rigid: add features/flexibility before validating")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** The optimism experiment, quantified: for degrees 1–10, repeat 200 times (fresh n = 30 training sets, fixed large test set), and record the *mean* training MSE, *mean* test MSE, and the mean gap. Plot all three vs degree. Verify the two qualitative laws: training error falls in degree, and the gap grows in degree; then check quantitatively how much of the test curve's left side is bias (mean prediction ≠ truth) vs variance (prediction wiggles across training sets).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(6)
+xg = np.linspace(0, 1, 400)
+truth = np.sin(2 * np.pi * xg)
+
+grid_preds = {d: [] for d in range(1, 11)}
+tr_mse, te_mse = {d: [] for d in range(1, 11)}, {d: [] for d in range(1, 11)}
+
+for rep in range(200):
+    x = np.sort(rng.uniform(0, 1, 30))
+    y = np.sin(2 * np.pi * x) + rng.normal(0, 0.3, 30)
+    for d in range(1, 11):
+        c = np.polyfit(x, y, d)
+        tr_mse[d].append(np.mean((y - np.polyval(c, x))**2))
+        preds = np.polyval(c, xg)
+        te_mse[d].append(np.mean((truth + rng.normal(0, 0.3, 400) - preds)**2))
+        grid_preds[d].append(preds)
+
+degrees = list(range(1, 11))
+gap = [np.mean(te_mse[d]) - np.mean(tr_mse[d]) for d in degrees]
+
+fig, ax = plt.subplots(figsize=(7, 3.4))
+ax.plot(degrees, [np.mean(tr_mse[d]) for d in degrees], marker="o", ms=4, label="train")
+ax.plot(degrees, [np.mean(te_mse[d]) for d in degrees], marker="s", ms=4, label="test")
+ax.plot(degrees, gap, marker="^", ms=4, label="gap (optimism)")
+ax.set(xlabel="degree", ylabel="MSE", title="Optimism grows with flexibility")
+ax.legend()
+plt.show()
+
+for d in [1, 3, 9]:
+    P = np.array(grid_preds[d])
+    bias2 = np.mean((P.mean(axis=0) - truth)**2)
+    var = np.mean(P.var(axis=0))
+    print(f"degree {d}: bias² = {bias2:.4f}, variance = {var:.4f}")
+```
+
+Degree 1: bias² dominates (a line can't trace a sine). Degree 9: variance dominates (curves swing wildly between training sets). The decomposition is [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd) previewed with your own data.
+</details>
+
+**Exercise 2.** Data-volume rescue: fix the degree-9 overfitting disaster by scaling n (30, 100, 300, 1000, 3000). Report test MSE at each n. Then replot the degree-1-vs-9 test comparison across n. Write the two-sentence law: when does flexibility stop hurting, and what never stops hurting?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(7)
+xte = rng.uniform(0, 1, 20000)
+yte = np.sin(2 * np.pi * xte) + rng.normal(0, 0.3, 20000)
+
+for n in [30, 100, 300, 1000, 3000]:
+    x = np.sort(rng.uniform(0, 1, n))
+    y = np.sin(2 * np.pi * x) + rng.normal(0, 0.3, n)
+    row = []
+    for d in [1, 9]:
+        c = np.polyfit(x, y, d)
+        row.append(np.mean((yte - np.polyval(c, xte))**2))
+    print(f"n={n:>5}: degree-1 test MSE {row[0]:.4f} | degree-9 {row[1]:.4f}")
+```
+
+Degree 9's test error falls toward the degree-1 level (and past it, eventually) as n grows — variance is curable with data, since each coefficient gets pinned by more points. Degree 1's error *never improves past its bias floor* — no amount of data fixes a wrong model shape. Flexibility's danger is finite; underfitting's is permanent.
+</details>
+
+**Exercise 3.** p ≫ n theater: n = 25 samples, 200 pure-noise features, pure-noise labels. Fit (a) plain OLS, (b) ridge with α = 10 ([Part 5](#) preview — `Ridge(alpha=10)`), (c) KNN with k = 10. Report train and test R²/MSE for each. Which method's *training* behavior is the most honest? Connect each to a bias/variance profile.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.neighbors import KNeighborsRegressor
+
+rng = np.random.default_rng(8)
+n, p = 25, 200
+X = rng.normal(0, 1, (n, p))
+y = rng.normal(0, 1, n)
+Xte = rng.normal(0, 1, (4000, p))
+yte = rng.normal(0, 1, 4000)
+
+for name, model in [("OLS", LinearRegression()),
+                    ("Ridge(10)", Ridge(alpha=10.0)),
+                    ("KNN(10)", KNeighborsRegressor(10))]:
+    model.fit(X, y)
+    tr = np.mean((y - model.predict(X))**2)
+    te = np.mean((yte - model.predict(Xte))**2)
+    print(f"{name:9s} train {tr:7.3f}  test {te:7.3f}")
+print("noise floor σ² = 1.0")
+```
+
+OLS: train ≈ 0 (interpolates 25 points with 200 features), test astronomically bad — pure variance. Ridge: shrinkage caps coefficients, train ≈ 1, test ≈ 1 — behaves like the null model, honest by *constraint*. KNN: train worse than OLS (local averaging can't interpolate as aggressively), test near the floor — local smoothing is naturally low-variance here. Ranking the *training* numbers by honesty: KNN/Ridge ≫ OLS; the training number only fools those who forget what it measures.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Optimism is predictable in size**: for linear models, in-sample optimism ≈ (2σ²/n)·(number of parameters) — the engine behind Cp/AIC/BIC and adjusted R². It's why [2.4](../part-02-linear-regression/02-4-accuracy-of-model.qmd)'s noise columns added ≈ (k/n) worth of fake R².
+- **The test set is a budget**: every look spends it ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd)); adaptive "tune on test, report test" can make a noise-only pipeline score near-perfectly (try it once, to be cured forever — [4.2](../part-04-validation-model-selection/04-2-validation-set.qmd)).
+- **Selection inflates**: choosing the best of M models by its CV score reports an extreme order statistic — the winner's CV score is biased *up* by roughly (SD of the noise) × E[max of M standard normals]. More candidates = more inflation ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)).
+- **Modern caveat — double descent**: beyond the interpolation threshold (p ≳ n), test error can *fall again* for some overparameterized models (the deep-learning regime). The classical U-curve is the right mental model for classical models; hold it loosely at the extremes.
+- **Data leakage resurrects optimism invisibly**: preprocessing fit before splitting, duplicates across splits, features derived from the outcome — every one shrinks the *apparent* gap while worsening the real one. The gap being small is good news *only if the pipeline earned it*.
+- **In-sample diagnostics ≠ out-of-sample validity**: residual plots ([2.10](../part-02-linear-regression/02-10-regression-assumptions.qmd)) certify the *fit's* assumptions; only held-out data certifies *predictions*.
+
+### Read & Refactor AI Code
+
+This AI-generated "experiment" has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(9)
+n, p = 100, 3
+X = rng.normal(0, 1, (n, p))
+y = X @ [2, -1, 0.5] + rng.normal(0, 1, n)
+
+# BUG 1: model selection on the test set
+results = {}
+for name, features in [("all3", [0, 1, 2]), ("first2", [0, 1]), ("first1", [0])]:
+    X_tr, X_te, y_tr, y_te = train_test_split(X[:, features], y, random_state=0)
+    results[name] = LinearRegression().fit(X_tr, y_tr).score(X_te, y_te)
+best = max(results, key=results.get)
+print("selected on test:", best, results)
+
+# BUG 2: report the selected model's test score as its performance
+print("performance:", round(results[best], 4))
+
+# BUG 3: same rows resampled until the score looks good
+for attempt in range(200):
+    X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=attempt)
+    s = LinearRegression().fit(X_tr, y_tr).score(X_te, y_te)
+    if s > 0.9:
+        print(f"found a split with R2 = {s:.4f} after {attempt + 1} tries!")
+        break
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Three models, one test set, argmax on test**: the winner's score is an order statistic — biased up even though each individual estimate was unbiased. Select on training-side CV.
+2. **Selected-on-test then reported-on-test**: the number is now a *selection* number, not an estimate. Report on data untouched by selection.
+3. **Split-shopping**: with enough tries, some split flatters any model; keeping the flattering one is p-hacking with a random seed ([1.4](../part-01-statistics-bridge/01-4-statistical-inference.qmd)'s peeking loop in evaluation clothing).
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import cross_val_score, KFold, train_test_split
+
+rng = np.random.default_rng(9)
+n, p = 100, 3
+X = rng.normal(0, 1, (n, p))
+y = X @ [2, -1, 0.5] + rng.normal(0, 1, n)
+
+cv = KFold(5, shuffle=True, random_state=0)
+results = {}
+for name, features in [("all3", [0, 1, 2]), ("first2", [0, 1]), ("first1", [0])]:
+    results[name] = cross_val_score(LinearRegression(), X[:, features], y,
+                                    cv=cv).mean()
+best = max(results, key=results.get)
+print("selected by CV:", best, {k: round(v, 4) for k, v in results.items()})
+
+# NOW spend the test set once, on the frozen winner
+feats = {"all3": [0, 1, 2], "first2": [0, 1], "first1": [0]}[best]
+X_tr, X_te, y_tr, y_te = train_test_split(X[:, feats], y, random_state=42)
+final = LinearRegression().fit(X_tr, y_tr)
+print("honest test R2:", round(final.score(X_te, y_te), 4))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** For a linear model with n training points and p parameters, the expected optimism of the training MSE is approximately $\frac{2\sigma^2}{n} p$. Verify this by simulation (σ = 1, p ∈ {1, 5, 20}, n = 100, truth = zero signal or mild signal), then use it to explain (a) why Cp/AIC-style criteria subtract $2p\hat\sigma^2/n$ from training error, and (b) why the approximation degrades when p approaches n.
+
+<details>
+<summary>Hint</summary>
+
+Optimism = E[test error] − E[train error] for the *fitted* rule; for linear smoothers with hat matrix H, trace-based arguments give the 2σ²p/n form (Mallows' Cp derivation).
+</details>
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(10)
+n = 100
+for p in [1, 5, 20]:
+    gaps = []
+    for _ in range(400):
+        X = rng.normal(0, 1, (n, p))
+        beta = np.zeros(p)
+        y = X @ beta + rng.normal(0, 1, n)
+        Xte = rng.normal(0, 1, (10000, p))
+        yte = Xte @ beta + rng.normal(0, 1, 10000)
+        f = LinearRegression().fit(X, y)
+        gaps.append(np.mean((yte - f.predict(Xte))**2) - np.mean((y - f.predict(X))**2))
+    print(f"p={p:>2}: mean optimism {np.mean(gaps):.4f}  theory 2σ²p/n = {2*p/n:.4f}")
+```
+
+Agreement is close while p ≪ n. As p → n, the fit interpolates: training MSE → 0, the hat matrix saturates (H → I, df → n), and the linear approximation's assumptions (moderate leverage) break — optimism explodes non-linearly rather than tracking 2pσ²/n. The formula is a small-p law; the U-curve is the whole truth.
+</details>
+
+**Q2.** A pipeline reports "CV error 0.31" as the performance of the *selected* model, where selection was: 12 candidate models evaluated by the same 5-fold CV, winner = smallest. Design and run the experiment measuring the **selection inflation**: simulate null data (no signal) where every model's true error equals σ², run the selection, record the winner's CV score; compare its average to σ² and to the average of a *fixed* model's CV score. Then derive the practical rule (report the winner's score from a fresh outer CV, or correct by the expected order statistic).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import cross_val_score, KFold
+
+rng = np.random.default_rng(11)
+winner_scores, fixed_scores = [], []
+for rep in range(300):
+    n = 60
+    X = rng.normal(0, 1, (n, 8))
+    y = rng.normal(0, 1, n)                    # no signal: all true MSEs = 1
+    cv = KFold(5, shuffle=True, random_state=rep)
+    scores = []
+    for p in range(1, 13):                     # 12 candidates: noise columns
+        s = -cross_val_score(LinearRegression(), X[:, :p], y,
+                             cv=cv, scoring="neg_mean_squared_error").mean()
+        scores.append(s)
+    winner_scores.append(min(scores))          # selection picks the flattering one
+    fixed_scores.append(scores[2])             # a pre-registered fixed model
+print(f"winner's CV MSE:  {np.mean(winner_scores):.4f}  (truth 1.0!)")
+print(f"fixed model's CV: {np.mean(fixed_scores):.4f}")
+```
+
+Even with *zero signal*, the winner of 12 candidates reports ≈ 0.8–0.9 — selection alone manufactures a fake improvement over the fixed model's ≈ 1.0. This gap is pure selection inflation and it grows with the candidate count and CV noise. Rules: (1) estimate the *selected pipeline's* performance by wrapping selection itself inside an outer CV (nested — [4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)); (2) or subtract the expected order-statistic bonus (knowable by simulation under the null — exactly what you just built).
+</details>
+
+## 6. Complex Questions
+
+**C1 (generalization × [2.9/3.5 KNN](../part-02-linear-regression/02-9-knn-regression.qmd)).** Build the full 2-D map: for n ∈ {25, 100, 400} and k ∈ {1, 3, 10, 30, 100}, record train and test MSE (regression) or error (classification) on a fixed truth. Produce a heatmap of test error over (n, k) and draw the ridge of optimal k. How does optimal k scale with n, and what does the map predict about KNN's viability when you can only collect 25 more samples?
+
+**C2 (generalization × [3.7 comparison](../part-03-classification-glm/03-7-model-comparison.qmd)).** Six classifiers, one dataset, twenty replications: record each model's CV accuracy per replication, then compute (a) each model's mean, (b) the winner-per-replication's average score, (c) the fixed pre-registered model's average. Quantify (b) − (c) as measured selection inflation in a *non-null* setting, and check whether it's larger or smaller than your null-data estimate from Q2 — then explain the direction.
+
+## 7. Summary
+
+- Training error is an optimistic estimator; the optimism grows with flexibility and shrinks with n.
+- The U-curve (test error vs flexibility) is the field's central picture: underfit left, overfit right, noise floor below.
+- Flexibility dials point opposite ways (degree ↑, k ↓) but the physics is one: bias² + variance + σ².
+- Selection among many models inflates the winner's score — order statistics, not skill.
+- Test sets are budgets; CV is the renewable subscription (next pages); leakage is counterfeit currency.
+- Underfitting (train error above σ²) is permanent without more flexibility; overfitting is curable with data or constraints.
+- The first remedy for optimism is the simplest split of all: [4.2 The validation set approach](../part-04-validation-model-selection/04-2-validation-set.qmd).

@@ -1,0 +1,502 @@
+---
+title: "3.7 Classification Model Comparison"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scipy
+    - scikit-learn
+    - matplotlib
+---
+
+You now own five classifiers (logistic, LDA, QDA, Naive Bayes, KNN). Choosing between them is where careless pipelines go to lie to themselves: comparing on one split, one metric, or — worst — the metric that was also used to tune. This page builds the honest comparison protocol: same folds, paired tests, calibration checks, and decision-aware selection.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+Three principles of fair comparison:
+
+1. **Same folds, paired evaluation** — models see identical train/test partitions; differences are then *within-fold*, far less noisy than independent estimates.
+2. **Metrics match the decision** — AUC/AP for ranking, calibration for probabilities, operating-point metrics for budgets ([3.1](03-1-classification-fundamentals.qmd), [3.1.5](03-1-5-auprc.qmd)).
+3. **Uncertainty on differences, not just points** — a 0.01 AUC gap between two models on one split is noise until tested.
+
+The canonical setup, all five models on identical CV folds:
+
+```{pyodide}
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.linear_model import LogisticRegression
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+
+X, y = make_classification(n_samples=500, n_features=6, n_informative=4,
+                           weights=[0.7, 0.3], class_sep=1.0, random_state=0)
+kf = StratifiedKFold(5, shuffle=True, random_state=1)
+
+models = {
+    "logistic": make_pipeline(StandardScaler(), LogisticRegression(max_iter=4000)),
+    "LDA":      LinearDiscriminantAnalysis(),
+    "QDA":      QuadraticDiscriminantAnalysis(reg_param=0.5),
+    "NaiveBayes": make_pipeline(StandardScaler(), GaussianNB()),
+    "KNN(k=15)":  make_pipeline(StandardScaler(), KNeighborsClassifier(15)),
+}
+
+for name, model in models.items():
+    acc = cross_val_score(model, X, y, cv=kf, scoring="accuracy")
+    auc = cross_val_score(model, X, y, cv=kf, scoring="roc_auc")
+    print(f"{name:11s} acc {acc.mean():.3f}±{acc.std():.3f}   "
+          f"AUC {auc.mean():.3f}±{auc.std():.3f}")
+```
+
+**Paired comparison** — the same fold's differences, tested. For two models' predictions on the *same* test rows, McNemar's test asks whether the disagreement pattern is asymmetric:
+
+```{pyodide}
+import numpy as np
+from scipy import stats
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.datasets import make_classification
+
+X, y = make_classification(n_samples=600, n_features=6, class_sep=1.0, random_state=2)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, stratify=y, random_state=3)
+
+m1 = LogisticRegression(max_iter=4000).fit(X_tr, y_tr).predict(X_te)
+m2 = LinearDiscriminantAnalysis().fit(X_tr, y_tr).predict(X_te)
+
+b = int(np.sum((m1 == y_te) & (m2 != y_te)))   # model 1 right, model 2 wrong
+c = int(np.sum((m1 != y_te) & (m2 == y_te)))   # model 2 right, model 1 wrong
+print(f"only-1-right: {b}, only-2-right: {c}")
+
+# exact McNemar: under H0, b ~ Binomial(b + c, 0.5)
+p = stats.binomtest(b, b + c, 0.5).pvalue
+print(f"McNemar exact p = {p:.4f}  (identical accuracy would give p = 1)")
+print(f"accuracies: {np.mean(m1 == y_te):.3f} vs {np.mean(m2 == y_te):.3f}")
+```
+
+**Calibration** — do predicted probabilities mean what they say? The reliability diagram:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.datasets import make_classification
+from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import GaussianNB
+from sklearn.model_selection import train_test_split
+from sklearn.calibration import calibration_curve
+from sklearn.metrics import brier_score_loss
+
+X, y = make_classification(n_samples=2000, n_features=8, weights=[0.8, 0.2],
+                           class_sep=0.8, random_state=4)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, stratify=y, random_state=5)
+
+fig, ax = plt.subplots(figsize=(5.5, 3.6))
+for model, name in [(LogisticRegression(max_iter=4000), "logistic"),
+                    (GaussianNB(), "Naive Bayes")]:
+    prob = model.fit(X_tr, y_tr).predict_proba(X_te)[:, 1]
+    frac_pos, mean_pred = calibration_curve(y_te, prob, n_bins=8)
+    ax.plot(mean_pred, frac_pos, marker="o", ms=4, label=f"{name} (Brier {brier_score_loss(y_te, prob):.3f})")
+ax.plot([0, 1], [0, 1], ls="--", color="gray", label="perfect")
+ax.set(xlabel="predicted probability", ylabel="observed frequency", title="Reliability diagrams")
+ax.legend()
+plt.show()
+```
+
+## 2. Concept Questions
+
+1. Why is a *paired* comparison (same folds) so much more powerful than comparing two independent 5-fold means?
+2. Two models have AUC 0.81 and 0.83. List, in order, the three facts you need before believing the second is better.
+3. What does a model above the diagonal in a reliability diagram (observed > predicted) indicate, and name one common pipeline step that causes systematic miscalibration.
+4. Why can Naive Bayes have a worse Brier score but nearly identical AUC to logistic — and when would you still ship NB?
+5. You tuned model A's hyperparameters by CV and want to compare against untuned model B. What does honest comparison require?
+
+<details>
+<summary>Answers</summary>
+
+1. Fold-to-fold difficulty dominates variance (easy folds flatter everyone). Pairing differences out that shared noise: Var(diff) = Var(A) + Var(B) − 2Cov(A,B), and the fold-correlation makes the covariance term large — paired tests see the *signal* that independent-mean comparisons drown in. The same logic as paired t-tests ([1.4](../part-01-statistics-bridge/01-4-statistical-inference.qmd)).
+2. (1) Uncertainty: is 0.02 within fold/seed noise (paired fold-wise test)? (2) Same preprocessing/tuning budget for both? (3) Does the metric match the deployment question — and does the gap replicate on a held-out set or fresh data?
+3. Observed frequency *exceeds* predicted probability → the model is systematically *underconfident* in that region. Causes: training on resampled/oversampled data (case–control sampling shifts the intercept — [3.3 C2](03-3-logistic-regression.qmd)); regularization that shrinks logits toward the base rate in the wrong direction; score warping in NB under feature correlation.
+4. Brier scores squared-error penalties punish NB's overconfident probabilities ([3.4](03-4-generative-classifiers.qmd)); AUC, being rank-based, is blind to that inflation. Ship NB when you consume *rankings* (top-k retrieval) and cost nothing by probability errors — its speed and small-sample stability then win.
+5. Either tune B with the identical CV protocol (same folds/grid budget) or evaluate both with an outer CV layer untouched by tuning — nested evaluation ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)). Comparing a tuned model's *selection-optimized* number against an untuned model's plain number conflates selection luck with model quality.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import GaussianNB
+from sklearn.datasets import make_classification
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+X, y = make_classification(n_samples=400, n_features=5, random_state=6)
+kf = StratifiedKFold(5, shuffle=True, random_state=7)
+a = cross_val_score(LogisticRegression(max_iter=4000), X, y, cv=kf)
+b = cross_val_score(make_pipeline(StandardScaler(), GaussianNB()), X, y, cv=kf)
+d = a - b                                        # paired fold differences!
+print("fold diffs:", d.round(3))
+print("paired mean ± SE:", d.mean().round(4), "±", round(d.std(ddof=1)/np.sqrt(5), 4))
+from scipy import stats
+print("paired t p =", stats.ttest_rel(a, b).pvalue.round(4))
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.metrics import brier_score_loss, roc_auc_score
+rng = np.random.default_rng(8)
+y = rng.integers(0, 2, 1000)
+p_cal = 0.5 + 0.2 * (y - 0.5) + rng.normal(0, 0.05, 1000)   # calibrated-ish
+p_uncal = np.clip(p_cal + 0.25, 0, 1)                        # same ranks, shifted
+print("AUC cal:", round(roc_auc_score(y, p_cal), 3), " AUC uncal:", round(roc_auc_score(y, p_uncal), 3))
+print("Brier cal:", round(brier_score_loss(y, p_cal), 4), " Brier uncal:", round(brier_score_loss(y, p_uncal), 4))
+print("shifting probabilities: AUC frozen, Brier exploded")
+```
+
+```{pyodide}
+import numpy as np
+from scipy import stats
+# McNemar's granularity: minimal detectable disagreement
+for n_disc in [5, 20, 50]:
+    p = stats.binomtest(n_disc, 2 * n_disc, 0.5).pvalue   # perfectly imbalanced split
+    print(f"b={n_disc}, c=0: p = {p:.4f}")
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.calibration import calibration_curve
+rng = np.random.default_rng(9)
+y = rng.integers(0, 2, 3000)
+p = np.where(y == 1, rng.beta(9, 3, 3000), rng.beta(3, 9, 3000))  # miscalibrated
+frac, mean_pred = calibration_curve(y, p, n_bins=5)
+print("predicted bin centers:", mean_pred.round(3))
+print("observed frequencies:  ", frac.round(3), " <- compare row by row")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Build `compare_models(models, X, y, k=5, seed=0)` returning a DataFrame of mean±SD accuracy, AUC, AP plus pairwise McNemar p-values on pooled out-of-fold predictions. Run it on the five classifiers of Section 1; identify (a) the statistical leader, (b) the pair whose difference is *not* significant, (c) which metric(s) disagree with accuracy's ranking.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import pandas as pd
+from scipy import stats
+from sklearn.model_selection import cross_val_predict, StratifiedKFold
+from sklearn.metrics import roc_auc_score, average_precision_score, accuracy_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.datasets import make_classification
+
+X, y = make_classification(n_samples=500, n_features=6, n_informative=4,
+                           weights=[0.7, 0.3], random_state=0)
+kf = StratifiedKFold(5, shuffle=True, random_state=1)
+
+models = {
+    "logistic": make_pipeline(StandardScaler(), LogisticRegression(max_iter=4000)),
+    "LDA": LinearDiscriminantAnalysis(),
+    "QDA": QuadraticDiscriminantAnalysis(reg_param=0.5),
+    "NB": make_pipeline(StandardScaler(), GaussianNB()),
+    "KNN15": make_pipeline(StandardScaler(), KNeighborsClassifier(15)),
+}
+
+rows = {}
+for name, m in models.items():
+    prob = cross_val_predict(m, X, y, cv=kf, method="predict_proba")[:, 1]
+    pred = (prob >= 0.5).astype(int)
+    rows[name] = dict(acc=accuracy_score(y, pred), auc=roc_auc_score(y, prob),
+                      ap=average_precision_score(y, prob), prob=prob)
+table = pd.DataFrame({k: {m: v[m] for m in ["acc", "auc", "ap"]}
+                      for k, v in rows.items()}).T.round(3)
+print(table)
+
+print("\nMcNemar (pooled out-of-fold predictions):")
+names = list(models)
+for i in range(len(names)):
+    for j in range(i + 1, len(names)):
+        p1, p2 = rows[names[i]]["prob"] >= 0.5, rows[names[j]]["prob"] >= 0.5
+        b = int(np.sum((p1 == y) & (p2 != y)))
+        c = int(np.sum((p1 != y) & (p2 == y)))
+        if b + c == 0:
+            continue
+        p = stats.binomtest(b, b + c, 0.5).pvalue
+        if p < 0.05:
+            print(f"  {names[i]} vs {names[j]}: p = {p:.4f} (significant)")
+```
+
+Caveat carried forward: pooled out-of-fold predictions are *not fully independent* across folds for the McNemar counts (models refit per fold), but the paired structure is preserved — for publication-grade claims, repeat across outer resamples ([4.3](../part-04-validation-model-selection/04-3-cross-validation.qmd)). The table + test pattern is the deliverable regardless.
+</details>
+
+**Exercise 2.** Calibration repair: the NB probabilities from Section 1's reliability data are inflated. Implement a simple **Platt-style fix**: fit a 1-D logistic regression mapping NB's logit-scored output to the true labels on a *validation split*, apply to test. Show Brier before/after and the reliability diagrams side by side. Confirm AUC is unchanged (rank-preserving map) — then state when this fix is *not* legitimate (which data it must not touch).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.naive_bayes import GaussianNB
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.calibration import calibration_curve
+from sklearn.metrics import brier_score_loss, roc_auc_score
+
+X, y = make_classification(n_samples=3000, n_features=8, weights=[0.8, 0.2],
+                           class_sep=0.8, random_state=4)
+X_fit, X_tmp, y_fit, y_tmp = train_test_split(X, y, stratify=y, random_state=5)
+X_cal, X_te, y_cal, y_te = train_test_split(X_tmp, y_tmp, stratify=y_tmp, random_state=6)
+
+nb = GaussianNB().fit(X_fit, y_fit)
+raw_te = nb.predict_proba(X_te)[:, 1]
+raw_cal = nb.predict_proba(X_cal)[:, 1]
+
+platt = LogisticRegression(max_iter=4000).fit(
+    np.log(raw_cal / (1 - raw_cal)).reshape(-1, 1), y_cal)     # 1-D calibration map
+fixed_te = platt.predict_proba(np.log(raw_te / (1 - raw_te)).reshape(-1, 1))[:, 1]
+
+for name, p in [("raw NB", raw_te), ("Platt-fixed", fixed_te)]:
+    print(f"{name:12s} Brier {brier_score_loss(y_te, p):.4f}  AUC {roc_auc_score(y_te, p):.4f}")
+```
+
+The calibration map is fit on a *dedicated* split that played no role in training the NB — touching the test set (or the original training set) for calibration would re-introduce optimism ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd)). AUC is invariant (monotone map); Brier collapses toward the logistic's. This split discipline — fit, calibrate, test on three disjoint samples — is the production-grade pattern.
+</details>
+
+**Exercise 3.** Decision-theoretic selection: two models, fixed budget of 100 follow-ups per 5,000 screened (1% prevalence). Compute for each model the expected number of true hits in its top-100 (per 10 bootstrap resamples of the screening population), with a CI on the *difference*. Also compute each model's precision@100. Which model wins the *deployment* question, and does it match the AUC winner?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import GaussianNB
+from sklearn.datasets import make_classification
+
+X, y = make_classification(n_samples=5000, n_features=6, weights=[0.99, 0.01],
+                           class_sep=1.2, random_state=11)
+m1 = LogisticRegression(max_iter=4000).fit(X, y)
+m2 = GaussianNB().fit(X, y)
+
+rng = np.random.default_rng(12)
+def hits(model, Xb, yb, k=100):
+    top = np.argsort(-model.predict_proba(Xb)[:, 1])[:k]
+    return yb[top].sum()
+
+diffs = []
+for _ in range(10):
+    idx = rng.integers(0, len(y), len(y))          # bootstrap the population
+    Xb, yb = X[idx], y[idx]
+    diffs.append(hits(m2, Xb, yb) - hits(m1, Xb, yb))
+diffs = np.array(diffs)
+print("NB minus logistic top-100 hits per bootstrap:", diffs)
+lo, hi = np.percentile(diffs, [2.5, 97.5])
+print(f"95% CI on difference: ({lo:.0f}, {hi:.0f})")
+
+from sklearn.metrics import roc_auc_score
+print(f"AUC logistic {roc_auc_score(y, m1.predict_proba(X)[:,1]):.3f} "
+      f" NB {roc_auc_score(y, m2.predict_proba(X)[:,1]):.3f}")
+```
+
+The bootstrap CI on hits-in-top-100 is the deployment metric with uncertainty attached. If it excludes 0, the decision is made regardless of what AUC says — models with similar AUC can differ sharply in the *head* of the ranking, and budgets only ever buy the head.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **The comparison protocol IS the result**: same folds, same preprocessing (pipelines), same tuning budget, paired tests, uncertainty on differences. Deviating from any of these resets the table to anecdote.
+- **Pooled out-of-fold predictions** (Exercise 1) preserve pairing but fold-refitting leaks mild dependence across folds — fine for exploration; use repeated outer resampling for claims.
+- **McNemar's exact test is binomial on discordant pairs** — b and c only; concordant pairs carry no comparison information. Low discordance = low power, whatever the accuracies say.
+- **Brier vs AUC rank**: fixing calibration never changes AUC (monotone maps) — which is why "we recalibrated and AUC didn't move" is expected, not suspicious.
+- **Multiple models ⇒ multiple comparisons**: 5 models = 10 pairwise tests; control family-wise error (Bonferroni ×10) or pre-specify the primary comparison ([12.3–12.4](../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.qmd) preview).
+- **Selection on the comparison metric**: if the winner's metric then becomes the reported performance, the number is selection-inflated — the nested-CV discipline of [4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd) applies with full force.
+
+### Read & Refactor AI Code
+
+This AI-generated "model selection" has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.datasets import make_classification
+from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import accuracy_score
+
+X, y = make_classification(n_samples=800, n_features=6, random_state=13)
+
+# BUG 1: pick the best model ON THE TEST SET by trying many
+candidates = {
+    "logistic": LogisticRegression(max_iter=4000).fit(X, y),
+    "NB": GaussianNB().fit(X, y),
+    "KNN(k=1)": KNeighborsClassifier(1).fit(X, y),
+}
+scores = {name: accuracy_score(y, m.predict(X)) for name, m in candidates.items()}
+winner = max(scores, key=scores.get)
+print("winner:", winner, scores)
+
+# BUG 2: report the winner's training accuracy as performance
+print("final performance:", round(scores[winner], 4))
+
+# BUG 3: unpaired comparison on different random splits
+from sklearn.model_selection import train_test_split
+accs = {}
+for name, ctor in [("logistic", LogisticRegression(max_iter=4000)),
+                   ("NB", GaussianNB())]:
+    X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=99)   # same seed, ok
+    accs[name] = ctor.fit(X_tr, y_tr).score(X_te, y_te)
+print("single-split accuracy gap:", round(abs(accs["logistic"] - accs["NB"]), 4),
+      "-> declared better")
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Model selection on the full dataset including the evaluation rows** — the test set is spent tuning ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd)). Select by CV inside training only.
+2. **Training accuracy as final performance**: KNN(k=1) scores 1.0 — pure memorization crowned winner. Report held-out/CV.
+3. **Single-split gap declared decisive**: one split's difference is noise ([4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd)); use repeated/paired CV and a McNemar-style test before naming a winner.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy import stats
+from sklearn.datasets import make_classification
+from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import cross_val_predict, StratifiedKFold
+from sklearn.metrics import accuracy_score
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+X, y = make_classification(n_samples=800, n_features=6, random_state=13)
+kf = StratifiedKFold(5, shuffle=True, random_state=1)
+candidates = {
+    "logistic": LogisticRegression(max_iter=4000),
+    "NB": make_pipeline(StandardScaler(), GaussianNB()),
+    "KNN(k=15)": make_pipeline(StandardScaler(), KNeighborsClassifier(15)),
+}
+oof = {}
+for name, m in candidates.items():
+    pred = cross_val_predict(m, X, y, cv=kf)
+    oof[name] = pred
+    print(f"{name:10s} CV accuracy = {accuracy_score(y, pred):.3f}")
+
+b = int(np.sum((oof["logistic"] == y) & (oof["NB"] != y)))
+c = int(np.sum((oof["logistic"] != y) & (oof["NB"] == y)))
+print(f"logistic vs NB McNemar p = {stats.binomtest(b, b + c, 0.5).pvalue:.4f}")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** The "no free lunch" caveat says no classifier dominates universally. Construct two 2-D problems — one where logistic beats KNN decisively, one where KNN beats logistic — with identical n and noise. Report both test-accuracy tables and explain each winner's edge in terms of *assumption alignment* (linear boundary vs local structure). What legitimate conclusion is possible about "the best classifier" for a *new* problem before looking at its data?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(14)
+def evaluate(make, n=400, seed=1):
+    r = np.random.default_rng(seed)
+    X, y = make(r, n)
+    X_tr, X_te, y_tr, y_te = train_test_split(X, y, stratify=y, random_state=seed)
+    lr = LogisticRegression(max_iter=4000).fit(X_tr, y_tr)
+    knn = KNeighborsClassifier(9).fit(X_tr, y_tr)
+    return lr.score(X_te, y_te), knn.score(X_te, y_te)
+
+linear_world = lambda r, n: (np.c_[r.normal(0, 1, n), r.normal(0, 1, n)],
+                             (np.c_[r.normal(0,1,n), r.normal(0,1,n)] @ [1.5, -1.5]
+                              + r.normal(0, .4, n) > 0).astype(int))
+def spiral_world(r, n):
+    t = r.uniform(0, 3.5, n)
+    X1 = np.c_[t * np.cos(t), t * np.sin(t)] + r.normal(0, .15, (n, 2))
+    t2 = r.uniform(0, 3.5, n)
+    X2 = np.c_[-t2 * np.cos(t2), -t2 * np.sin(t2)] + r.normal(0, .15, (n, 2))
+    X = np.vstack([X1, X2])
+    y = np.r_[np.zeros(n), np.ones(n)].astype(int)
+    return X, y
+
+for name, world in [("linear truth", linear_world), ("spiral truth", spiral_world)]:
+    a, b = evaluate(world)
+    print(f"{name:13s} logistic {a:.3f} | KNN {b:.3f}")
+```
+
+Linear truth: logistic's inductive bias matches the boundary — it wins. Spiral: the boundary is wildly nonlinear; KNN's local votes trace it while logistic caps out at linear. Conclusion about a *new* problem, pre-data: none about which wins — only about the *procedure* (honest CV over a small, diverse candidate set) that finds out. Model choice is an empirical property of the problem, which is why Part 4's machinery exists.
+</details>
+
+**Q2.** You must compare k=7-KNN and logistic and report a p-value for "A is better." Walk through the construction of a *paired, replicated* comparison: (a) why fold-wise paired t on 5 folds is weak (df = 4, dependence), (b) how repeated 5×2-fold CV (or 20 random 80/20 replications) restores power, (c) what exactly the unit of analysis is (a replication's difference), and (d) the multiplicity caveat if 8 models enter the same protocol. Implement (b) for two models and report the CI for the accuracy difference.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from scipy import stats
+from sklearn.datasets import make_classification
+from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+X, y = make_classification(n_samples=1000, n_features=6, class_sep=0.9, random_state=15)
+diffs = []
+for rep in range(40):
+    X_tr, X_te, y_tr, y_te = train_test_split(X, y, stratify=y, random_state=rep)
+    a = make_pipeline(StandardScaler(), LogisticRegression(max_iter=4000)).fit(X_tr, y_tr)
+    b = make_pipeline(StandardScaler(), KNeighborsClassifier(7)).fit(X_tr, y_tr)
+    diffs.append(a.score(X_te, y_te) - b.score(X_te, y_te))
+diffs = np.array(diffs)
+
+t, p = stats.ttest_1samp(diffs, 0)
+ci = (diffs.mean() - 1.96 * diffs.std(ddof=1)/np.sqrt(len(diffs)),
+      diffs.mean() + 1.96 * diffs.std(ddof=1)/np.sqrt(len(diffs)))
+print(f"mean diff = {diffs.mean():.4f}, 95% CI ({ci[0]:.4f}, {ci[1]:.4f}), p = {p:.5f}")
+```
+
+(a) 5-fold paired t has df = 4 and folds share training rows — dependence inflates the nominal Type I error (the famous Dietterich point). (b) Each replication is a fresh split: differences are far less correlated across replications; 40 replications give a stable CI. (c) The unit is the *replication-level difference* — treat replications as the sample. (d) Eight models ⇒ 28 pairwise CIs; multiplicity control (Bonferroni/Holm) or a pre-registered primary comparison keeps the family-wise error honest ([12.3](../part-12-multiple-testing-bioinformatics/12-3-family-wise-error-rate.qmd) preview).
+</details>
+
+## 6. Complex Questions
+
+**C1 (comparison × [0.5 splitting](../part-00-python-foundations/00-5-data-splitting.qmd) × [4.3 CV](../part-04-validation-model-selection/04-3-cross-validation.qmd)).** Build the full "league table" experiment: 6 classifiers × 20 repeated stratified 5-fold CVs, recording accuracy, AUC, and Brier per repeat. Produce (a) a ranked mean table with per-model CIs, (b) a paired heatmap of p-values (all pairs), (c) a stability statement — which model's *variance across repeats* is worst and what does that imply for reproducibility of a published winner? This deliverable is the reusable template for every future model-selection question in the course.
+
+**C2 (comparison × [3.1.5 AUPRC](03-1-5-auprc.qmd) × [1.3 Bayes](../part-01-statistics-bridge/01-3-probability-essentials.qmd)).** Two hospitals each evaluate your two models; hospital A has 2% disease prevalence, hospital B has 25%. Show empirically that model rankings can *flip by metric family* (AUC stable, AP and precision@budget flip or compress) across the two prevalences, then write the reporting paragraph that tells both hospitals which model to deploy and why — in language that survives their different baselines.
+
+## 7. Summary
+
+- Compare models on identical folds, paired; differences need uncertainty, points don't settle arguments.
+- McNemar for hard labels; paired fold differences for scores; replicate for power.
+- Rank metrics (AUC/AP), probability metrics (Brier, calibration), and operating-point metrics answer different questions — pick per decision, report several.
+- Calibration is a separate axis: Platt/isotonic fixes on dedicated data; AUC is blind to it, Brier isn't.
+- Same tuning budget for every candidate; selection metrics must never double as reported performance.
+- With several candidates, multiple-comparisons discipline applies — previewing Part 12.
+- Comparison done honestly *is* model selection's foundation: Part 4 formalizes the machinery — starting from why held-out error is the only currency: [4.1 The generalization problem](../part-04-validation-model-selection/04-1-generalization-problem.qmd).

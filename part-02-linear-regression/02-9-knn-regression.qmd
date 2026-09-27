@@ -1,0 +1,424 @@
+---
+title: "2.9 KNN Regression"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - scikit-learn
+    - matplotlib
+---
+
+K-nearest-neighbors regression abandons functional form entirely: to predict a point, average the responses of its k closest training points. It is the prototype **nonparametric** method — flexible, assumption-light, and the cleanest lens on the flexibility–data trade before Part 4 formalizes it.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+**The algorithm** for predicting at query point $x_0$:
+
+1. Compute the distance from $x_0$ to every training point.
+2. Take the $k$ nearest.
+3. Predict $\hat{y} = \frac{1}{k} \sum_{i \in N_k(x_0)} y_i$ — their average (optionally distance-weighted).
+
+One hyperparameter, $k$, controls everything: $k = 1$ reproduces the training data exactly (maximally flexible); $k = n$ predicts the global mean everywhere (maximally rigid).
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.5
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.neighbors import KNeighborsRegressor
+
+rng = np.random.default_rng(0)
+x = np.sort(rng.uniform(0, 10, 80))
+y = np.sin(1.2 * x) + 0.3 * x + rng.normal(0, 0.4, 80)
+X = x.reshape(-1, 1)
+xg = np.linspace(0, 10, 400).reshape(-1, 1)
+
+fig, ax = plt.subplots(figsize=(7, 3.5))
+ax.scatter(x, y, s=12, alpha=0.4, color="gray", label="data")
+for k, c in [(1, "red"), (5, "green"), (50, "purple")]:
+    fit = KNeighborsRegressor(n_neighbors=k).fit(X, y)
+    ax.plot(xg, fit.predict(xg), lw=2, color=c, label=f"k = {k}")
+ax.set(xlabel="x", ylabel="y", title="k = smoothing dial")
+ax.legend()
+plt.show()
+```
+
+Distance weighting softens the steps without a new hyperparameter family:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.neighbors import KNeighborsRegressor
+
+rng = np.random.default_rng(1)
+x = np.sort(rng.uniform(0, 10, 60))
+y = np.sin(1.2 * x) + 0.3 * x + rng.normal(0, 0.4, 60)
+X = x.reshape(-1, 1); xg = np.linspace(0, 10, 400).reshape(-1, 1)
+
+fig, ax = plt.subplots(figsize=(7, 3.2))
+ax.scatter(x, y, s=12, alpha=0.4, color="gray")
+for weights, style in [("uniform", "--"), ("distance", "-")]:
+    fit = KNeighborsRegressor(n_neighbors=7, weights=weights).fit(X, y)
+    ax.plot(xg, fit.predict(xg), style, lw=2, label=weights)
+ax.legend(); ax.set_title("k=7: uniform vs distance-weighted")
+plt.show()
+```
+
+**Implement it by hand once** — the whole method is a NumPy one-liner away:
+
+```{pyodide}
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+
+rng = np.random.default_rng(2)
+x = rng.uniform(0, 10, 40); y = np.sin(x) + rng.normal(0, 0.2, 40)
+X = x.reshape(-1, 1)
+
+def knn_predict(x0, X, y, k):
+    d = np.abs(X.ravel() - x0)                 # 1-D distances
+    idx = np.argsort(d)[:k]                    # k nearest indices
+    return y[idx].mean()
+
+pred_hand = knn_predict(4.0, X, y, 5)
+pred_sk = KNeighborsRegressor(n_neighbors=5).fit(X, y).predict([[4.0]])[0]
+print(f"hand: {pred_hand:.4f}   sklearn: {pred_sk:.4f}   equal: {np.isclose(pred_hand, pred_sk)}")
+```
+
+## 2. Concept Questions
+
+1. What does KNN with k = n predict everywhere, and which model from Part 2 is it identical to?
+2. Why does KNN require **feature scaling**, while OLS arguably doesn't?
+3. Your KNN has excellent training predictions and poor test predictions. Which end of the k dial are you on, and what single change is the first thing to try?
+4. In 1-D with n = 100 and k = 10, roughly what fraction of the x-range does each neighborhood cover? What happens to that fraction as dimensions grow at fixed n and k?
+5. KNN's fitted curve is wiggly at k = 5 but smooth at k = 50 — restate that sentence in bias–variance language.
+
+<details>
+<summary>Answers</summary>
+
+1. The global average $\bar y$ at every query — identical to the intercept-only regression of [2.1](02-1-regression-setup.qmd)/[2.2](02-2-simple-linear-regression.qmd) (whose training RSS = TSS). The two "models" at the extremes of flexibility are the same object.
+2. KNN's *only* notion of "near" is a distance metric in raw coordinates; a feature measured in thousands (gene counts) swamps one measured in fractions (GC content), so the neighborhood becomes 1-D along the biggest-scaled axis. OLS multiplies each feature by its own learned coefficient — scale is absorbed by β̂ (up to conditioning) — so it is scale-*equivariant*, not scale-blind.
+3. Small k (overfitting: variance dominant). First change: increase k — then validate properly ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)); scaling too if features aren't comparable.
+4. With uniformly spread points, k = 10 of 100 points spans ~10% of the range. In d dimensions with fixed n and k, the same 10 points live in a shell whose radius explodes (concentration of distances) — neighborhoods become huge relative to any one axis: the **curse of dimensionality**. KNN degrades toward the global mean unless n grows exponentially in d.
+5. k = 5: low bias (local averages track the true curve) but high variance (each neighborhood's few points swing the estimate) — wiggly. k = 50: high bias (averages over genuine structure) but low variance (many points stabilize it) — smooth. The dial trades one against the other, exactly the [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd) decomposition.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+rng = np.random.default_rng(3)
+x = np.arange(10.); y = 2 * x + 1
+fit1 = KNeighborsRegressor(n_neighbors=1).fit(x.reshape(-1,1), y)
+print(fit1.predict([[3.0], [3.4]]))      # [7, 7] — piecewise-constant steps
+print(np.mean(y - fit1.predict(x.reshape(-1,1))))   # training error exactly 0 for k=1
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+rng = np.random.default_rng(4)
+x = rng.uniform(0, 5, 50); y = rng.normal(10, 3, 50)
+for k in [1, 5, 50]:
+    fit = KNeighborsRegressor(k).fit(x.reshape(-1,1), y)
+    print(f"k={k:>2}: prediction at x=2.5 -> {fit.predict([[2.5]])[0]:.3f}")
+# k=50 ≈ y.mean(): converges to the mean-model
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+# scaling changes the neighborhood (and the fit)
+rng = np.random.default_rng(5)
+X = np.c_[rng.uniform(0, 1, 100), rng.uniform(0, 1000, 100)]   # 2nd feature dominates
+y = X[:, 1] + rng.normal(0, 10, 100)
+q = [[0.5, 500.0]]
+fit_raw = KNeighborsRegressor(5).fit(X, y).predict(q)[0]
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+fit_scaled = make_pipeline(StandardScaler(), KNeighborsRegressor(5)).fit(X, y).predict(q)[0]
+print(f"raw: {fit_raw:.1f}  scaled: {fit_scaled:.1f}  truth ≈ 500")
+```
+
+```{pyodide}
+import numpy as np
+# distance concentration: nearest vs farthest neighbor distance grows with d
+rng = np.random.default_rng(6)
+for d in [1, 10, 100]:
+    X = rng.uniform(0, 1, (200, d))
+    q = np.full(d, 0.5)
+    dists = np.sqrt(((X - q)**2).sum(axis=1))
+    print(f"d={d:>3}: ratio farthest/nearest = {(dists.max()/dists.min()):.2f}")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Implement full 2-D KNN regression by hand (vectorized distances, `argsort`, averaging) and verify exact agreement with `KNeighborsRegressor` on 20 random queries with k = 7. Then switch to distance weighting in both and re-verify (weights ∝ 1/d, handling d = 0 by falling back to that point alone).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+
+rng = np.random.default_rng(7)
+X = rng.uniform(0, 10, (60, 2))
+y = np.sin(X[:, 0]) + 0.5 * X[:, 1] + rng.normal(0, 0.3, 60)
+
+def knn_predict_weighted(x0, X, y, k):
+    d = np.sqrt(((X - x0)**2).sum(axis=1))
+    idx = np.argsort(d)[:k]
+    dk = d[idx]
+    if np.any(dk == 0):                       # exact match: return it
+        return y[idx[dk == 0]][0]
+    w = 1 / dk
+    return (w * y[idx]).sum() / w.sum()
+
+fit = KNeighborsRegressor(n_neighbors=7, weights="distance").fit(X, y)
+qs = rng.uniform(0, 10, (20, 2))
+hand = np.array([knn_predict_weighted(q, X, y, 7) for q in qs])
+sk = fit.predict(qs)
+print("max |hand - sklearn|:", np.abs(hand - sk).max())
+```
+
+Agreement to float precision (sklearn's weighting is the same 1/d scheme). Writing KNN once makes its failure modes concrete: ties, zero distances, and the cost — every query scans all n training points (no "fit" to speak of; the data *is* the model).
+</details>
+
+**Exercise 2 — KNN vs OLS under two truths.** Generate 100 training points under (a) a linear truth and (b) a wiggly sinusoidal truth (same noise). Fit OLS and KNN (k chosen by 5-fold CV over k = 1..30) to each; evaluate both on large fresh test sets. Report a 2×2 table of test MSEs. Which method wins under which truth, and what does that table say about "model choice" as a statement about the world?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.model_selection import cross_val_score, KFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+
+rng = np.random.default_rng(8)
+
+def experiment(truth, seed):
+    r = np.random.default_rng(seed)
+    x = np.sort(r.uniform(0, 10, 100))
+    y = truth(x) + r.normal(0, 0.5, 100)
+    xte = r.uniform(0, 10, 5000)
+    yte = truth(xte) + r.normal(0, 0.5, 5000)
+    X = x.reshape(-1, 1)
+
+    ols = LinearRegression().fit(X, y)
+    best_k, best_mse = None, np.inf
+    for k in range(1, 31):
+        pipe = make_pipeline(StandardScaler(), KNeighborsRegressor(k))
+        s = (-cross_val_score(pipe, X, y, cv=KFold(5, shuffle=True, random_state=0),
+                              scoring="neg_mean_squared_error")).mean()
+        if s < best_mse:
+            best_k, best_mse = k, s
+    knn = KNeighborsRegressor(best_k).fit(X, y)
+
+    return {"OLS": np.mean((yte - ols.predict(xte.reshape(-1,1)))**2),
+            f"KNN(k={best_k})": np.mean((yte - knn.predict(xte.reshape(-1,1)))**2)}
+
+linear_truth = lambda x: 1 + 0.7 * x
+wiggly_truth = lambda x: 1 + 0.7 * x + 2 * np.sin(2.5 * x)
+
+for name, truth in [("linear truth", linear_truth), ("wiggly truth", wiggly_truth)]:
+    res = experiment(truth, seed=9)
+    print(name, {k: round(v, 3) for k, v in res.items()})
+```
+
+Linear truth: OLS wins (KNN wastes effort estimating zero curvature). Wiggly truth: KNN wins (OLS's bias dominates). Neither method is "better" — methods are hypotheses about structure; CV chooses the hypothesis the data supports. This 2×2 is the whole model-selection story in miniature (Part 4).
+</details>
+
+**Exercise 3 — the curse, quantified.** Generate data with signal only in the first 2 of d features ($y = x_1 x_2 + \varepsilon$, remaining features pure noise, all scaled comparably). For d = 2, 5, 20, fit CV-tuned KNN and OLS on n = 300 and report test MSE on fresh data. Watch KNN degrade with d while OLS merely gets noisier — then explain in neighborhood-radius language.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.model_selection import cross_val_score, KFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+
+rng = np.random.default_rng(10)
+xte_all = rng.uniform(-1, 1, (20000, 20))
+
+for d in [2, 5, 20]:
+    X = rng.uniform(-1, 1, (300, d))
+    y = X[:, 0] * X[:, 1] + rng.normal(0, 0.3, 300)
+    Xte = xte_all[:, :d]
+    yte = Xte[:, 0] * Xte[:, 1] + rng.normal(0, 0.3, 20000)
+
+    best = min(
+        (k, (-cross_val_score(
+            make_pipeline(StandardScaler(), KNeighborsRegressor(k)),
+            X, y, cv=5, scoring="neg_mean_squared_error").mean()))
+        for k in (3, 5, 10, 20, 40)
+    )
+    knn = KNeighborsRegressor(best[0]).fit(X, y)
+    ols = LinearRegression().fit(X, y)
+
+    mse_k = np.mean((yte - knn.predict(Xte))**2)
+    mse_o = np.mean((yte - ols.predict(Xte))**2)
+    print(f"d={d:>2}: KNN(k={best[0]}) MSE = {mse_k:.3f} | OLS MSE = {mse_o:.3f}")
+```
+
+In d = 20, "5 nearest neighbors" are no longer *local* — they're scattered across a huge radius, so the average mixes unrelated points (bias explodes), while the useful signal lives in a 2-D slice KNN can't isolate. OLS degrades gracefully: extra noise features only add mild variance to the coefficient estimates. Nonparametric flexibility is bought with locality, and locality is the first casualty of dimension — the reason Part 5's regularization exists for wide data.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **No training phase, all query cost**: prediction is O(n·d) per point (brute force); KD-trees/ball trees help in low d and stop helping in high d. "The model" is a lookup table — deploy size = training size.
+- **Scaling is part of the model**: put the scaler *inside the pipeline* so CV/tuning refit it per fold ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd) leakage rule).
+- **k = 1 on training data scores perfectly** — reporting it is the canonical overfitting self-own; evaluate on held-out data only.
+- **Ties and even k**: with classification (Part 3) even k can produce vote ties; with regression ties are harmless (averages), but *distance* ties in argsort are resolved arbitrarily — reproducibility note for numeric features with many duplicates.
+- **Weighted KNN interpolates between k-sensitivity and locality**: `weights="distance"` reduces the discontinuity at neighborhood boundaries but doesn't fix dimensionality.
+- **KNN has no coefficients, no p-values, no global story** — it predicts, it doesn't explain. Using it where inference is the goal is a category error.
+
+### Read & Refactor AI Code
+
+This AI-generated KNN pipeline has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.model_selection import train_test_split
+
+rng = np.random.default_rng(11)
+n = 200
+X = np.c_[rng.uniform(0, 1, n),            # gene length (small units)
+          rng.uniform(0, 10000, n)]        # read count (huge units)
+y = X[:, 1] / 1000 + np.sin(X[:, 0] * 6) + rng.normal(0, 0.3, n)
+
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=0)
+
+# BUG 1: k chosen by TRAINING error
+scores = []
+for k in range(1, 31):
+    fit = KNeighborsRegressor(k).fit(X_tr, y_tr)
+    scores.append(np.mean((y_tr - fit.predict(X_tr))**2))
+best_k = int(np.argmin(scores)) + 1
+print("chosen k:", best_k, " (always 1!)")
+
+# BUG 2: unscaled features
+knn = KNeighborsRegressor(best_k).fit(X_tr, y_tr)
+print("test MSE:", np.mean((y_te - knn.predict(X_te))**2).round(3))
+
+# BUG 3: report k=1 training error as model quality
+print("train MSE:", np.mean((y_tr - KNeighborsRegressor(1).fit(X_tr, y_tr).predict(X_tr))**2).round(4),
+      "-> 'perfect model!'")
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **Tuning on training error selects k = 1 always** (perfect memorization) — hyperparameters must be chosen by CV *within the training set*.
+2. **Unscaled features**: distances are dominated by the 10,000-range column; the sin structure in feature 1 is invisible. Fix: StandardScaler in a pipeline.
+3. **k=1 training error as quality**: by construction zero — it measures memory, not skill. Fix: report CV (tuning) and held-out test error.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import train_test_split, cross_val_score, KFold
+
+rng = np.random.default_rng(11)
+n = 200
+X = np.c_[rng.uniform(0, 1, n), rng.uniform(0, 10000, n)]
+y = X[:, 1] / 1000 + np.sin(X[:, 0] * 6) + rng.normal(0, 0.3, n)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, random_state=0)
+
+results = {}
+for k in range(1, 31):
+    pipe = make_pipeline(StandardScaler(), KNeighborsRegressor(k))
+    cv = (-cross_val_score(pipe, X_tr, y_tr, cv=KFold(5, shuffle=True, random_state=1),
+                           scoring="neg_mean_squared_error")).mean()
+    results[k] = cv
+best_k = min(results, key=results.get)
+print("CV-chosen k:", best_k)
+
+final = make_pipeline(StandardScaler(), KNeighborsRegressor(best_k)).fit(X_tr, y_tr)
+print("honest test MSE:", round(float(np.mean((y_te - final.predict(X_te))**2)), 4))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Show that uniform KNN regression is a linear smoother: $\hat{y} = S y$ where $S = D^{-1} W$ with $W_{ij} = 1\{x_j \in N_k(x_i)\}$. What are the diagonal entries of $S$ at k = 1, and how does that make the "training error = 0" fact inevitable? Relate the trace of S to an "effective degrees of freedom" and compute it for k = 1 and k = n.
+
+<details>
+<summary>Hint</summary>
+
+Each fitted value is an average of a subset of the y's — write the averaging weights as a matrix.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+$\hat y_i = \frac{1}{k}\sum_{j \in N_k(i)} y_j$ ⇒ $\hat{\mathbf y} = S\mathbf y$ with row i of S equal to 1/k on the k neighbor columns. At k = 1, each row has a single 1 (the point itself is its own neighbor), so S = I: $\hat y_i = y_i$ exactly — zero training error *by identity*, and tr(S) = n = "n effective parameters" (maximal flexibility). At k = n, S has every entry 1/n: $\hat y_i = \bar y$, tr(S) = 1 (one effective parameter, the mean). The smoother matrix's trace interpolates between — the KNN analog of polynomial degree. (For OLS, S is the hat matrix H with tr(H) = p + 1 — same bookkeeping, which is how KNN and regression become comparable on a flexibility axis.)
+</details>
+
+**Q2.** KNN predictions are discontinuous at neighborhood boundaries; kernel smoothing (Part 6) fixes this by distance-decaying weights. Demonstrate the discontinuity: construct a 1-D dataset where shifting a query point by ε changes its prediction by a jump, measure the jump, and then show the same dataset under `weights="distance"` yields a continuous prediction path. Why might you nevertheless prefer uniform KNN?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+
+rng = np.random.default_rng(12)
+x = np.sort(rng.uniform(0, 10, 25))
+y = np.sin(x) + rng.normal(0, 0.05, 25)     # nearly clean: jumps visible
+X = x.reshape(-1, 1)
+
+k = 5
+uni = KNeighborsRegressor(k).fit(X, y)
+dist = KNeighborsRegressor(k, weights="distance").fit(X, y)
+
+q = np.linspace(x[10] + 1e-6, x[11] - 1e-6, 200).reshape(-1, 1)
+pu, pdis = uni.predict(q), dist.predict(q)
+jump_at = np.argmax(np.abs(np.diff(pu)))
+print(f"uniform: max jump = {np.abs(np.diff(pu)).max():.3f}")
+print(f"distance-weighted: max jump = {np.abs(np.diff(pdis)).max():.5f} (continuous)")
+```
+
+Crossing the boundary where a far point swaps into the neighborhood changes the average by (y_in − y_out)/k — up to 2σ/k. Distance weighting fades the swap continuously. Uniform KNN is still preferred when: interpretability of "local average of the 5 most similar cases" matters, computation must be cheapest, or the distance scale itself is questionable (weights amplify metric artifacts). Smoothness is a virtue for curve *display* (Part 6's smoothing splines are the refined endpoint of this line of thought).
+</details>
+
+## 6. Complex Questions
+
+**C1 (KNN × [4.4 Bias–variance](../part-04-validation-model-selection/04-4-bias-variance.qmd) preview).** Simulate 300 training sets (n = 60) from a known f; for each k in 1..40, fit KNN on every training set and evaluate on a fixed dense grid. Estimate bias² (mean prediction vs f)², variance (SD of predictions)², and total MSE per k; plot all three. Identify the k minimizing total MSE and verify the bias/variance crossover story — you will reuse this exact experimental design on the theory page.
+
+**C2 (KNN × [0.5 Splitting](../part-00-python-foundations/00-5-data-splitting.qmd) × [4.3 CV](../part-04-validation-model-selection/04-3-cross-validation.qmd)).** Compare two k-selection strategies on 200 fresh simulations: (a) pick k by CV, report that CV value as the error estimate; (b) pick k by CV, then report a *nested* outer-CV estimate. How big is the optimism of (a), and does it grow with the number of candidate k values? (This prefigures the tuning trap of [4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd).)
+
+## 7. Summary
+
+- KNN predicts by local averaging; k is the single flexibility dial from memorization (k=1) to the mean-model (k=n).
+- Distances make scaling part of the model — scale inside a pipeline, never outside.
+- It is a linear smoother: tr(S) = effective df; k=1 is the identity map (zero training error, zero information).
+- The curse of dimensionality inflates neighborhood radius; nonparametric methods need exponentially more data in high d.
+- KNN vs OLS is bias-vs-flexibility: each wins under the truth it assumes; CV adjudicates.
+- No coefficients, no inference: KNN predicts, it doesn't explain.
+- Before returning to model form, audit the regression machinery's fine print: [2.10 Regression assumptions](02-10-regression-assumptions.qmd).

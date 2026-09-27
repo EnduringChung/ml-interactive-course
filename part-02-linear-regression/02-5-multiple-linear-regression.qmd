@@ -1,0 +1,379 @@
+---
+title: "2.5 Multiple Linear Regression"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - pandas
+    - statsmodels
+    - patsy
+    - scikit-learn
+---
+
+Multiple regression models $Y$ as a linear function of *several* predictors at once — which is where regression earns its keep: adjusting for confounders, isolating each variable's contribution, and predicting from combined structure. It also introduces the two new failure modes that dominate applied work: **collinearity** and **confounding**.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+The model becomes a vector equation:
+
+$$Y = \beta_0 + \beta_1 X_1 + \cdots + \beta_p X_p + \varepsilon$$
+
+Fitted by the same least-squares principle, now in $(p+1)$-dimensional coefficient space: $\hat{\boldsymbol\beta} = (X^\top X)^{-1} X^\top \mathbf y$ (requires the columns of the **design matrix** $X$ to be linearly independent). The key interpretive discipline: $\hat\beta_j$ is the expected change in $Y$ per unit of $X_j$ **holding the other predictors fixed** — an *adjusted* association, not a raw one.
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(0)
+n = 100
+x1 = rng.uniform(0, 10, n)                      # hours of study
+x2 = 0.7 * x1 + rng.normal(0, 2, n)             # practice problems (correlated!)
+y = 1 + 2.0 * x1 + 0.5 * x2 + rng.normal(0, 2, n)
+
+fit = sm.OLS(y, sm.add_constant(np.c_[x1, x2])).fit()
+print(fit.params.round(3))       # [const, x1, x2] — recovers ~[1, 2, 0.5]
+print(fit.bse.round(3))
+print(f"R² = {fit.rsquared:.4f},  adj R² = {fit.rsquared_adj:.4f}")
+```
+
+Compare each coefficient's **simple** (one-at-a-time) estimate with its **multiple** (adjusted) estimate — the discrepancy is confounding in action:
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+rng = np.random.default_rng(0)
+n = 100
+x1 = rng.uniform(0, 10, n)
+x2 = 0.7 * x1 + rng.normal(0, 2, n)
+y = 1 + 2.0 * x1 + 0.5 * x2 + rng.normal(0, 2, n)
+
+simple_x1 = sm.OLS(y, sm.add_constant(x1)).fit().params[1]
+multi_x1 = sm.OLS(y, sm.add_constant(np.c_[x1, x2])).fit().params[1]
+print(f"effect of x1, alone in model:  {simple_x1:.3f}")
+print(f"effect of x1, adjusting for x2: {multi_x1:.3f}   (truth: 2.0)")
+print("the simple estimate absorbed x2's contribution — confounding")
+```
+
+**The F-statistic** asks whether *any* predictor helps: $H_0: \beta_1 = \cdots = \beta_p = 0$ against the mean-model:
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+rng = np.random.default_rng(0)
+n = 100
+x1 = rng.uniform(0, 10, n)
+x2 = 0.7 * x1 + rng.normal(0, 2, n)
+y = 1 + 2.0 * x1 + 0.5 * x2 + rng.normal(0, 2, n)
+fit = sm.OLS(y, sm.add_constant(np.c_[x1, x2])).fit()
+
+print(f"F = {fit.fvalue:.2f}, p = {fit.f_pvalue:.3e}")
+print(f"R² = {fit.rsquared:.4f}")
+```
+
+## 2. Concept Questions
+
+1. In `y ~ hours + practice`, β̂_hours = 1.8. State the exact operational meaning of that number.
+2. Why can R² rise while *every* individual p-value falls above 0.05? (Two predictors, strongly collinear, jointly informative.)
+3. What breaks mathematically when two predictors are *perfectly* collinear (x2 = 2·x1)?
+4. The F-test p = 0.2 but one predictor's t-test p = 0.03. Possible? What's going on?
+5. You add a confounder and your key coefficient collapses toward zero. Two explanations — which is the happy one?
+
+<details>
+<summary>Answers</summary>
+
+1. "Increasing study hours by 1 predicts +1.8 in y, **for fixed practice problems**" — the comparison is between two otherwise-identical subjects. It is not the raw effect of forcing extra hours on a real person (that would include the practice-hours they'd lose — an interaction/mediation issue).
+2. Strongly collinear predictors share their explanatory work: together they lift R², individually neither looks "significant" because each coefficient's SE is inflated by the redundancy (the model can't decide which one gets the credit). The F-test (joint) is significant while the t-tests (each alone) are not — the classic collinearity signature.
+3. $X^\top X$ becomes singular — non-invertible, so $(X^\top X)^{-1}$ doesn't exist and β̂ is not unique (infinitely many coefficient pairs give identical predictions). Computationally you get huge, unstable estimates; conceptually, the data cannot distinguish the two channels even in principle.
+4. Yes — it's exactly answer 2's situation: joint F rejects (the pair helps) while each individual t fails (credit-splitting inflates both SEs). The F-test and the collection of t-tests answer different questions.
+5. (a) Happy: the confounder was inflating the coefficient; your predictor's *adjusted* effect is genuinely smaller — this is learning. (b) Sad: the "confounder" is a mediator or a collider, or you adjusted away real signal (overadjustment). Which one depends on the causal structure, not on the regression output.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+rng = np.random.default_rng(1)
+n = 80
+X = np.c_[rng.uniform(0, 5, n), rng.uniform(-2, 2, n)]
+y = 3 + 1.5 * X[:, 0] - 2.0 * X[:, 1] + rng.normal(0, 1, n)
+fit = sm.OLS(y, sm.add_constant(X)).fit()
+print(fit.params.round(3))                      # ≈ [3, 1.5, -2]
+print(np.corrcoef(fit.fittedvalues, y)[0, 1].round(4))  # corr(ŷ, y) = √R²
+```
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+rng = np.random.default_rng(2)
+# near-perfect collinearity: coefficient seesaw
+x1 = rng.uniform(0, 10, 100)
+x2 = 2 * x1 + rng.normal(0, 0.01, 100)          # almost deterministic
+y = 1 + 3 * x1 + rng.normal(0, 1, 100)          # x2 is pure noise for y
+fit = sm.OLS(y, sm.add_constant(np.c_[x1, x2])).fit()
+print(fit.params.round(2))                       # unstable split of credit
+print(fit.bse.round(2))                          # huge SEs
+print(f"R² still fine: {fit.rsquared:.4f}")
+```
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+rng = np.random.default_rng(3)
+n = 200
+a = rng.normal(0, 1, n)
+X = np.c_[a, 0.9 * a + rng.normal(0, 0.5, n), rng.normal(0, 1, n)]
+Xc = sm.add_constant(X)
+vifs = [variance_inflation_factor(Xc, j) for j in range(1, Xc.shape[1])]
+print("VIFs:", np.round(vifs, 2))    # first two large; third ≈ 1
+```
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+from statsmodels.stats.anova import anova_lm
+import statsmodels.formula.api as smf
+import pandas as pd
+rng = np.random.default_rng(4)
+df = pd.DataFrame({"x1": rng.uniform(0, 10, 100),
+                   "x2": rng.uniform(0, 10, 100)})
+df["y"] = 1 + 2 * df["x1"] + rng.normal(0, 2, 100)   # x2 irrelevant
+
+fit_small = smf.ols("y ~ x1", data=df).fit()
+fit_big   = smf.ols("y ~ x1 + x2", data=df).fit()
+print(anova_lm(fit_small, fit_big).round(4))   # partial F-test: does x2 add anything?
+```
+
+### Exercises (with solutions)
+
+**Exercise 1 — the confounder lab.** Simulate a classic confounded observational study: hidden z drives both x and y (`x = 0.8z + noise`, `y = 2x + 1.5z + noise`). Estimate the effect of x three ways: (a) simple regression, (b) multiple regression adjusting for z, (c) multiple regression adjusting for an irrelevant variable w. Which estimate recovers the truth, and what does (c) demonstrate?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(5)
+n = 300
+z = rng.normal(0, 1, n)                  # hidden confounder
+x = 0.8 * z + rng.normal(0, 1, n)
+w = rng.normal(0, 1, n)                  # irrelevant variable
+y = 2 * x + 1.5 * z + rng.normal(0, 1, n)
+
+print("(a) simple :   ", round(sm.OLS(y, sm.add_constant(x)).fit().params[1], 3))
+print("(b) adjust z:  ", round(sm.OLS(y, sm.add_constant(np.c_[x, z])).fit().params[1], 3))
+print("(c) adjust w:  ", round(sm.OLS(y, sm.add_constant(np.c_[x, w])).fit().params[1], 3))
+print("true effect of x: 2.0")
+```
+
+(a) inherits z's influence through corr(x, z) and overshoots; (b) recovers 2.0 — adjustment works *when the confounder is measured*; (c) ≈ (a): adjusting for an unrelated variable changes nothing except a hair of precision. The entire value of multiple regression for inference is (b) — and its limit is that z must have been measured.
+</details>
+
+**Exercise 2 — VIF by hand.** Compute the variance inflation factor of each predictor in a 3-predictor model *without* `variance_inflation_factor`: regress each predictor on the others, take $1/(1-R^2_j)$; verify against the library. Then state, numerically, what VIF = 10 does to SE(β̂_j) relative to an uncorrelated design.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(6)
+n = 200
+x1 = rng.normal(0, 1, n)
+x2 = 0.95 * x1 + rng.normal(0, 0.4, n)
+x3 = rng.normal(0, 1, n)
+
+def manual_vif(X, j):                     # X: 2-D, columns = predictors
+    others = np.delete(X, j, axis=1)
+    r2 = sm.OLS(X[:, j], sm.add_constant(others)).fit().rsquared
+    return 1 / (1 - r2)
+
+X = np.c_[x1, x2, x3]
+print("manual VIFs:", [round(manual_vif(X, j), 2) for j in range(3)])
+
+SE_multiplier = np.sqrt(manual_vif(X, 1))
+print(f"VIF=10 ⇔ SE inflated by √10 ≈ {np.sqrt(10):.2f}× vs orthogonal design")
+```
+
+VIF $j$ = how many times larger $\text{Var}(\hat\beta_j)$ is than it would be if predictor $j$ were uncorrelated with the rest; SE inflates by √VIF. VIF = 10 is the common "serious" threshold, but the number to internalize is the mechanism: redundant predictors make individual coefficients unidentifiable *in practice* even while the model as a whole predicts fine (drill 2).
+</details>
+
+**Exercise 3 — model building discipline.** Using the statsmodels formula API on the built-in-style data below, run the classic workflow: (a) fit the full model `y ~ x1 + x2 + x3`; (b) use a **partial F-test** (`anova_lm`) to decide whether x3 earns its place; (c) refit without it if not. Report final coefficients with CIs, and give the one-sentence interpretation of each that a subject-matter reader could use.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+from statsmodels.stats.anova import anova_lm
+
+rng = np.random.default_rng(7)
+n = 150
+df = pd.DataFrame({
+    "x1": rng.uniform(0, 10, n),
+    "x2": rng.uniform(-5, 5, n),
+    "x3": rng.normal(0, 1, n),                  # irrelevant
+})
+df["y"] = 2 + 1.2 * df["x1"] - 0.7 * df["x2"] + rng.normal(0, 1.5, n)
+
+full = smf.ols("y ~ x1 + x2 + x3", data=df).fit()
+reduced = smf.ols("y ~ x1 + x2", data=df).fit()
+print(anova_lm(reduced, full).round(4))         # big p -> x3 adds nothing
+print(reduced.params.round(3))
+print(reduced.conf_int().round(3))
+```
+
+Interpretation template: "holding x2 fixed, each additional unit of x1 predicts +1.2 (95% CI a to b) units of y; similarly for x2 with sign −0.7." Note what the model *doesn't* claim: causality (that needs design) and constancy of the x1 effect across x2 (that's [2.7 Interaction](02-7-interaction-terms.qmd)'s question).
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Adjusted ≠ causal, still.** Multiple regression blocks the *measured* confounders' backdoors; unmeasured ones survive. The regression is honest; the causal claim needs the design.
+- **Collinearity doesn't hurt predictions, only interpretations**: the fitted surface is stable even when individual coefficients seesaw (drill 2). Report predictions confidently, coefficients humbly.
+- **The F-test tests the joint null** — a significant F with null t-tests means collinearity; a null F with a "significant" t is a red flag (multiple testing or a fluke).
+- **Adding predictors always weakly improves in-sample fit** (the noise-collector theorem of [2.4](02-4-accuracy-of-model.qmd)); *selection* — which variables to keep — is a Part 5 topic, and must be judged out-of-sample.
+- **Categorical predictors and interactions slot into this machinery** as extra columns — dummy variables ([2.6](02-6-categorical-predictors.qmd)) and products ([2.7](02-7-interaction-terms.qmd)) — so everything on this page applies to them unchanged.
+- **Too many predictors relative to n** (n ≲ 2p) makes OLS unstable or singular: the high-dimensional regime is a different sport (Part 5).
+- **statsmodels vs sklearn**: statsmodels gives inference (SEs, tests) and no penalty; sklearn gives prediction machinery and (in LinearRegression) no SEs. Choose by goal — the models are the same math.
+
+### Read & Refactor AI Code
+
+This AI-generated analysis has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+
+rng = np.random.default_rng(8)
+n = 200
+df = pd.DataFrame({
+    "dosage": rng.uniform(0, 100, n),
+    "age":    rng.normal(50, 10, n),
+})
+df["response"] = 5 + 0.4 * df["dosage"] + 0.3 * df["age"] + rng.normal(0, 2, n)
+
+# BUG 1: compare predictors by raw coefficient size
+fit = smf.ols("response ~ dosage + age", data=df).fit()
+print("bigger coefficient = more important:", fit.params.idxmax())
+
+# BUG 2: perfect collinearity constructed silently
+df["age_celsius_like"] = df["age"] * 2
+fit2 = smf.ols("response ~ dosage + age + age_celsius_like", data=df).fit()
+print(fit2.params.round(2))
+
+# BUG 3: conclude causality from the adjusted model
+print("each mg of dosage CAUSES +0.4 response")
+```
+
+<details>
+<summary>What's wrong, and the fixed version</summary>
+
+1. **Raw coefficients aren't comparable** — dosage spans 0–100 (per-mg effect) while age spans ~40 (per-year effect); the magnitude ranking mixes units with importance. Standardize (z-score) predictors if you need a "which moves y more per SD" statement.
+2. **`age_celsius_like = 2×age` is perfect collinearity** — design matrix singular; statsmodels (via pinv) silently returns an arbitrary split, values differ run to run conceptually and SEs explode. Drop the duplicate column; check condition numbers/VIFs when columns might be linear combinations.
+3. **"CAUSES" from an observational fit** — adjustment does not manufacture randomization. Report the adjusted *association*; causal language needs the design to back it.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+import statsmodels.api as sm
+
+rng = np.random.default_rng(8)
+n = 200
+df = pd.DataFrame({"dosage": rng.uniform(0, 100, n),
+                   "age": rng.normal(50, 10, n)})
+df["response"] = 5 + 0.4 * df["dosage"] + 0.3 * df["age"] + rng.normal(0, 2, n)
+
+fit = smf.ols("response ~ dosage + age", data=df).fit()
+
+zdf = (df[["dosage", "age"]] - df[["dosage", "age"]].mean()) / df[["dosage", "age"]].std()
+fit_std = smf.ols("response ~ dosage + age", data=zdf.assign(response=df["response"])).fit()
+print("per-SD effects:", fit_std.params[["dosage", "age"]].round(3))
+
+Xc = sm.add_constant(df[["dosage", "age"]])
+print("VIFs:", [round(variance_inflation_factor(Xc, j), 2) for j in (1, 2)])
+
+print(f"association: +1 mg ↔ {fit.params['dosage']:.3f} response units "
+      f"(95% CI {fit.conf_int().loc['dosage', 0]:.3f} to {fit.conf_int().loc['dosage', 1]:.3f}), "
+      "holding age fixed — causality requires stronger design.")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Show from $\hat\beta = (X^\top X)^{-1}X^\top y$ that if a predictor column is an exact linear combination of others, β̂ is not unique. Then explain why *near*-collinearity manifests as large coefficient **variance**: relate $\text{Var}(\hat\beta) = \sigma^2 (X^\top X)^{-1}$ to a small eigenvalue of $X^\top X$ and to the VIF.
+
+<details>
+<summary>Hint</summary>
+
+Rotating to the eigenbasis of $X^\top X$: coefficients along near-null directions are determined by dividing by a tiny eigenvalue.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Exact collinearity: $X = X_{-j} c$ for some $c$ makes $X\beta = X_{-j}(c\beta_j + \beta_{-j})$; infinitely many β produce identical fitted values, so $(X^\top X)$ is singular and the inverse mapping doesn't exist. Near-collinearity: diagonalize $X^\top X = Q\Lambda Q^\top$; the coefficient component along an eigenvector with tiny λ has variance $\sigma^2/\lambda$ — enormous. The data constrain only the *combination* of predictors well, not each separately. The VIF is the pairwise-oriented version of the same geometry: $\text{VIF}_j = 1/(1 - R_j^2)$ where $R_j^2$ is how well x_j is explained by the rest; the two views coincide through $\sigma^2(X^\top X)^{-1}$'s diagonal. Predictions are unaffected because prediction happens in row space, where near-dependence costs little — only coefficient *identification* is damaged.
+</details>
+
+**Q2.** Construct a **suppressor** variable: a predictor with zero correlation with y that *improves* the multiple-regression fit and flips another coefficient's sign. Explain the mechanism in terms of partialled variables: $\hat\beta_1$ is the slope of y on x₁ **after both are cleaned of x₂** — and cleaning can reveal structure that raw correlation hid.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import statsmodels.api as sm
+
+rng = np.random.default_rng(9)
+n = 500
+x2 = rng.normal(0, 1, n)                       # the suppressor
+x1 = 0.8 * x2 + rng.normal(0, 1, n)            # x1 correlates with x2...
+noise = 0.7 * x2 + rng.normal(0, 1, n)         # ...and shares noise with y's error path
+y = 1.0 * x1 - 1.0 * x2 + 0.8 * noise + rng.normal(0, 0.5, n)
+
+r1 = np.corrcoef(x1, y)[0, 1]
+print(f"corr(x1, y) alone: {r1:.3f}  (weak)")
+print(f"corr(x2, y) alone: {np.corrcoef(x2, y)[0,1]:.3f}  (≈ 0!)")
+
+fit = sm.OLS(y, sm.add_constant(np.c_[x1, x2])).fit()
+print("adjusted betas:", fit.params[1:].round(3), " <- both large once x2 is controlled")
+```
+
+Mechanism: x2 is a proxy for part of x1's *noise*. Controlling for x2 subtracts that noise from x1 (partialling), unmasking x1's true coefficient; x2 itself picks up −1 from the shared-noise path. The lesson generalizes: raw correlations are projections onto single axes, multiple-regression coefficients are projections after residualization — different objects that can differ in sign or magnitude. (This is also why "delete predictors with insignificant t-stats" is a bad automatic rule.)
+</details>
+
+## 6. Complex Questions
+
+**C1 (multiple regression × [1.2 Relationships](../part-01-statistics-bridge/01-2-relationships.qmd)).** Build the full Simpson's paradox dataset (three groups, positive within-group slopes, negative pooled slope). Show (a) the pooled simple regression, (b) the multiple regression with group dummies (preview of [2.6](02-6-categorical-predictors.qmd) — you may hardcode the dummy columns), (c) slope-per-group via interaction (preview of [2.7](02-7-interaction-terms.qmd)). Verify (b) recovers the common within-group slope and explain why the dummy adjustment *is* the paradox's resolution.
+
+**C2 (multiple regression × [0.5 Data splitting](../part-00-python-foundations/00-5-data-splitting.qmd) × [2.4](02-4-accuracy-of-model.qmd)).** On n = 100, compare: in-sample R² of the 10-predictor model vs its 5-fold R², when only 3 predictors are real. Then repeat at n = 1000. Write the "sample size needed per predictor" folklore you observe, and connect it to why Part 5's penalized methods exist.
+
+## 7. Summary
+
+- Multiple regression estimates each predictor's association *holding the others fixed* — an adjusted, not raw, statement.
+- Adjustment fixes measured confounding; unmeasured confounding survives, and causality still needs design.
+- Collinearity damages coefficient identification (VIF, inflated SEs, F-vs-t splits) but not prediction quality.
+- The F-test judges the joint model; t-tests judge individual channels — collinearity decouples them.
+- In-sample fit creeps up with any added column; adjustment, penalties, and CV are the honest referees.
+- Design matters: spread predictors, measure the confounders, and mind n vs p.
+- All predictors so far are numeric; real data has groups and labels — next page: [2.6 Categorical predictors](02-6-categorical-predictors.qmd).

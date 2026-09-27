@@ -1,0 +1,398 @@
+---
+title: "3.3 Logistic Regression"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - statsmodels
+    - patsy
+    - matplotlib
+---
+
+Logistic regression models P(y = 1) as a sigmoid of a linear score — bounded, Bernoulli-likelihood-honest, and the workhorse classifier of applied statistics. Its coefficients speak in **log-odds**, which is either its greatest interpretive feature or its greatest PR problem, depending on how well you've drilled this page.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+The model:
+
+$$p(x) = \frac{e^{\beta_0 + \beta_1 x}}{1 + e^{\beta_0 + \beta_1 x}} \qquad\Longleftrightarrow\qquad \log\frac{p(x)}{1 - p(x)} = \beta_0 + \beta_1 x$$
+
+The **logit** (log-odds) is linear in x; the sigmoid maps it back to [0, 1]. Coefficients are **log-odds ratios**: $e^{\beta}$ multiplies the odds of the outcome per unit of x. Fitting maximizes the Bernoulli log-likelihood — no closed form, solved by iteration (Newton/IRLS):
+
+$$\ell(\beta) = \sum_i \big[ y_i \log p_i + (1 - y_i)\log(1 - p_i) \big]$$
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+
+rng = np.random.default_rng(0)
+x = rng.uniform(0, 10, 200)
+p_true = 1 / (1 + np.exp(-(x - 5) * 0.7))
+y = (rng.uniform(0, 1, 200) < p_true).astype(int)
+
+model = LogisticRegression(penalty=None, max_iter=4000).fit(x.reshape(-1, 1), y)
+b1, b0 = model.coef_[0][0], model.intercept_[0]
+
+print(f"intercept = {b0:.3f}  (log-odds at x=0)")
+print(f"slope     = {b1:.3f}  -> odds ratio per +1 x = {np.exp(b1):.3f}")
+
+p_at_5 = model.predict_proba([[5.0]])[0, 1]
+print(f"P(y=1) at x=5 = {p_at_5:.3f}  (sigmoid crossing 0.5 where score = 0)")
+```
+
+Note `penalty=None`: sklearn's default *penalizes* the fit (C = 1.0) — worth knowing before comparing coefficients against statsmodels' unpenalized MLE:
+
+```{pyodide}
+import numpy as np
+import statsmodels.api as sm
+from sklearn.linear_model import LogisticRegression
+
+rng = np.random.default_rng(0)
+x = rng.uniform(0, 10, 200)
+y = (rng.uniform(0, 1, 200) < 1 / (1 + np.exp(-(x - 5) * 0.7))).astype(int)
+
+sm_fit = sm.Logit(y, sm.add_constant(x)).fit(disp=0)
+sk_fit = LogisticRegression(penalty=None, max_iter=4000).fit(x.reshape(-1, 1), y)
+
+print("statsmodels:", np.round(sm_fit.params, 3))
+print("sklearn:    ", np.round([sk_fit.intercept_[0], sk_fit.coef_[0][0]], 3))
+print(sm_fit.summary().tables[1])
+```
+
+The **decision boundary** and probability surface, drawn:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.5
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LogisticRegression
+
+rng = np.random.default_rng(1)
+n = 150
+mean0, mean1 = np.array([0, 0]), np.array([2, 2])
+X = np.vstack([rng.normal(mean0, 1.0, (n // 2, 2)),
+               rng.normal(mean1, 1.0, (n // 2, 2))])
+y = np.r_[np.zeros(n // 2), np.ones(n // 2)].astype(int)
+
+clf = LogisticRegression().fit(X, y)
+
+xx, yy = np.meshgrid(np.linspace(-4, 6, 200), np.linspace(-4, 6, 200))
+Z = clf.predict_proba(np.c_[xx.ravel(), yy.ravel()])[:, 1].reshape(xx.shape)
+
+fig, ax = plt.subplots(figsize=(6.5, 4))
+cs = ax.contourf(xx, yy, Z, levels=15, cmap="RdBu_r", alpha=0.6)
+ax.contour(xx, yy, Z, levels=[0.5], colors="k", linewidths=2)
+ax.scatter(X[y == 0, 0], X[y == 0, 1], c="blue", s=12, label="class 0")
+ax.scatter(X[y == 1, 0], X[y == 1, 1], c="red", s=12, label="class 1")
+fig.colorbar(cs, ax=ax, label="P(y=1)")
+ax.set_title("Logistic regression: linear boundary, smooth probabilities")
+ax.legend()
+plt.show()
+```
+
+## 2. Concept Questions
+
+1. β = 0.693 for a binary treatment. Translate twice: once into odds, once into a sentence a patient understands.
+2. Where is the decision boundary in terms of the linear score, and why does moving β₀ shift it but moving β₁ rotate it?
+3. sklearn's default `C = 1.0` penalizes coefficients. What happens to the fitted coefficients as C → ∞ and as C → 0, and what real-world failure does the C → 0 extreme prevent?
+4. Logistic regression has no closed-form solution. Why (in one sentence), and what does the algorithm actually optimize?
+5. Your model's predicted probabilities are well-ranked but poorly calibrated (everything too extreme). Which metric family is blind to this, and what might have caused it?
+
+<details>
+<summary>Answers</summary>
+
+1. Odds multiply by e^0.693 = 2.0 — treatment **doubles the odds**. For a patient: "if your baseline chance were 1-in-10 (odds 1:9), treatment moves you to about 2-in-9 ≈ 18% chance." (Odds doubling ≠ probability doubling — the translation must go through the patient's baseline.)
+2. Boundary = where p = 0.5 = where linear score = 0 (a line, β₀ + β₁x = 0). β₀ shifts the line (offset); β₁ changes its direction/steepness (in 2-D: the normal vector). β₁'s magnitude sets how *quickly* probability transitions across the boundary.
+3. C → ∞ = no penalty = unpenalized MLE (coefficients as large as likelihood demands); C → 0 = coefficients crushed toward 0 (predicting base rate everywhere). Small C prevents coefficient blow-up under separation or p ≫ n — a ridge penalty in disguise (Part 5).
+4. The log-likelihood is nonlinear in β (β sits inside a sigmoid), so no algebraic zero exists; software maximizes ℓ(β) iteratively — Newton–Raphson/IRLS — the same machinery statsmodels' summary then reuses for SEs (inverse Hessian).
+5. AUC/AP ([3.1](03-1-classification-fundamentals.qmd), [3.1.5](03-1-5-auprc.qmd)) — rank-based, calibration-blind. Causes: training/serving prevalence mismatch, regularization, resampled training data (oversampling positives), or a drifted population — the fixes live in [3.7](03-7-model-comparison.qmd)'s calibration section.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+def sigmoid(z): return 1 / (1 + np.exp(-z))
+print(sigmoid(0))               # 0.5 — score zero = coin flip
+print(sigmoid(2).round(4))      # 0.8808
+print(sigmoid(-2).round(4))     # 0.1192 — symmetric around 0
+print(sigmoid(1000))            # 1.0 — saturates, never exceeds [0,1]
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+rng = np.random.default_rng(2)
+x = rng.normal(0, 1, 500)
+y = (rng.uniform(0, 1, 500) < 1 / (1 + np.exp(-(-1 + 1.5 * x)))).astype(int)
+fit = LogisticRegression(penalty=None, max_iter=4000).fit(x.reshape(-1, 1), y)
+print("beta:", fit.coef_[0][0].round(3), " intercept:", fit.intercept_[0].round(3))
+print("odds ratio:", np.exp(fit.coef_[0][0]).round(3))
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+rng = np.random.default_rng(3)
+X = np.c_[rng.normal(0, 1, 400), rng.normal(0, 1, 400)]
+score = 2 * X[:, 0] - 1 * X[:, 1]
+y = (rng.uniform(0, 1, 400) < 1 / (1 + np.exp(-score))).astype(int)
+fit = LogisticRegression(penalty=None, max_iter=5000).fit(X, y)
+print(fit.coef_[0].round(3))    # ≈ [2, -1] — boundary: 2·x1 - 1·x2 = 0
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+# regularization shrinks coefficients (C small -> big shrink)
+rng = np.random.default_rng(4)
+x = rng.normal(0, 1, 100)
+y = (rng.uniform(0, 1, 100) < 1 / (1 + np.exp(-(-0.5 + 2 * x)))).astype(int)
+for C in [0.01, 0.1, 1.0, 100.0]:
+    f = LogisticRegression(C=C, max_iter=4000).fit(x.reshape(-1, 1), y)
+    print(f"C={C:>6}: coef = {f.coef_[0][0]:.3f}")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Hand-compute a prediction: given fitted β₀ = −4.0, β₁ = 0.8 (age, in years) for disease status — compute P(disease) at ages 40, 50, 60 by hand (sigmoid), the odds at each age, and verify the odds ratio between consecutive ages equals e^0.8 ≈ 2.23. Then compute the *risk ratio* between ages 50 and 60 and explain why it differs from the odds ratio.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+b0, b1 = -4.0, 0.8
+
+for age in [40, 50, 60]:
+    z = b0 + b1 * age
+    p = 1 / (1 + np.exp(-z))
+    print(f"age {age}: score = {z:.1f},  P = {p:.3f},  odds = {p/(1-p):.3f}")
+
+print(f"odds ratio per +5 yrs: {np.exp(0.8 * 5):.2f} (= e^(0.8·5))")
+
+p50 = 1 / (1 + np.exp(-(b0 + b1 * 50)))
+p60 = 1 / (1 + np.exp(-(b0 + b1 * 60)))
+print(f"risk ratio (60 vs 50): {p60/p50:.2f}")
+```
+
+The odds ratio is constant (2.23 per 5 years — the model's defining constraint); the risk ratio depends on the baseline (here ~3.9 at age 60 vs 50). Odds ratios are portable and log-symmetric; risk ratios are what many audiences *think* they're hearing — always know which one you quoted.
+</details>
+
+**Exercise 2.** The **separation problem**: construct x where all y = 1 for x > 0 and y = 0 for x < 0 (perfect separation). Fit unpenalized (`penalty=None`) and watch the coefficients; then fit with C = 0.1 and C = 100. Report coefficient magnitudes, and explain why the MLE "does not exist" here and what the small-C fit is implicitly doing about it.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+
+rng = np.random.default_rng(5)
+x = np.r_[rng.normal(-2, 0.5, 100), rng.normal(2, 0.5, 100)]
+y = (x > 0).astype(int)                     # perfectly separable!
+
+for C in [0.1, 100.0]:
+    f = LogisticRegression(C=C, max_iter=10000).fit(x.reshape(-1, 1), y)
+    print(f"C={C:>6}: intercept = {f.intercept_[0]:+.2f}, coef = {f.coef_[0][0]:+.2f}")
+
+f_inf = LogisticRegression(penalty=None, max_iter=10000).fit(x.reshape(-1, 1), y)
+print(f"penalty=None: coef = {f_inf.coef_[0][0]:+.2f} (climbing toward infinity)")
+```
+
+Under perfect separation, likelihood increases forever as the slope grows (the model can approach zero training error by steepening the sigmoid) — the MLE diverges to ±∞. The penalty (small C) caps the climb, acting as the prior/regularization that makes the problem well-posed: a finite, conservative boundary. Symptoms in the wild: "convergence warnings" + absurdly large coefficients + predicted probabilities at exactly 0/1 — fix with regularization or better data, not more iterations.
+</details>
+
+**Exercise 3.** Logistic regression in a pipeline with honest tuning: build `make_pipeline(StandardScaler(), LogisticRegression(max_iter=5000))`, tune C over a log grid with 5-fold CV (`GridSearchCV`), and report (a) the chosen C, (b) CV AUC, (c) test AUC on a held-out set, and (d) the odds ratios from the refit model. Then re-run everything with `random_state` changed — how stable are (a)–(d)?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.metrics import roc_auc_score
+from sklearn.datasets import make_classification
+
+X, y = make_classification(n_samples=600, n_features=5, n_informative=3,
+                           class_sep=0.9, random_state=7)
+X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.25,
+                                          stratify=y, random_state=11)
+
+pipe = make_pipeline(StandardScaler(), LogisticRegression(max_iter=5000))
+grid = {"logisticregression__C": np.logspace(-3, 3, 13)}
+search = GridSearchCV(pipe, grid, cv=5, scoring="roc_auc").fit(X_tr, y_tr)
+
+best = search.best_estimator_
+logit = best.named_steps["logisticregression"]
+odds_ratios = np.exp(logit.coef_[0])
+
+print("chosen C:", round(search.best_params_["logisticregression__C"], 4))
+print("CV AUC:  ", round(search.best_score_, 4))
+print("test AUC:", round(roc_auc_score(y_te, best.predict_proba(X_te)[:, 1]), 4))
+print("odds ratios per SD:", odds_ratios.round(3))
+
+# stability across a different split
+X_tr2, X_te2, y_tr2, y_te2 = train_test_split(X, y, test_size=0.25,
+                                              stratify=y, random_state=42)
+s2 = GridSearchCV(pipe, grid, cv=5, scoring="roc_auc").fit(X_tr2, y_tr2)
+print("second split: C =", round(s2.best_params_["logisticregression__C"], 4),
+      " test AUC =", round(roc_auc_score(y_te2, s2.best_estimator_
+                                         .predict_proba(X_te2)[:, 1]), 4))
+```
+
+Everything is stable to ~a decimal place except C's *exact* position on the grid (neighboring Cs perform nearly identically — see the one-standard-error discussion in [4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)). The pipeline guarantees scaling is fit per-fold; the test set answers once, at the end.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Odds ratios vs risk ratios vs percentage points** — three languages for one coefficient. e^β multiplies odds; converting to risk changes requires knowing the baseline ([Exercise 1](#)); quoting "30% increase" for e^β = 1.3 is wrong unless p is small.
+- **sklearn penalizes by default** — `penalty=None` (or huge C) for MLE-comparable inference; statsmodels Logit for SEs/p-values. Mixing the two without checking is a silent-model-swap bug.
+- **Regularized coefficients are biased** — their SEs are not the inverse-Hessian values; statsmodels-style inference on a *penalized* fit is invalid (bootstrap if you must).
+- **Separation/quasi-separation** → diverging coefficients and zero-width CIs; recognize the convergence warnings, regularize or collect data ([Exercise 2](#)).
+- **Complete-data quirks**: sklearn's classes are order-sensitive in `coef_` sign conventions; `predict_proba[:, 1]` is P(class 1) — with string labels, "class 1" is `classes_[1]`, alphabetically determined. Check `model.classes_`.
+- **Logistic is additive in log-odds** — interactions and nonlinearities enter exactly as in Part 2 ([2.7](../part-02-linear-regression/02-7-interaction-terms.qmd), [2.8](../part-02-linear-regression/02-8-nonlinear-transformations.qmd)) but their *interpretation* happens on the odds scale, which multiplies rather than adds.
+
+### Read & Refactor AI Code
+
+This AI-generated classifier has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
+
+rng = np.random.default_rng(6)
+n = 400
+x = rng.normal(60, 10, n)                    # age
+y = (rng.uniform(0, 1, n) < 1 / (1 + np.exp(-(x - 60) * 0.15))).astype(int)
+
+# BUG 1: default penalized fit, coefficients read as if MLE
+fit = LogisticRegression().fit(x.reshape(-1, 1), y)
+print(f"odds ratio per year: {np.exp(fit.coef_[0][0]):.3f}")
+
+# BUG 2: 0.5-threshold probabilities reported as 'risk scores'
+risky = fit.predict_proba(x.reshape(-1, 1))[:, 1]
+print("max risk score:", risky.max().round(3), "-> 'some patients at 100% risk'")
+
+# BUG 3: coefficient magnitude comparison across unscaled features
+x2 = x * 1000                                # same info, different units
+fit2 = LogisticRegression(max_iter=5000).fit(x2.reshape(-1, 1), y)
+print("which feature matters more?", "coef1:", fit.coef_[0][0].round(4),
+      "coef2:", fit2.coef_[0][0].round(6))
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Penalized coefficients read as MLE odds ratios**: default C = 1 shrinks the coefficient, so the "odds ratio" understates the association. Use `penalty=None` for interpretable coefficients (or disclose the penalty).
+2. **Saturated probabilities described with certainty language**: predicted probabilities are never "100% risk" — 0.9997 ≠ certainty; and the 0.5 threshold has no clinical meaning by default. Report ranges and set thresholds from costs ([3.1](03-1-classification-fundamentals.qmd)).
+3. **Unit-dependent coefficient comparison**: multiplying x by 1000 divides the coefficient by 1000 — neither magnitude means anything without units. Standardize (per-SD odds ratios) to compare.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+
+rng = np.random.default_rng(6)
+n = 400
+x = rng.normal(60, 10, n)
+y = (rng.uniform(0, 1, n) < 1 / (1 + np.exp(-(x - 60) * 0.15))).astype(int)
+
+mle = LogisticRegression(penalty=None, max_iter=10000).fit(x.reshape(-1, 1), y)
+print(f"MLE odds ratio per year: {np.exp(mle.coef_[0][0]):.3f}")
+
+pipe = make_pipeline(StandardScaler(),
+                     LogisticRegression(penalty=None, max_iter=10000)).fit(x.reshape(-1, 1), y)
+print("odds ratio per +1 SD:", np.exp(pipe.named_steps['logisticregression'].coef_[0][0]).round(3))
+
+risky = mle.predict_proba(x.reshape(-1, 1))[:, 1]
+print(f"risk range in sample: [{risky.min():.3f}, {risky.max():.3f}] — high, not 100%")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Derive the gradient of the Bernoulli log-likelihood for logistic regression and show it equals $X^\top (y - p)$ — the same form as linear regression's normal equations. Two consequences to explain: (a) why Newton–Raphson for logistic = iteratively reweighted least squares, (b) why a perfect-separation dataset makes both the gradient and the Hessian misbehave (relate to [Exercise 2](#)).
+
+<details>
+<summary>Hint</summary>
+
+ℓ = Σ[y log p + (1−y) log(1−p)]; dp/dz = p(1−p) with z = x^Tβ; then differentiate ℓ in β via the chain rule.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+With z_i = x_i^Tβ and p_i = σ(z_i): ∂ℓ/∂β = Σ (y_i − p_i) x_i = X^T(y − p). Setting it to zero mirrors OLS's X^T(y − Xβ) = 0, but p depends on β through sigmoids, so the equation is transcendental — no closed form. Newton–Raphson needs the Hessian H = −X^T W X with W = diag(p(1−p)); the update solves the weighted least-squares problem X^TWX β_new = X^TW z_working — IRLS: iteratively reweighted least squares with working response z = x^Tβ + (y−p)/(p(1−p)). Under separation, as ‖β‖→∞, p_i → 0/1 matching y_i, the gradient X^T(y−p) → 0 *along the diverging direction* while the log-likelihood itself → its supremum: the iteration drifts to ‖β‖ = ∞ and W's entries vanish (Hessian degenerates) — numerically rendered as "failure to converge," statistically as a non-existent MLE.
+</details>
+
+**Q2.** LDA vs logistic — the famous equivalence: for two Gaussian classes with shared covariance, both models yield *parallel* linear boundaries, and their coefficients are proportional. Verify numerically (fit both, compare coefficient directions), then break the equivalence twice — (a) unequal covariances, (b) heavy-tailed features (t-distributed) — and report which model degrades more in each case and why (generative assumption vs discriminative flexibility).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+
+def cos_sim(a, b):
+    return float(a @ b / (np.linalg.norm(a) * np.linalg.norm(b)))
+
+rng = np.random.default_rng(7)
+def make(n, scale0, scale1, df=None):
+    def draw(mu, scale):
+        if df:
+            return mu + scale * rng.standard_t(df, (n, 2))
+        return rng.normal(mu, scale, (n, 2))
+    X = np.vstack([draw([0, 0], scale0), draw([2.5, 2.5], scale1)])
+    y = np.r_[np.zeros(n), np.ones(n)].astype(int)
+    return X, y
+
+for tag, kw in [("equal cov", dict(scale0=1.0, scale1=1.0)),
+                ("unequal cov", dict(scale0=1.0, scale1=2.5)),
+                ("t-errors", dict(scale0=1.0, scale1=1.0, df=2))]:
+    X, y = make(400, **kw)
+    lda = LinearDiscriminantAnalysis().fit(X, y)
+    logit = LogisticRegression(penalty=None, max_iter=5000).fit(X, y)
+    print(f"{tag:12s} coef direction cos = {cos_sim(lda.coef_[0], logit.coef_[0]):.3f}",
+          f"| LDA acc = {lda.score(X, y):.3f}, logit acc = {logit.score(X, y):.3f}")
+```
+
+Equal covariances: directions align (cos ≈ 1) — the two are near-proportional estimates of the same boundary. Unequal covariances: LDA's shared-covariance assumption is false → its single pooled boundary is mis-specified (QDA is the fix), while logistic, modeling only P(y|x), flexibly fits *some* linear boundary (though now the Bayes boundary itself is quadratic — both are limited). Heavy tails: LDA's means/covariances are moment-based and outlier-driven; the logistic likelihood, depending only on y given the score, is typically *more* robust. Moral (Efron/Friedman): generative models win when their density assumptions hold (faster convergence, fewer parameters); discriminative models are safer when assumptions are questionable.
+</details>
+
+## 6. Complex Questions
+
+**C1 (logistic × [2.6–2.7](../part-02-linear-regression/02-6-categorical-predictors.qmd)).** Build a treatment × biomarker model: `logit(P(response)) ~ treatment * biomarker_high`. (a) Fit and interpret each coefficient in odds-ratio language, including the interaction. (b) Convert the interaction into a *difference of log-odds* — then show numerically that a positive interaction in log-odds can correspond to a *negative* difference in absolute risk change at high baselines. What does this imply for presenting "effect modification" to non-statistical audiences?
+
+**C2 (logistic × [4.6 Tuning](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd) × [1.3 Bayes](../part-01-statistics-bridge/01-3-probability-essentials.qmd)).** Train on a case–control dataset with 50% positives (sampled prevalence ≠ population prevalence of 5%). Show that (unpenalized) logistic regression estimates coefficients consistently but its intercept — hence all predicted probabilities — is miscalibrated by the sampling ratio; correct it with the logit-offset correction (subtract log(sampling odds)) and verify calibration before/after on a population-prevalence test set. This intercept-transport trick is standard in epidemiology and worth owning.
+
+## 7. Summary
+
+- p = σ(linear score): bounded probabilities, Bernoulli likelihood, MLE by IRLS.
+- Coefficients are log-odds ratios — translate consciously (odds ≠ risk), and standardize before comparing.
+- sklearn penalizes by default; statsmodels gives unpenalized MLE inference — know which model you fitted.
+- Separation breaks the MLE; regularization is the practical answer, warnings the tell.
+- Boundary: score = 0; intercept shifts it, slopes rotate it; probabilities are smooth across it.
+- Additivity holds in log-odds: interactions multiply odds, not risks — mind the audience.
+- Discriminating classes without a parametric story is next: [3.4 Generative classifiers (LDA, QDA, Naive Bayes)](03-4-generative-classifiers.qmd).

@@ -60,14 +60,35 @@ Status flow: **Draft → Drilled → Reviewed → Published**
 | 1.3 Probability essentials | T1 | Published |
 | 1.4 Statistical inference | T1 | Published |
 | 1.5 Resampling intuition | T1 | Published |
-| Part 2 — Linear regression (10 pages) | T1 | Not started (stubs) |
-| Part 3 — Classification & GLMs (8 pages) | T1 | Not started |
-| Part 4 — Validation & model selection (6 pages) | T1 | Not started (stubs) |
-| Part 5 — Regularization & high dimensions (6 pages) | T1 | Not started |
+| 2.1 The regression problem | T1 | Published |
+| 2.2 Simple linear regression | T1 | Published |
+| 2.3 Accuracy of the coefficients | T1 | Published |
+| 2.4 Accuracy of the full model | T1 | Published |
+| 2.5 Multiple linear regression | T1 | Published |
+| 2.6 Categorical predictors | T1 | Published |
+| 2.7 Interaction terms | T1 | Published |
+| 2.8 Nonlinear feature transformations | T1 | Published |
+| 2.9 KNN regression | T1 | Published |
+| 2.10 Regression assumptions & diagnostics | T1 | Published |
+| 3.1 Classification fundamentals | T1 | Published |
+| 3.1.5 AUPRC for skewed datasets | T1 | Published |
+| 3.2 Why not linear regression for categories? | T1 | Published |
+| 3.3 Logistic regression | T1 | Published |
+| 3.4 Generative classifiers (LDA, QDA, NB) | T1 | Published |
+| 3.5 KNN classification | T1 | Published |
+| 3.6 Generalized linear models | T1 | Published |
+| 3.7 Classification model comparison | T1 | Published |
+| 4.1 The generalization problem | T1 | Published |
+| 4.2 The validation set approach | T1 | Published |
+| 4.3 Cross-validation | T1 | Published |
+| 4.4 The bias–variance trade-off | T1 | Published |
+| 4.5 The bootstrap | T1 | Published |
+| 4.6 Hyperparameter tuning | T1 | Published |
+| Part 5 — Regularization & high dimensions (6 pages) | T1 | Not started (5.1 stub) |
 | Part 6 — Nonlinear regression (7 pages) | T1 | Not started |
 | Part 7 — Trees & ensembles (7 pages) | T1 | Not started |
 | Part 8 — SVMs (6 pages) | T1 | Not started |
-| Part 9 — Unsupervised (9.1–9.6 T1; 9.7 T3) | mixed | Not started |
+| Part 9 — Unsupervised (9.1–9.6 T1; 9.7 T3) | mixed | Not started (stubs) |
 | Part 10 — Deep learning (10.x) | T3 | Not started |
 | Part 11 — Survival analysis (11.x) | T1 | Not started |
 | Part 12 — Multiple testing (12.1–12.5 T1; 12.6 T2) | mixed | Not started (stubs) |

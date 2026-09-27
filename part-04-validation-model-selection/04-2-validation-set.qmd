@@ -1,0 +1,471 @@
+---
+title: "4.2 The Validation Set Approach"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - scikit-learn
+    - matplotlib
+---
+
+The simplest honest estimator: hold out a chunk of data, fit on the rest, evaluate once on the holdout. It is the prototype of every validation scheme — and its weaknesses (variance, wasted data, single-number confidence) are exactly the weaknesses the rest of Part 4 exists to fix.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+**Protocol**: split rows into training and validation sets (say 70/30). Fit the model on training. Compute the metric once on validation. That number estimates out-of-sample error.
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(0)
+n = 200
+x = rng.uniform(0, 1, (n, 1))
+y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, 0.3, n)
+
+X_tr, X_va, y_tr, y_va = train_test_split(x, y, test_size=0.3, random_state=1)
+
+def features(X):                       # cubic basis (truth-agnostic choice)
+    return np.c_[X, X**2, X**3]
+
+fit = LinearRegression().fit(features(X_tr), y_tr)
+val_mse = np.mean((y_va - fit.predict(features(X_va)))**2)
+print(f"validation MSE = {val_mse:.4f}")
+```
+
+**The weaknesses, demonstrated rather than described.** First, *variance*: the estimate depends heavily on which rows land in validation:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(2)
+x = rng.uniform(0, 1, (200, 1))
+y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, 0.3, 200)
+
+def features(X):
+    return np.c_[X, X**2, X**3]
+
+val_mses = []
+for seed in range(200):
+    X_tr, X_va, y_tr, y_va = train_test_split(x, y, test_size=0.3, random_state=seed)
+    fit = LinearRegression().fit(features(X_tr), y_tr)
+    val_mses.append(np.mean((y_va - fit.predict(features(X_va)))**2))
+val_mses = np.array(val_mses)
+
+fig, ax = plt.subplots(figsize=(7, 3.2))
+ax.hist(val_mses, bins=30, color="steelblue")
+ax.axvline(val_mses.mean(), color="red", label=f"mean = {val_mses.mean():.4f}")
+ax.set(xlabel="validation MSE", title=f"200 validation splits: SD = {val_mses.std():.4f}")
+ax.legend()
+plt.show()
+```
+
+Second, *bias from smaller training*: validation-error estimates are pessimistic because the model is trained on only 70% of the data — deployment would use 100%:
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(3)
+x = rng.uniform(0, 1, (200, 1))
+y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, 0.3, 200)
+
+def features(X):
+    return np.c_[X, X**2, X**3]
+
+xte = rng.uniform(0, 1, (10000, 1))
+yte = np.sin(2 * np.pi * xte).ravel() + rng.normal(0, 0.3, 10000)
+
+for frac in [0.2, 0.5, 0.8]:
+    mses = []
+    for seed in range(100):
+        X_tr, X_va, y_tr, y_va = train_test_split(x, y, train_size=frac, random_state=seed)
+        fit = LinearRegression().fit(features(X_tr), y_tr)
+        mses.append(np.mean((yte - fit.predict(features(xte)))**2))  # TRUE error of 70%-trained model
+    print(f"train frac {frac}: true error of this-size model = {np.mean(mses):.4f}")
+print("the validation estimate reflects the SMALLER training set, not deployment")
+```
+
+## 2. Concept Questions
+
+1. Your validation MSE is 0.31 on one 70/30 split. What is the (approximate) standard error of that single number if σ² ≈ 0.09 and n_validation = 60 — and what does it say about reporting "0.31" to three decimals?
+2. Why is validation error said to *overestimate* the error of the final model refit on all data?
+3. Which two competing pressures determine the validation fraction, and what happens at the extremes (10% vs 50% holdout)?
+4. You use the validation set to pick among 15 models, then report the winner's validation MSE. Which error from [4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd) have you committed, and what's the minimal fix?
+5. For a time-ordered dataset, what must change in the protocol, and why is a random split actively wrong?
+
+<details>
+<summary>Answers</summary>
+
+1. SE(MSE) ≈ σ²·√(2/n_val) ≈ 0.09 × √(2/60) ≈ 0.0164. So 0.31 ± 0.033 (95%): the third decimal is noise; report 0.31 ± 0.02 or the CI — or average over splits ([4.3](../part-04-validation-model-selection/04-3-cross-validation.qmd)).
+2. The validation model trained on 70% of data; with less data its error is higher than the refit-on-100% model's ([4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd)'s data-rescue law). The estimator is pessimistically biased for the deployment model.
+3. Big validation → precise estimate but badly undertrained model (pessimistic, wasteful); small validation → near-deployment training but noisy estimate. 20–30% is the customary compromise; CV removes the trade-off.
+4. Selection on the validation set converts it into a second training set — the winner's number is an order statistic, inflated. Minimal fix: a third, untouched test split; the full fix is nested CV ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)).
+5. Time-ordered data needs *forward chaining*: train on the past, validate on the future (random splits let the model train on the future — temporal leakage). Metrics then answer "how well do we predict tomorrow," the only deployment-honest question.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import train_test_split
+X = np.arange(20).reshape(-1, 1)
+tr, va = train_test_split(X, test_size=0.25, random_state=0)
+print("validation rows:", sorted(va.ravel()))
+print("no overlap:", len(set(tr.ravel()) & set(va.ravel())) == 0)
+tr2, va2 = train_test_split(X, test_size=0.25, random_state=0)
+print("same seed -> same split:", np.array_equal(va, va2))
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import train_test_split
+rng = np.random.default_rng(1)
+y = np.r_[np.ones(10), np.zeros(90)].astype(int)
+_, va = train_test_split(y, test_size=0.2, random_state=0)
+print("positives in unstratified validation:", va.sum(), "of 2 expected")
+_, va_s = train_test_split(y, test_size=0.2, stratify=y, random_state=0)
+print("positives in stratified validation: ", va_s.sum())
+```
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+rng = np.random.default_rng(2)
+x = rng.uniform(0, 1, (100, 1))
+y = (3 * x).ravel() + rng.normal(0, 1, 100)
+X_tr, X_va, y_tr, y_va = train_test_split(x, y, test_size=0.3, random_state=3)
+fit = LinearRegression().fit(X_tr, y_tr)
+print("val MSE:", np.mean((y_va - fit.predict(X_va))**2).round(4))
+print("≈ σ² = 1.0? the model is essentially unbiased here")
+```
+
+```{pyodide}
+import numpy as np
+# validation-error SE from its own binomial-style formula
+rng = np.random.default_rng(4)
+n_val = 50
+y_true = rng.normal(10, 2, n_val)
+y_pred = np.full(n_val, 10.0)
+squared_errs = (y_true - y_pred)**2
+print("validation MSE:", squared_errs.mean().round(4))
+print("its SE:", (squared_errs.std(ddof=1)/np.sqrt(n_val)).round(4))
+print("-> report MSE ± SE, never 3 decimals alone")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Validation-vs-truth calibration: for a fixed data-generating process, compute (a) the true test MSE of a model trained on 70% of n = 150 (evaluated on 100k fresh points), and (b) the distribution of single-split validation estimates over 300 seeds. Report the mean of (b) vs (a), the SD of (b), and the fraction of 95% intervals (estimate ± 1.96·SE, SE from validation residuals) that contain (a). Is the validation estimator centered where it claims?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(5)
+x = rng.uniform(0, 1, (150, 1))
+y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, 0.3, 150)
+
+def features(X):
+    return np.c_[X, X**2, X**3]
+
+xte = rng.uniform(0, 1, (100000, 1))
+yte = np.sin(2 * np.pi * xte).ravel() + rng.normal(0, 0.3, 100000)
+
+X_tr, X_va, y_tr, y_va = train_test_split(x, y, test_size=0.3, random_state=0)
+truth = np.mean((yte - LinearRegression().fit(features(X_tr), y_tr)
+                 .predict(features(xte)))**2)
+print(f"true test MSE (70%-trained model): {truth:.4f}")
+
+estimates, ses, covered = [], [], 0
+for seed in range(300):
+    X_tr, X_va, y_tr, y_va = train_test_split(x, y, test_size=0.3, random_state=seed)
+    fit = LinearRegression().fit(features(X_tr), y_tr)
+    errs = (y_va - fit.predict(features(X_va)))**2
+    estimates.append(errs.mean())
+    se = errs.std(ddof=1) / np.sqrt(len(errs))
+    ses.append(se)
+    covered += abs(errs.mean() - truth) <= 1.96 * se
+
+print(f"mean validation estimate: {np.mean(estimates):.4f} over 300 splits")
+print(f"SD across splits: {np.std(estimates):.4f}; typical SE within a split: {np.mean(ses):.4f}")
+print(f"95% interval coverage of the truth: {covered/300:.2f}")
+```
+
+The per-split mean matches the truth (the estimator is *centered* for the 70%-trained model); within-split SEs describe split-to-split scatter well (coverage ≈ 0.93–0.95). The two failure modes to remember: it's centered for the smaller training set (pessimism for deployment), and single-split numbers carry ±SE-sized error bars people rarely print.
+</details>
+
+**Exercise 2.** The learning-curve use case: for n_train ∈ {15, 30, 60, 120} (from a pool of 600), estimate test MSE by validation on a fixed 200-row holdout, replicating each size 100 times. Plot mean ± SD vs n_train. Identify where the curve flattens ("more data stops helping") and connect to [4.1 Exercise 2](../part-04-validation-model-selection/04-1-generalization-problem.qmd)'s law — what does the flatten point say about how much more data to collect?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(6)
+def features(X):
+    return np.c_[X, X**2, X**3]
+
+x_pool = rng.uniform(0, 1, (600, 1))
+y_pool = np.sin(2 * np.pi * x_pool).ravel() + rng.normal(0, 0.3, 600)
+X_hold = rng.uniform(0, 1, (200, 1))
+y_hold = np.sin(2 * np.pi * X_hold).ravel() + rng.normal(0, 0.3, 200)
+
+sizes = [15, 30, 60, 120]
+means, sds = [], []
+for m in sizes:
+    vals = []
+    for rep in range(100):
+        idx = rng.choice(600, m, replace=False)
+        fit = LinearRegression().fit(features(x_pool[idx]), y_pool[idx])
+        vals.append(np.mean((y_hold - fit.predict(features(X_hold)))**2))
+    means.append(np.mean(vals)); sds.append(np.std(vals))
+
+fig, ax = plt.subplots(figsize=(7, 3.2))
+ax.errorbar(sizes, means, yerr=sds, marker="o", capsize=4)
+ax.set(xlabel="training size", ylabel="validation MSE", title="Learning curve (mean ± SD)")
+plt.show()
+```
+
+The curve falls steeply then flattens: past the elbow, additional samples buy little — the residual error is dominated by noise floor + bias, not estimation variance. The flatten point is the empirical answer to "how much data is enough," and it shifts left or right with model flexibility (simpler models flatten earlier).
+</details>
+
+**Exercise 3.** Validation-set selection inflation, in miniature: 20 candidate polynomial degrees (1–20) evaluated on ONE validation split; record the winner's validation MSE. Repeat over 300 datasets; report the mean winner-vs-fixed-degree-3 validation ratio under a *sinusoidal truth* where degree 3 is genuinely near-optimal. Compare with selecting by 5-fold CV instead (averaged within each dataset). How much does honest selection reduce the inflation?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(7)
+
+def features(X, d):
+    return np.c_[[X**j for j in range(1, d + 1)]].T
+
+def one_dataset(seed):
+    r = np.random.default_rng(seed)
+    x = r.uniform(0, 1, 80)
+    y = np.sin(2 * np.pi * x) + r.normal(0, 0.3, 80)
+    X_tr, X_va, y_tr, y_va = train_test_split(x, y, test_size=0.3, random_state=seed)
+
+    val_scores, cv_scores = [], []
+    for d in range(1, 21):
+        ftr, fva = features(X_tr, d), features(X_va, d)
+        m = LinearRegression().fit(ftr, y_tr)
+        val_scores.append(np.mean((y_va - m.predict(fva))**2))
+        # CV inside training for the honest variant
+        idx = r.permutation(len(y_tr))
+        folds = np.array_split(idx, 5)
+        cv_s = []
+        for f in folds:
+            tr_i = np.setdiff1d(idx, f)
+            mf = LinearRegression().fit(features(X_tr[tr_i], d), y_tr[tr_i])
+            cv_s.append(np.mean((y_tr[f] - mf.predict(features(X_tr[f], d)))**2))
+        cv_scores.append(np.mean(cv_s))
+
+    w_val = np.argmin(val_scores) + 1
+    w_cv = np.argmin(cv_scores) + 1
+    # true error of each winner on big fresh data
+    xte = r.uniform(0, 1, 5000)
+    yte = np.sin(2 * np.pi * xte) + r.normal(0, 0.3, 5000)
+    e_val = np.mean((yte - LinearRegression().fit(features(X_tr, w_val), y_tr)
+                     .predict(features(xte, w_val)))**2)
+    e_cv = np.mean((yte - LinearRegression().fit(features(X_tr, w_cv), y_tr)
+                    .predict(features(xte, w_cv)))**2)
+    return e_val, e_cv
+
+out = np.array([one_dataset(s) for s in range(300)])
+print(f"winner selected on 1 validation split: true MSE {out[:,0].mean():.4f}")
+print(f"winner selected on 5-fold CV:          true MSE {out[:,1].mean():.4f}")
+```
+
+CV-based selection picks degrees closer to optimal and its winners' *true* errors are lower — the single validation split's noisier estimates select flashy degrees (selected-on-noise). The deeper lesson though: in *both* cases the winner's own selection score must not be reported as performance; the numbers here are TRUE errors of refit winners, which is why they're comparable at all.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **One number, no error bar** — the validation estimate's SE is computable from the validation residuals (drill 4) and *should* be printed; most published single-split numbers would fail that audit.
+- **The holdout is a budget too**: every model evaluated on it spends it ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd)); "validation" that saw 15 models is a training set wearing a costume.
+- **Pessimism by undertraining** — correction strategies exist (e.g., learning-curve extrapolation), but the clean fix is CV, which refits on (K−1)/K of data per fold.
+- **Stratification** for classification, **grouping** for clustered data, **temporal order** for time series — the split's *design* is part of the estimator ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd)).
+- **Post-selection refit**: after choosing on validation, refit on ALL data before deployment — but then the validation number describes the *pre-refit* model, not the deployed one; only CV/nested schemes price the full pipeline.
+- **Validation on a different distribution than deployment** (site shift, prevalence shift) measures the wrong thing — the split cannot fix a sampling problem ([3.7 C2](../part-03-classification-glm/03-7-model-comparison.qmd)).
+
+### Read & Refactor AI Code
+
+This AI-generated pipeline has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import StandardScaler
+
+rng = np.random.default_rng(8)
+n = 300
+X = rng.normal(0, 1, (n, 4))
+y = X @ [1, -1, 0.5, 0] + rng.normal(0, 1, n)
+
+# BUG 1: scale before split
+scaler = StandardScaler().fit(X)
+Xs = scaler.transform(X)
+X_tr, X_va, y_tr, y_va = train_test_split(Xs, y, random_state=0)
+
+# BUG 2: choose one of 10 feature subsets on validation, report on validation
+subsets = {k: X_tr[:, :k] for k in range(1, 5)}
+scores = {k: LinearRegression().fit(v, y_tr).score(X_va[:, :k], y_va)
+          for k, v in subsets.items()}
+best = max(scores, key=scores.get)
+print("winner:", best, scores)
+
+# BUG 3: refit on all data and quote the old validation score
+final = LinearRegression().fit(X[:, :int(best)], y)
+print("deployed-model performance:", round(scores[best], 4))
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Pre-split scaling** leaks validation statistics into training inputs ([0.5](../part-00-python-foundations/00-5-data-splitting.qmd)). Scale inside the training fold only.
+2. **Selection and report on the same holdout**: winner's score is an order statistic ([4.1 Q2](../part-04-validation-model-selection/04-1-generalization-problem.qmd)). Reserve a third split, or select by CV.
+3. **Score transplant**: the validation number belongs to the 70%-trained model; the deployed all-data model's performance was never estimated. Estimate the full pipeline honestly (CV over the entire choose-and-fit procedure).
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.model_selection import train_test_split, cross_val_score, KFold
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+
+rng = np.random.default_rng(8)
+n = 300
+X = rng.normal(0, 1, (n, 4))
+y = X @ [1, -1, 0.5, 0] + rng.normal(0, 1, n)
+
+# selection by CV (training side only), scored honestly by the same CV
+cv = KFold(5, shuffle=True, random_state=0)
+for k in range(1, 5):
+    pipe = make_pipeline(StandardScaler(), LinearRegression())
+    s = cross_val_score(pipe, X[:, :k], y, cv=cv).mean()
+    print(f"k={k}: CV R2 {s:.4f}")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Derive the SE of a validation MSE estimate: given validation residuals e_i with mean-zero assumption violations aside, SE = sd(e²)/√(n_val). Compare, by simulation, this plug-in SE to the observed SD of validation MSEs across 500 splits. When do they disagree (name the distributional cause), and what does the disagreement do to naive "± SE" error bars?
+
+<details>
+<summary>Hint</summary>
+
+e² has a skewed distribution (χ²-like when errors are Gaussian); its mean's SE uses e²'s own variance — but heavy tails or heteroscedasticity make the plug-in unstable.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(9)
+x = rng.uniform(0, 1, (150, 1))
+y = np.sin(2 * np.pi * x).ravel() + rng.normal(0, 0.3, 150)
+def features(X):
+    return np.c_[X, X**2, X**3]
+
+plug, observed = [], []
+all_val = []
+for seed in range(500):
+    X_tr, X_va, y_tr, y_va = train_test_split(x, y, test_size=0.3, random_state=seed)
+    fit = LinearRegression().fit(features(X_tr), y_tr)
+    e2 = (y_va - fit.predict(features(X_va)))**2
+    plug.append(e2.std(ddof=1)/np.sqrt(len(e2)))
+    all_val.append(e2.mean())
+observed = np.std(all_val)
+print(f"mean plug-in SE: {np.mean(plug):.5f} | observed SD across splits: {observed:.5f}")
+```
+
+Under Gaussian errors the plug-in SE is unbiased for the across-split SD (they estimate the same sampling variability); they diverge when errors are heavy-tailed (e² 's variance is dominated by rare huge residuals, so the plug-in is itself noisy — sometimes 2× off) or heteroscedastic (validation mix shifts). Consequence: treat "± SE" bars on single-split estimates as approximate, and prefer averaging across splits, which makes the across-split SD directly measurable.
+</details>
+
+**Q2.** Your deployment population drifts: the validation set was drawn from distribution P, deployment sees Q (same relationship, different x-mix). Design a simulation where the validation estimate is *unbiased for P* and *biased for Q*, quantify the bias as a function of the drift's magnitude, and derive the reporting rule for validation estimates under anticipated drift (report per-stratum estimates or reweight to Q's mix — never the pooled number alone).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from sklearn.linear_model import LinearRegression
+
+rng = np.random.default_rng(10)
+# P: x ~ U(0,1); Q: x ~ U(0.8, 1.4) (drift upward)
+# truth: y = sin(2πx) + 0.3ε — model fit on P, applied to both
+def make(n, r, lo=0, hi=1):
+    x = r.uniform(lo, hi, (n, 1))
+    y = np.sin(2 * np.pi * x).ravel() + r.normal(0, 0.3, n)
+    return x, y
+
+xp, yp = make(300, rng)
+fit = LinearRegression().fit(np.c_[xp, xp**2, xp**3], yp)
+
+xq, yq = make(20000, rng, 0.8, 1.4)
+err_PQ = np.mean((yq - fit.predict(np.c_[xq, xq**2, xq**3]))**2)
+
+xv, yv = make(90, rng)                        # a fresh P-validation set
+err_P = np.mean((yv - fit.predict(np.c_[xv, xv**2, xv**3]))**2)
+print(f"validation estimate (P): {err_P:.4f}   truth on Q: {err_PQ:.4f}")
+print(f"bias for deployment = {err_PQ - err_P:+.4f} — the pooled number hides this")
+```
+
+The validation number is a perfectly good estimate of error-on-P and a biased estimate of error-on-Q; the bias grows with how much Q's x-mass sits outside (or disproportionately inside) regions where the model misfits (here: extrapolation region x > 1). Rule: validation estimates are *distribution-conditional*; under anticipated drift, report stratified/reweighted errors — the pooled MSE is a weighted average with weights (P's) that deployment doesn't have. This is covariate shift, and it converts "validation" from a statistic into a design decision.
+</details>
+
+## 6. Complex Questions
+
+**C1 (validation × [0.5 stratification](../part-00-python-foundations/00-5-data-splitting.qmd) × [3.1.5 AUPRC](../part-03-classification-glm/03-1-5-auprc.qmd)).** On a 1%-positive dataset with n = 1000, compare unstratified vs stratified 70/30 validation for estimating AUPRC: 200 splits each, report the spread (SD and IQR) of the estimates. Which procedure's estimate would you publish, and what sample size of positives would make the unstratified version tolerable (verify empirically)?
+
+**C2 (validation × [4.3 CV](../part-04-validation-model-selection/04-3-cross-validation.qmd) preview).** Using the same dataset and model, run the head-to-head: 200 independent single 70/30 splits vs 5-fold CV (repeated 40 times) as estimators of the same quantity. Compare (a) bias (vs a huge fresh test truth), (b) variance across repetitions, (c) total compute (fits per estimate). You should find CV's variance advantage at 5× the compute — the explicit price list that makes [4.3](../part-04-validation-model-selection/04-3-cross-validation.qmd)'s conventions legible.
+
+## 7. Summary
+
+- Validation = fit on one part, evaluate once on an untouched part — the prototype of honest estimation.
+- Its estimate is noisy (single split) and pessimistic (smaller training); both defects are measurable and both are CV's motivation.
+- The validation set is a budget: selection on it converts it to training; keep a third split or use nested CV.
+- Print uncertainty: plug-in SEs from validation residuals, or split-to-split SDs — never a bare 3-decimal number.
+- Split design (stratify, group, temporal order) is part of the estimator, not an implementation detail.
+- Estimates are distribution-conditional: drift between validation and deployment breaks the number, not the math.
+- The fix for both defects — reuse every row for validation while keeping folds clean — is cross-validation: [4.3 Cross-validation](../part-04-validation-model-selection/04-3-cross-validation.qmd).
