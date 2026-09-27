@@ -25,7 +25,6 @@ Positive when variables move together, negative when opposed — but its magnitu
 $$r = \frac{\text{cov}(x,y)}{s_x s_y} \in [-1, 1]$$
 
 ```{pyodide}
-#| autorun: true
 import numpy as np
 
 x = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
@@ -41,7 +40,6 @@ Key reading: **r measures linear association strength, not slope** (slope lives 
 **Spearman correlation** = Pearson correlation applied to **ranks**. It detects any *monotone* relationship and shrugs at outliers:
 
 ```{pyodide}
-#| autorun: true
 import numpy as np
 from scipy import stats
 
@@ -53,7 +51,6 @@ print(stats.pearsonr(x, np.exp(x)).statistic.round(3))  # < 1 — curvature cost
 And the classical caution — **curvature**: quadratic data can have r ≈ 0 over a symmetric range even though the variables are perfectly dependent:
 
 ```{pyodide}
-#| autorun: true
 #| fig-width: 7
 #| fig-height: 3
 import numpy as np

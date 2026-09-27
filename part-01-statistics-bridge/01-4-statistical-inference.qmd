@@ -24,7 +24,6 @@ $$\bar{x} \pm t_{0.975,\,n-1} \cdot \frac{s}{\sqrt{n}}$$
 where the t-quantile widens the interval for small samples. Interpretation (get this exactly right): if the sampling procedure were repeated many times, **95% of the resulting intervals would contain the true mean** — it is a property of the procedure, not a 95% probability statement about this particular interval.
 
 ```{pyodide}
-#| autorun: true
 import numpy as np
 from scipy import stats
 
@@ -45,7 +44,6 @@ print("scipy CI:", tuple(round(v, 3) for v in ci))
 **Hypothesis test logic.** State $H_0$ (no effect) → compute a statistic measuring departure from $H_0$ → the **p-value** is P(data at least this extreme | $H_0$). Small p = the null struggles to explain the data. It is *not* P($H_0$ | data).
 
 ```{pyodide}
-#| autorun: true
 import numpy as np
 from scipy import stats
 
@@ -64,7 +62,6 @@ print(f"Welch t = {res2.statistic:.3f}, p = {res2.pvalue:.4f}")
 **Errors and power.** Two ways to be wrong: **Type I** — declare an effect under a true null (rate = α); **Type II** — miss a real effect (rate = β); **power** = 1 − β, driven by effect size, n, α, and noise.
 
 ```{pyodide}
-#| autorun: true
 import numpy as np
 rng = np.random.default_rng(0)
 

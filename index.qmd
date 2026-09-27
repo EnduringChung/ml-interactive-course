@@ -62,7 +62,6 @@ Every subtopic page follows the same seven-section template, so your study loop 
 Run this cell to confirm the live engine works on your device:
 
 ```{pyodide}
-#| autorun: true
 #| fig-width: 7
 #| fig-height: 3.5
 import numpy as np

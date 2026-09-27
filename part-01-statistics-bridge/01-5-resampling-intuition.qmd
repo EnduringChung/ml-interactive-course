@@ -19,7 +19,6 @@ When the formula for an uncertainty is messy or unknown — a median, a differen
 **The bootstrap** treats your sample as a stand-in for the population: draw new samples **with replacement**, same size as the original, recompute the statistic, repeat. The variability across bootstrap replicates mimics the sampling variability of the statistic.
 
 ```{pyodide}
-#| autorun: true
 import numpy as np
 from scipy import stats
 
@@ -34,7 +33,6 @@ print(f"mean of data: {x.mean():.2f}, bootstrap 95% CI = ({lo:.2f}, {hi:.2f})")
 Let's do that cleanly for the *median* — the statistic where formulas hurt:
 
 ```{pyodide}
-#| autorun: true
 import numpy as np
 from scipy import stats
 
@@ -49,7 +47,6 @@ print(f"median = {np.median(x):.2f}, bootstrap 95% CI = ({lo:.2f}, {hi:.2f})")
 **The permutation test** answers a different question — "is this association real?" — by **shuffling labels** to simulate a world where the null is exactly true, and asking how extreme the real statistic is among the shuffled ones:
 
 ```{pyodide}
-#| autorun: true
 import numpy as np
 
 rng = np.random.default_rng(1)
@@ -70,7 +67,6 @@ print(f"observed diff = {observed:.2f}, permutation p = {(count + 1) / (10_000 +
 **The jackknife** — leave one out, recompute, look at the spread — estimates bias and SE from n recomputations (cheap, deterministic, less flexible):
 
 ```{pyodide}
-#| autorun: true
 import numpy as np
 
 x = np.array([2.0, 3.5, 3.9, 4.1, 5.0, 8.0])

@@ -25,7 +25,6 @@ $$s^2_{\text{pop}} = \frac{1}{n}\sum (x_i - \bar{x})^2 \qquad s^2_{\text{sample}
 The $n-1$ (**Bessel's correction**) in the sample version compensates for the fact that $\bar{x}$ was *estimated from the same data* — deviations from an estimated center are systematically too small. Standard deviation is the square root, back in data units.
 
 ```{pyodide}
-#| autorun: true
 import numpy as np
 
 x = np.array([2.0, 4.0, 4.0, 4.0, 5.0, 5.0, 7.0, 9.0])
@@ -40,7 +39,6 @@ print("sd  (sample):        ", np.std(x, ddof=1))
 **Position and shape.** **Quartiles** split the sorted data into quarters; the **IQR** (Q3 − Q1) is the spread of the middle half — robust to outliers. **Skewness** measures asymmetry (positive = right tail).
 
 ```{pyodide}
-#| autorun: true
 import numpy as np
 from scipy import stats
 

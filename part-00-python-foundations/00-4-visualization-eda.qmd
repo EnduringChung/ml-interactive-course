@@ -18,7 +18,6 @@ Exploratory Data Analysis (EDA) is the discipline of interrogating data **before
 matplotlib has two layers: the **pyplot state machine** (`plt.plot(...)`) for quick plots, and the **object-oriented interface** (`fig, ax = plt.subplots()`; then `ax.plot(...)`) which is the right habit for anything non-trivial. Anatomy you should be able to name: `Figure` (the canvas), `Axes` (one plot panel), axis (with limits, ticks, labels), title, legend.
 
 ```{pyodide}
-#| autorun: true
 #| fig-width: 7
 #| fig-height: 3.5
 import numpy as np
@@ -42,7 +41,6 @@ plt.show()
 The three plots that carry 90% of EDA:
 
 ```{pyodide}
-#| autorun: true
 #| fig-width: 8.5
 #| fig-height: 3
 import numpy as np
@@ -71,7 +69,6 @@ plt.show()
 5. Boxplots by group — does grouping explain spread?
 
 ```{pyodide}
-#| autorun: true
 import numpy as np
 import pandas as pd
 

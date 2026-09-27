@@ -23,7 +23,6 @@ Probability is the language in which every model speaks: a predicted probability
 - **Bayes:** $P(A \mid B) = \dfrac{P(B \mid A)\,P(A)}{P(B)}$ — the flip between "evidence given cause" and "cause given evidence."
 
 ```{pyodide}
-#| autorun: true
 # Complement: P(at least one six in 4 dice rolls)
 p_none = (5 / 6) ** 4
 print(1 - p_none)                        # ≈ 0.5177 — more likely than not!
@@ -47,7 +46,6 @@ print(f"PPV = {ppv:.3f}")                # 0.090 — 9%! (intuition says 99%)
 | **Normal** | sums/averages of many small effects (CLT) | μ, σ | `stats.norm` |
 
 ```{pyodide}
-#| autorun: true
 from scipy import stats
 
 # Binomial: exactly 3 resistant cells out of 10, p = 0.5
@@ -64,7 +62,6 @@ print(stats.norm.ppf(0.975).round(6))    # 1.959964 — the inverse machine
 **Expectation and variance** are the distribution's center and spread: $E[X] = \sum x\,p(x)$; for the *sum* of independent variables, means add and variances add (this additive rule powers everything from portfolio risk to the SE of a mean).
 
 ```{pyodide}
-#| autorun: true
 import numpy as np
 rng = np.random.default_rng(0)
 

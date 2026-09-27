@@ -17,7 +17,6 @@ NumPy arrays are fast but anonymous — columns have no names, rows have no iden
 A **DataFrame** is a rectangular table: each **column** is a **Series** (a labeled 1-D array with one `dtype`), and rows share an **index**. Think: dict of columns + shared row labels.
 
 ```{pyodide}
-#| autorun: true
 import pandas as pd
 
 df = pd.DataFrame({
@@ -33,7 +32,6 @@ print(df.dtypes)          # object = text; float64/int64 = numeric
 **Two selectors, two jobs.** `loc` selects **by label**, `iloc` by **integer position**, and both use `[rows, columns]`:
 
 ```{pyodide}
-#| autorun: true
 import pandas as pd
 df = pd.DataFrame(
     {"expr": [12.5, 8.1, 15.2, 7.9], "tissue": ["tumor", "normal", "tumor", "normal"]},
@@ -48,7 +46,6 @@ print(df.loc[df["tissue"] == "tumor", "expr"])   # filter rows, pick one column
 **groupby** is the split–apply–combine engine and probably the single most used pandas verb:
 
 ```{pyodide}
-#| autorun: true
 import pandas as pd
 df = pd.DataFrame({
     "tissue": ["tumor", "normal", "tumor", "normal", "tumor"],
@@ -61,7 +58,6 @@ print(df.groupby("tissue")["expr"].agg(["mean", "std", "count"]))  # several at 
 **merging** joins two tables on a key — the same mental model as SQL joins:
 
 ```{pyodide}
-#| autorun: true
 import pandas as pd
 expr = pd.DataFrame({"gene": ["BRCA1", "TP53", "EGFR"], "log2fc": [1.2, -0.8, 2.5]})
 anno = pd.DataFrame({"gene": ["BRCA1", "TP53"], "chr": [17, 17]})
