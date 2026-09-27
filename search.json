@@ -1,0 +1,1133 @@
+[
+  {
+    "objectID": "part-04-validation-model-selection/04-4-bias-variance.html",
+    "href": "part-04-validation-model-selection/04-4-bias-variance.html",
+    "title": "Coming soon",
+    "section": "",
+    "text": "This page has not been published yet. It is scheduled in the build order and will follow the same seven-section template as every other page.\nCheck back soon — progress is tracked in the course home."
+  },
+  {
+    "objectID": "part-04-validation-model-selection/04-3-cross-validation.html",
+    "href": "part-04-validation-model-selection/04-3-cross-validation.html",
+    "title": "Coming soon",
+    "section": "",
+    "text": "This page has not been published yet. It is scheduled in the build order and will follow the same seven-section template as every other page.\nCheck back soon — progress is tracked in the course home."
+  },
+  {
+    "objectID": "part-04-validation-model-selection/04-1-generalization-problem.html",
+    "href": "part-04-validation-model-selection/04-1-generalization-problem.html",
+    "title": "Coming soon",
+    "section": "",
+    "text": "This page has not been published yet. It is scheduled in the build order and will follow the same seven-section template as every other page.\nCheck back soon — progress is tracked in the course home."
+  },
+  {
+    "objectID": "part-00-python-foundations/00-3-pandas.html",
+    "href": "part-00-python-foundations/00-3-pandas.html",
+    "title": "0.3 pandas",
+    "section": "",
+    "text": "NumPy arrays are fast but anonymous — columns have no names, rows have no identity, and mixed types are impossible. pandas adds labels. It is the Python twin of R’s data frame (the tidyverse’s tibble), and it will be your main tool for loading, cleaning, and summarizing data before any model sees it.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.3 pandas"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-3-pandas.html#basic-concept",
+    "href": "part-00-python-foundations/00-3-pandas.html#basic-concept",
+    "title": "0.3 pandas",
+    "section": "1. Basic Concept",
+    "text": "1. Basic Concept\nA DataFrame is a rectangular table: each column is a Series (a labeled 1-D array with one dtype), and rows share an index. Think: dict of columns + shared row labels.\n\n\n\n\n\n\nTwo selectors, two jobs. loc selects by label, iloc by integer position, and both use [rows, columns]:\n\n\n\n\n\n\ngroupby is the split–apply–combine engine and probably the single most used pandas verb:\n\n\n\n\n\n\nmerging joins two tables on a key — the same mental model as SQL joins:",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.3 pandas"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-3-pandas.html#concept-questions",
+    "href": "part-00-python-foundations/00-3-pandas.html#concept-questions",
+    "title": "0.3 pandas",
+    "section": "2. Concept Questions",
+    "text": "2. Concept Questions\n\nWhat is the difference between df[\"expr\"] and df[[\"expr\"]]?\nWhen do loc and iloc give different answers for the same-looking call?\nWhy does df[df[\"expr\"] &gt; 10][\"expr\"] = 0 silently fail to change df?\nWhat does how=\"left\" in merge guarantee, and what can it create?\nWhat does df.groupby(\"tissue\")[\"expr\"].transform(\"mean\") return, and how is it different from .mean()?\n\n\n\nAnswers\n\n\ndf[\"expr\"] returns a Series; df[[\"expr\"]] returns a one-column DataFrame. Many methods (.T, joining, multiple columns) behave differently on the two.\nWhen the index labels are not 0..n-1 (e.g. after filtering, or a named index). loc[\"S2\", ...] finds the row named S2; iloc[1, ...] finds the second row whatever it’s called.\nChained indexing: the first bracket may return a temporary copy, so the assignment can land on a copy that’s then discarded (the classic SettingWithCopyWarning). The correct form assigns through one loc call: df.loc[df[\"expr\"] &gt; 10, \"expr\"] = 0.\nLeft merge keeps every row of the left table; rows with no match on the right get NaN in the right columns (a merge “fan-out” can also multiply rows if the key is duplicated on the right).\ntransform(\"mean\") returns a Series the same length/index as df — the group mean broadcast back to each row — so you can subtract it to center within groups. .mean() returns one row per group.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.3 pandas"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-3-pandas.html#drills-exercises",
+    "href": "part-00-python-foundations/00-3-pandas.html#drills-exercises",
+    "title": "0.3 pandas",
+    "section": "3. Drills & Exercises",
+    "text": "3. Drills & Exercises\n\nDrills\nWe’ll build one small cohort table and predict outputs before running each cell.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nExercises (with solutions)\nExercise 1. From the cohort df above: build a summary table with one row per group showing mean age, mean marker, and patient count, then add a column is_old (age &gt; 50) and recompute the table splitting on both group and is_old.\n\n\nSolution\n\n\n\n\n\n\n\nThe agg(col=(\"source\", \"func\")) named aggregation syntax produces clean column names in one pass — no renaming afterwards.\n\nExercise 2. Merge a measurements table with a demographic table (left join), count missing matches, and fill missing site values with \"unknown\".\n\n\nSolution\n\n\n\n\n\n\n\nP03 exists in measurements but not demographics → left join keeps it, site becomes NaN. This exact pattern (merge → count NaN → decide policy) is 90% of real data integration.\n\nExercise 3. Given the wide expression table below (rows = genes, columns = samples), compute each gene’s mean and variance, keep genes with variance above 2.0, and melt the survivors into long format (gene, sample, value).\n\n\nSolution\n\n\n\n\n\n\n\nWide ↔︎ long reshaping (melt / pivot) is the pandas equivalent of tidyverse’s pivot_longer / pivot_wider. Most plotting and modeling tools want long format.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.3 pandas"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-3-pandas.html#advanced-information-pitfalls",
+    "href": "part-00-python-foundations/00-3-pandas.html#advanced-information-pitfalls",
+    "title": "0.3 pandas",
+    "section": "4. Advanced Information & Pitfalls",
+    "text": "4. Advanced Information & Pitfalls\n\nChained assignment is the #1 pandas bug. df[df.a &gt; 0][\"b\"] = 1 may write to a temporary copy. Always: single loc call → df.loc[mask, \"b\"] = 1. (pandas 3.0’s copy-on-write makes chained assignment fail loudly; the pyodide pandas here is 2.x, where it can still silently no-op.)\ninplace=True is deprecated style. It mutates the object you may not own and prevents method chaining. Prefer df = df.dropna() or df.dropna(subset=[\"marker\"], inplace=False).\nIndex is not “row number”. After filtering, .iloc[0] and .index[0] diverge. Reset with reset_index(drop=True) when position and label must agree again.\nmerge can silently multiply rows if the key is duplicated on either side — always check len(result) vs len(left) and result[\"key\"].value_counts().\n== on a column with NaN gives False, never NaN: df[df[\"x\"] == np.nan] matches nothing. Use df[\"x\"].isna().\nObject dtype columns are slow (Python objects, not arrays). Convert strings to category when few distinct values; parse dates with pd.to_datetime immediately.\ngroupby drops groups containing NaN keys by default (dropna=True) — a silent row-loss channel in reports.\n\n\nRead & Refactor AI Code\nThis AI-generated analysis has three bugs. Run it, observe, fix.\n\n\n\n\n\n\n\n\nWhat’s wrong, and the fixed version\n\n\nChained assignment: high may be a copy, so the mark never lands in df (see the printed 0). Fix with df.loc[df[\"value\"] &gt; 10, \"site\"] = \"HIGH\".\nNaN never equals NaN: count is 0 despite two NaNs. Fix: df[\"value\"].isna().sum().\nLoop + manual dict is slower, noisier, and easier to get wrong than groupby; also the loop’s .mean() results are fine here but the pattern invites index bugs. Fix: df.groupby(\"site\")[\"value\"].mean().",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.3 pandas"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-3-pandas.html#advanced-questions",
+    "href": "part-00-python-foundations/00-3-pandas.html#advanced-questions",
+    "title": "0.3 pandas",
+    "section": "5. Advanced Questions",
+    "text": "5. Advanced Questions\nQ1. A colleague merges a 20,000-row measurements table with a 200-row annotation table and the result has 23,117 rows. Diagnose the likely causes and give a defensive merge recipe.\n\n\nHint\n\nWhat does validate= in merge do? What does a duplicated key do to row counts?\n\n\n\nSolution\n\nThe key is duplicated: an m-to-many join multiplies rows (each left row matches every right row with the same key). Diagnosis: anno[\"gene\"].value_counts().head(), compare len(left), len(right), len(merged); check merged[\"gene\"].is_unique. Defensive recipe: merged = meas.merge(anno, on=\"gene\", how=\"left\", validate=\"m:1\") — raises instead of fanning out; or deduplicate anno.drop_duplicates(\"gene\") first; assert len(merged) == len(meas) afterwards. Choosing validate is documentation and a runtime guard.\n\nQ2. Explain the difference between apply, transform, and agg on a groupby object, and why apply is the dangerous one. Give a task where apply is genuinely required.\n\n\nSolution\n\nagg collapses each group to one value (len = n groups). transform returns one value per input row (len = n rows, group statistic broadcast back). apply returns whatever your function returns — a scalar, a Series, or a DataFrame — so pandas has to guess how to assemble results, which is slower and produces surprising shapes/indexes. Use agg/transform whenever possible; reach for apply when you need genuinely per-group multi-row computation, e.g. fitting a per-group linear model and returning its coefficients as a Series: df.groupby(\"site\").apply(lambda g: pd.Series(np.polyfit(g[\"x\"], g[\"y\"], 1), index=[\"slope\", \"intercept\"])). In modern pandas, prefer groupby(...).filter(...) for row selection and named agg for summaries to keep types predictable.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.3 pandas"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-3-pandas.html#complex-questions",
+    "href": "part-00-python-foundations/00-3-pandas.html#complex-questions",
+    "title": "0.3 pandas",
+    "section": "6. Complex Questions",
+    "text": "6. Complex Questions\nC1 (pandas × 0.4 Visualisation). Take the cohort df and produce, in long format, everything needed to plot marker distributions per group: which table shape does matplotlib’s ax.boxplot want (list of arrays) and which does a pandas .boxplot(by=...) want? Convert between wide and long to produce the same figure both ways — internalize why “tidy/long” is the interchange format and “wide” is a display choice.\nC2 (pandas × 1.2 Relationships). For the cohort data, compute the correlation matrix of the numeric columns (df.corr(numeric_only=True)), then compute it within groups (df.groupby(\"group\").corr(numeric_only=True)). Under what real-world condition can the pooled correlation have the opposite sign from every within-group correlation (Simpson’s paradox)? Construct a 3-line synthetic example demonstrating it.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.3 pandas"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-3-pandas.html#summary",
+    "href": "part-00-python-foundations/00-3-pandas.html#summary",
+    "title": "0.3 pandas",
+    "section": "7. Summary",
+    "text": "7. Summary\n\nA DataFrame is labeled columns of Series sharing an index; dtypes tells you what you actually have.\nloc = labels, iloc = positions; filtering is df.loc[mask, cols] — one call, no chaining.\ngroupby + agg/transform covers split–apply–combine; transform broadcasts back to row shape.\nmerge(how=\"left\", validate=\"m:1\") with NaN-counting afterwards is the safe join recipe.\nNaN: use .isna(), skipna defaults, and decide drop-vs-fill deliberately.\nWide is for humans, long is for machines; melt/pivot convert between them.\nNumbers on a page lie less than pictures — next page turns these tables into plots that reveal structure before you model it: 0.4 Visualisation & EDA.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.3 pandas"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-1-python-basics.html",
+    "href": "part-00-python-foundations/00-1-python-basics.html",
+    "title": "0.1 Python for Numerical Work",
+    "section": "",
+    "text": "Python is the substrate everything else in this course is written in. Before touching NumPy, pandas, or scikit-learn, your reflexes in core Python — types, functions, comprehensions, error messages — need to be automatic. This page drills exactly those reflexes, with a bias toward the numerical/data style of Python rather than web or scripting styles.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.1 Python for Numerical Work"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-1-python-basics.html#basic-concept",
+    "href": "part-00-python-foundations/00-1-python-basics.html#basic-concept",
+    "title": "0.1 Python for Numerical Work",
+    "section": "1. Basic Concept",
+    "text": "1. Basic Concept\nPython is a dynamically typed language: names are labels attached to objects, not boxes with fixed types. For numerical work you mostly live with four scalar types (int, float, bool, str) and four container types (list, tuple, dict, set).\nOne fact causes more numerical bugs than anything else: Python float is IEEE-754 binary floating point, so most decimal fractions cannot be stored exactly.\n\n\n\n\n\n\nThe second fact to internalize: / is always true division; // is floor division; % is the remainder.\n\n\n\n\n\n\nA function is defined with def, returns with return (no return means it returns None), and can take default arguments:\n\n\n\n\n\n\nComprehensions are the idiomatic way to transform collections. If you are writing a for loop whose only job is to build a list, you should usually write a comprehension instead:\n\n\n\n\n\n\nf-strings format values into text — you will use them constantly to report results:",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.1 Python for Numerical Work"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-1-python-basics.html#concept-questions",
+    "href": "part-00-python-foundations/00-1-python-basics.html#concept-questions",
+    "title": "0.1 Python for Numerical Work",
+    "section": "2. Concept Questions",
+    "text": "2. Concept Questions\nAnswer from memory first, then open each answer to check.\n\nWhat does 10 / 4 evaluate to, and what type is the result?\nWhy is 0.1 + 0.2 == 0.3 False? Name the underlying cause.\nWhat is the difference between a list and a tuple? Give one practical consequence.\nWhat does a function return if you never write return?\nIn f\"{x:.2f}\", what does the .2f part do?\n\n\n\nAnswers\n\n\n2.5, a float. In Python 3, / always produces a float, even for whole-number results (8 / 2 is 4.0).\n0.1 and 0.2 have no exact representation in binary floating point (IEEE-754). Their nearest representable values don’t sum to the nearest representable 0.3. Compare with a tolerance (math.isclose) instead.\nLists are mutable, tuples are immutable. Consequence: tuples can be dictionary keys and elements of sets; lists cannot. Also, accidentally mutating a tuple raises an error, which can protect data.\nNone.\nFormat x as a fixed-point number with exactly 2 digits after the decimal point (rounding half-to-even on the decimal representation).",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.1 Python for Numerical Work"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-1-python-basics.html#drills-exercises",
+    "href": "part-00-python-foundations/00-1-python-basics.html#drills-exercises",
+    "title": "0.1 Python for Numerical Work",
+    "section": "3. Drills & Exercises",
+    "text": "3. Drills & Exercises\n\nDrills\nPredict each line’s output before running. These rebuild reflexes — do them until automatic.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nExercises (with solutions)\nExercise 1. Write a function celsius_to_fahrenheit(c) that converts a temperature and returns the result rounded to 1 decimal place. Then use it in a comprehension to convert [0, 37, 100].\n\n\nSolution\n\n\n\n\n\n\n\n\nExercise 2. Given the DNA string below, compute (a) its length, (b) GC content as a percentage with 1 decimal, (c) its reverse complement. Use one comprehension and one dictionary somewhere.\n\n\nSolution\n\n\n\n\n\n\n\nNote: reversed(seq) + join is O(n); building a string with += in a loop is O(n²) — a classic performance trap.\n\nExercise 3. FizzBuzz, data edition: for integers 1–20, print Bio if divisible by 3, Stats if divisible by 5, BioStats if divisible by both, otherwise the number — as a single list of strings.\n\n\nSolution\n\n\n\n\n\n\n\nOrder matters: check the compound condition (% 15 == 0) first, otherwise the simple cases win. Same idea as writing mutually exclusive if/elif branches.\n\nExercise 4. Parse this mini-FASTA (a real task shape in bioinformatics) and report each sequence’s length and GC%:\n&gt;gene1\nATGGCC\n&gt;gene2\nGCGCGCGCGT\n\n\nSolution\n\n\n\n\n\n\n\nsum(b in \"GC\" for b in seq) works because True/False sum as 1/0 — an idiom worth owning.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.1 Python for Numerical Work"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-1-python-basics.html#advanced-information-pitfalls",
+    "href": "part-00-python-foundations/00-1-python-basics.html#advanced-information-pitfalls",
+    "title": "0.1 Python for Numerical Work",
+    "section": "4. Advanced Information & Pitfalls",
+    "text": "4. Advanced Information & Pitfalls\nPitfalls that bite numerical/data Python specifically:\n\nMutable default arguments are created once, at function definition — not at each call. def f(x, acc=[]) shares the same list across all calls. This is the single most common “haunted function” bug.\nis compares identity, == compares value. Never write x is 5 — it happens to work for small ints in CPython and breaks everywhere else.\nFloats in loops accumulate error. Summing 10 million floats with + loses precision; use math.fsum or better, NumPy (np.sum uses pairwise summation).\nChained comparison is a feature: 0 &lt; x &lt; 1 means (0 &lt; x) and (x &lt; 1). Nice, but it changes short-circuit semantics.\nNames resolve at call time, not definition time (closures see the current value of outer variables, a classic loop-closure bug).\nEverything is an object: 1 and True compare equal (1 == True), and bool is a subclass of int. So [1, 2].count(True) counts True, not 1… except it counts both, because True == 1. Watch out in data cleaning.\n\n\nRead & Refactor AI Code\nThe following AI-generated snippet looks reasonable but contains three bugs. Run it, observe the wrong behavior, find the bugs, and fix them in the editor.\n\n\n\n\n\n\n\n\nWhat’s wrong, and the fixed version\n\n\nMutable default argument. The default list is created once, so the second call appends to the first call’s list. Fix: default to None and create the list inside.\nis with floats. Identity comparison, not equality; 30.0 is not the same object as the literal in the function. Fix: ==, or better math.isclose for computed floats.\n// instead of /. Floor division silently truncates the mean. Fix: /.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.1 Python for Numerical Work"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-1-python-basics.html#advanced-questions",
+    "href": "part-00-python-foundations/00-1-python-basics.html#advanced-questions",
+    "title": "0.1 Python for Numerical Work",
+    "section": "5. Advanced Questions",
+    "text": "5. Advanced Questions\nQ1. Explain precisely why 0.1 + 0.2 != 0.3 in terms of binary representation. Why is 0.5 stored exactly but 0.1 not?\n\n\nHint\n\nWrite 0.1, 0.2, 0.5 as sums of powers of 1/2. Which terminate?\n\n\n\nSolution\n\nIEEE-754 doubles store numbers as ±m × 2^e with a 53-bit significand. A decimal fraction is exactly representable only if it is a dyadic rational — a fraction whose denominator is a power of 2. 0.5 = 1/2 is dyadic: exact. 0.1 = 1/10 needs denominator 2 × 5; the factor 5 is impossible in binary, so 0.1 rounds to the nearest 53-bit binary fraction: 0.1000000000000000055511151231257827.... Adding the two rounded values 0.1 + 0.2 gives a value whose rounded nearest double is 0.30000000000000004, one ulp above 0.3’s nearest double. Consequence for practice: never test float equality; test abs(a-b) &lt; tol or math.isclose(a, b, rel_tol=1e-9, abs_tol=0.0). For exact decimal money/counting semantics use decimal.Decimal or integers.\n\nQ2. What does this print, and why?\n\n\n\n\n\n\n\n\nHint\n\nClosures capture variables, not values. When do the lambdas look up f?\n\n\n\nSolution\n\n[9, 9, 9]. Each lambda closes over the variable f; by the time they are called, the loop finished and f holds 3, so every call computes 3*3. Fix by binding at definition time: lambda f=f: f*f (default argument evaluated immediately), or use a factory function def make(f): return lambda: f*f. The same late-binding logic explains why a list of functions that reference a module-level config variable all change behavior when you reassign that variable.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.1 Python for Numerical Work"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-1-python-basics.html#complex-questions",
+    "href": "part-00-python-foundations/00-1-python-basics.html#complex-questions",
+    "title": "0.1 Python for Numerical Work",
+    "section": "6. Complex Questions",
+    "text": "6. Complex Questions\nC1 (functions × strings × loops → bioinformatics). Write translate(seq) that translates a DNA string to an amino-acid one-letter string using the standard genetic code, handling (a) lowercase input, (b) a trailing partial codon, (c) stop codons marked *. Test on ATGGCCATTGTAATGGGCCGCTGAAAGGGTGCCCGATAG (you can hardcode just the codons you need, or a 64-entry dict). When you reach 0.2 NumPy, consider which parts of this problem could be vectorized — and which fundamentally cannot (hint: the lookup table is not arithmetic).\nC2 (this page × 1.1 Descriptive statistics). Write a pure-Python function summary(xs) returning a dict with n, mean, median, min, max, computed without importing anything. Then check: what happens with an empty list, a list of one element, and a list containing None? Design your function’s error behavior deliberately (raise ValueError? skip None?) — this is exactly the design decision pandas makes for you with skipna=True.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.1 Python for Numerical Work"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-1-python-basics.html#summary",
+    "href": "part-00-python-foundations/00-1-python-basics.html#summary",
+    "title": "0.1 Python for Numerical Work",
+    "section": "7. Summary",
+    "text": "7. Summary\n\nPython names point to objects; types live on the objects, not the names.\n/ is true division, // floors, % gives the remainder; floats are IEEE-754 binary — compare with math.isclose, never ==.\nComprehensions &gt; loops for building collections; f-strings &gt; string concatenation for output.\nFunctions returning None by default and mutable default arguments are top sources of silent bugs.\nis checks identity; == checks equality; empty containers are falsy.\nClosures look up variables at call time — late binding breaks loop-generated functions.\nPure-Python numeric loops are slow: the moment you have arrays of numbers, you want 0.2 NumPy, which pushes loops into compiled code and changes how you express numerical ideas entirely.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.1 Python for Numerical Work"
+    ]
+  },
+  {
+    "objectID": "part-09-unsupervised-learning/09-2-principal-component-analysis.html",
+    "href": "part-09-unsupervised-learning/09-2-principal-component-analysis.html",
+    "title": "Coming soon",
+    "section": "",
+    "text": "This page has not been published yet. It is scheduled in the build order and will follow the same seven-section template as every other page.\nCheck back soon — progress is tracked in the course home."
+  },
+  {
+    "objectID": "part-03-classification-glm/03-1-5-auprc.html",
+    "href": "part-03-classification-glm/03-1-5-auprc.html",
+    "title": "Coming soon",
+    "section": "",
+    "text": "This page has not been published yet. It is scheduled in the build order and will follow the same seven-section template as every other page.\nCheck back soon — progress is tracked in the course home."
+  },
+  {
+    "objectID": "part-02-linear-regression/02-4-accuracy-of-model.html",
+    "href": "part-02-linear-regression/02-4-accuracy-of-model.html",
+    "title": "Coming soon",
+    "section": "",
+    "text": "This page has not been published yet. It is scheduled in the build order and will follow the same seven-section template as every other page.\nCheck back soon — progress is tracked in the course home."
+  },
+  {
+    "objectID": "part-02-linear-regression/02-6-categorical-predictors.html",
+    "href": "part-02-linear-regression/02-6-categorical-predictors.html",
+    "title": "Coming soon",
+    "section": "",
+    "text": "This page has not been published yet. It is scheduled in the build order and will follow the same seven-section template as every other page.\nCheck back soon — progress is tracked in the course home."
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-4-statistical-inference.html",
+    "href": "part-01-statistics-bridge/01-4-statistical-inference.html",
+    "title": "1.4 Statistical Inference",
+    "section": "",
+    "text": "Inference answers the question every experiment asks: is this pattern real, or would chance produce it? Confidence intervals quantify uncertainty about a population quantity; hypothesis tests quantify how surprising the data would be under a “nothing is happening” model. Both are built on one idea — the sampling distribution of a statistic.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.4 Statistical Inference"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-4-statistical-inference.html#basic-concept",
+    "href": "part-01-statistics-bridge/01-4-statistical-inference.html#basic-concept",
+    "title": "1.4 Statistical Inference",
+    "section": "1. Basic Concept",
+    "text": "1. Basic Concept\nThe standard error. A sample mean varies from sample to sample with SD ≈ \\(s/\\sqrt{n}\\) — the standard error (SE). Small n means the SE is big means the sample mean is a shaky estimate of the population mean.\nConfidence interval. A 95% CI for a mean is approximately\n\\[\\bar{x} \\pm t_{0.975,\\,n-1} \\cdot \\frac{s}{\\sqrt{n}}\\]\nwhere the t-quantile widens the interval for small samples. Interpretation (get this exactly right): if the sampling procedure were repeated many times, 95% of the resulting intervals would contain the true mean — it is a property of the procedure, not a 95% probability statement about this particular interval.\n\n\n\n\n\n\nHypothesis test logic. State \\(H_0\\) (no effect) → compute a statistic measuring departure from \\(H_0\\) → the p-value is P(data at least this extreme | \\(H_0\\)). Small p = the null struggles to explain the data. It is not P(\\(H_0\\) | data).\n\n\n\n\n\n\nErrors and power. Two ways to be wrong: Type I — declare an effect under a true null (rate = α); Type II — miss a real effect (rate = β); power = 1 − β, driven by effect size, n, α, and noise.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.4 Statistical Inference"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-4-statistical-inference.html#concept-questions",
+    "href": "part-01-statistics-bridge/01-4-statistical-inference.html#concept-questions",
+    "title": "1.4 Statistical Inference",
+    "section": "2. Concept Questions",
+    "text": "2. Concept Questions\n\nA 95% CI is (2.1, 3.9). Is “P(true mean is in (2.1, 3.9)) = 0.95” a correct reading?\nWhy does a p-value not tell you the probability the null hypothesis is true?\nWhat does the t in “t-test” buy you over a z-test, and when does the distinction vanish?\nYour test on n = 5 has p = 0.20. Which conclusions are valid: (a) “no effect exists”, (b) “effect not demonstrated”, (c) “need more data or a better design”?\nWhy is equal_var=False (Welch) the sensible default for two-sample t-tests?\n\n\n\nAnswers\n\n\nNo. The interval is now fixed — it either contains the mean or not. The 95% describes the procedure’s long-run success rate across hypothetical repetitions. (Frequentist probability attaches to procedures, not fixed quantities.)\nThe p-value is computed assuming the null is true; it can’t then assign that null a probability. It is P(data at least this extreme | H₀) — evidence about the data under H₀, not about H₀ given the data. That reversal is exactly Bayes’ rule, and frequentist testing deliberately doesn’t do it (a prior on hypotheses would be required).\nt replaces the known population σ with the estimated s, adding uncertainty that widens critical values (t₀.₉₇₅,₄ = 2.78 vs z = 1.96). As df → ∞, t → z; by n ≈ 30–50 the difference is negligible.\n\nand (c) only. Absence of evidence is not evidence of absence; a high p-value at tiny n is uninformative, not exculpatory. Never conclude “no effect” without a power/equivalence argument.\n\nReal biological groups rarely have equal variances, and Student’s pooled t can inflate false positives under inequality; Welch’s correction keeps Type I error near nominal with negligible power loss — so it’s the robust default.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.4 Statistical Inference"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-4-statistical-inference.html#drills-exercises",
+    "href": "part-01-statistics-bridge/01-4-statistical-inference.html#drills-exercises",
+    "title": "1.4 Statistical Inference",
+    "section": "3. Drills & Exercises",
+    "text": "3. Drills & Exercises\n\nDrills\nPredict, then run.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nExercises (with solutions)\nExercise 1. For the two-sample experiment below, compute (a) Welch t-test, (b) the 95% CI of each group mean, (c) the 95% CI for the difference in means (bootstrap is fine). State the decision and the estimate-with-uncertainty sentence you would put in a report.\n\n\nSolution\n\n\n\n\n\n\n\nReport sentence: “Treatment increased the marker by an estimated 1.5 units (bootstrap 95% CI 0.3 to 2.7; Welch p = 0.02).” The CI is the quantitative claim; the p-value only grades the surprise under “no difference.” Also note the CI excludes 0 exactly when p &lt; 0.05 (two-sided) — consistency check.\n\nExercise 2. Multiple testing preview, empirically: simulate 100 independent two-group experiments under the global null (α = 0.05 each). (a) Expected number of “significant” results? (b) Empirical probability that at least one is significant? (c) Repeat at α = 0.001. What family-wise lesson emerges?\n\n\nSolution\n\n\n\n\n\n\n\nAt α = 0.05, ~5 false positives per 100-null family and ≈ 99.4% chance of at least one. The family-wise error explodes with the number of tests — the problem Bonferroni and FDR (12.3, 12.4) solve.\n\nExercise 3. Demonstrate the effect of skew on the t-test/CI: sample n = 10 from a lognormal; bootstrap the sampling distribution of the mean; compare the bootstrap CI to the t-formula CI. Which is trustworthy here, and what sample size restores the t-approximation (test empirically)?\n\n\nSolution\n\n\n\n\n\n\n\nAt n = 10 the mean’s true sampling distribution is strongly right-skewed — the symmetric t-CI is a poor description (and its 95% coverage is off). The bootstrap CI inherits the skew. At n = 100 the CLT has done its work and the two CIs nearly agree. Lesson: t-methods assume approximate normality of the sampling distribution, which skewed small samples violate; alternatives are log-transform, nonparametric tests, or larger n.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.4 Statistical Inference"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-4-statistical-inference.html#advanced-information-pitfalls",
+    "href": "part-01-statistics-bridge/01-4-statistical-inference.html#advanced-information-pitfalls",
+    "title": "1.4 Statistical Inference",
+    "section": "4. Advanced Information & Pitfalls",
+    "text": "4. Advanced Information & Pitfalls\n\np-value misreadings (all wrong, all common): P(H₀ true) = p; p = 0.03 means “3% chance the result is chance”; p &gt; 0.05 means “no effect”; p = 0.049 vs 0.051 is a meaningful difference. The p-value is one number about one conditional probability — treat it as such.\nThe t-test compares means; it does not “prove normality” — with n = 5 you cannot even check the assumption well. Prefer Welch + report effect size + CI.\nPaired vs unpaired is a design property: repeated measures on the same unit demand paired analysis (ttest_rel); pairing halves the noise only if the pairing is real.\nEffect size ≠ significance: at n = 100,000, a 0.1% difference gets p ≈ 0; at n = 5, a huge effect gets p ≈ 0.3. Report effect + CI, let n decide detectability, not importance.\nOne-sided tests halve the p-value but require pre-registered direction — switching sides after looking at data is p-hacking.\nStopping rules break calibration: “collect until p &lt; 0.05” inflates Type I error far above 5% (the simulation drill adapts to demonstrate this).\n\n\nRead & Refactor AI Code\nThis AI-generated analysis has three bugs. Run, diagnose, fix.\n\n\n\n\n\n\n\n\nWhat’s wrong, and the fixed version\n\n\nDesign mismatch: after is generated from before — paired structure. The unpaired test throws away the pairing and most of the power. Use ttest_rel (or test the differences).\nBoth printed conclusions are wrong: small p is not “96% chance the treatment works” (it’s P(data|H₀), not P(H₀|data) or power), and large p never “proves useless”. Correct sentence: “data would be surprising under no-effect (p = …)”.\nSequential peeking: continuing until significance guarantees eventual “significance” even under a true null — Type I error ≈ 100%. Fix: pre-set n, or use a formal sequential design (alpha-spending); simplest demonstration — fix n and rerun.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.4 Statistical Inference"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-4-statistical-inference.html#advanced-questions",
+    "href": "part-01-statistics-bridge/01-4-statistical-inference.html#advanced-questions",
+    "title": "1.4 Statistical Inference",
+    "section": "5. Advanced Questions",
+    "text": "5. Advanced Questions\nQ1. Derive why the SE of a mean is \\(s/\\sqrt{n}\\) using the variance-addition rule from 1.3, and explain the practical arms race it implies: to halve the SE of the mean, how much more data do you need? To halve the noise of each measurement?\n\n\nHint\n\nWrite Var(x̄) = Var(Σxᵢ/n²) with independence, then take square roots twice.\n\n\n\nSolution\n\nWith independent \\(x_i\\) of variance \\(\\sigma^2\\): \\(\\text{Var}(\\bar x) = \\text{Var}\\!\\big(\\tfrac{1}{n}\\sum x_i\\big) = \\tfrac{1}{n^2}\\,n\\sigma^2 = \\sigma^2/n\\), so \\(\\text{SE} = \\sigma/\\sqrt n\\) — square-root law. Halving the SE of the mean requires 4× the data; the SE of the mean is about precision of knowledge, and knowledge is expensive. Halving the noise of each measurement (σ) is an instrument/protocol question, not a statistics question — and it pays off in every subsequent analysis. First optimize measurement noise, then buy n.\n\nQ2. Construct and demonstrate the “optional stopping” inflation: under a true null, run the peeking loop (test after every new pair, stop at p &lt; 0.05 or n = 200). Estimate the realized Type I error. Compare to a fixed-n = 200 test. What does this say about A/B test dashboards that highlight “significance” daily?\n\n\nSolution\n\n\n\n\n\n\n\nPeeking inflates the false-positive rate from 5% to roughly 30–50% — the more checkpoints, the worse. Daily-looked-at dashboards with “significance” badges are exactly this experiment; the fixes are fixed horizons, sequential designs (alpha spending), or Bayesian monitoring with pre-agreed decision rules.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.4 Statistical Inference"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-4-statistical-inference.html#complex-questions",
+    "href": "part-01-statistics-bridge/01-4-statistical-inference.html#complex-questions",
+    "title": "1.4 Statistical Inference",
+    "section": "6. Complex Questions",
+    "text": "6. Complex Questions\nC1 (inference × 0.5 Data splitting). Two models score 0.81 and 0.84 accuracy on the same 250-sample test set. Use the binomial SE machinery to judge whether they differ; then design the evaluation protocol (repeated splits or K-fold, paired comparison per fold) that would let you test the difference honestly. What makes the paired fold-wise comparison better than comparing two independent error bars?\nC2 (inference × 2.4 Accuracy of the full model preview). Fit a simple linear regression to 30 noisy points; use the standard errors of slope and intercept (available from scipy.stats.linregress or a small manual computation) to build 95% CIs. Now re-fit on 300 points of the same process. How do the SEs scale, and why does “collect 10× more data” not always shrink practical uncertainty (name the two components: sampling error vs measurement/bias)?",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.4 Statistical Inference"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-4-statistical-inference.html#summary",
+    "href": "part-01-statistics-bridge/01-4-statistical-inference.html#summary",
+    "title": "1.4 Statistical Inference",
+    "section": "7. Summary",
+    "text": "7. Summary\n\nInference = sampling distributions: SE = s/√n; means shrink noise by √n — 4× data per 2× precision.\nCI: range of parameter values the data can’t refute (at the chosen level); it’s the procedure that has 95% coverage, not your interval.\np-value = P(data this extreme | H₀); never P(H₀), never “chance of being right.”\nWelch two-sample t is the default; paired designs need paired tests; ranks for non-normal data.\nPower depends on effect, n, α, noise — underpowered studies “fail” without evidence of absence.\nMultiple tests and optional stopping break the 5% guarantee; corrections and fixed protocols restore it.\nWhen assumptions are shaky, resample the data itself: bootstraps and permutation tests — 1.5 Resampling intuition.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.4 Statistical Inference"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-5-resampling-intuition.html",
+    "href": "part-01-statistics-bridge/01-5-resampling-intuition.html",
+    "title": "1.5 Resampling Intuition",
+    "section": "",
+    "text": "When the formula for an uncertainty is messy or unknown — a median, a difference of AUCs, a ratio — resampling replaces the mathematics with computation: shuffle or resample the data you have, recompute the statistic many times, and look at the spread. It is the bridge between classical inference and the cross-validation you will use for every model.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.5 Resampling Intuition"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-5-resampling-intuition.html#basic-concept",
+    "href": "part-01-statistics-bridge/01-5-resampling-intuition.html#basic-concept",
+    "title": "1.5 Resampling Intuition",
+    "section": "1. Basic Concept",
+    "text": "1. Basic Concept\nThe bootstrap treats your sample as a stand-in for the population: draw new samples with replacement, same size as the original, recompute the statistic, repeat. The variability across bootstrap replicates mimics the sampling variability of the statistic.\n\n\n\n\n\n\nLet’s do that cleanly for the median — the statistic where formulas hurt:\n\n\n\n\n\n\nThe permutation test answers a different question — “is this association real?” — by shuffling labels to simulate a world where the null is exactly true, and asking how extreme the real statistic is among the shuffled ones:\n\n\n\n\n\n\nThe jackknife — leave one out, recompute, look at the spread — estimates bias and SE from n recomputations (cheap, deterministic, less flexible):",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.5 Resampling Intuition"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-5-resampling-intuition.html#concept-questions",
+    "href": "part-01-statistics-bridge/01-5-resampling-intuition.html#concept-questions",
+    "title": "1.5 Resampling Intuition",
+    "section": "2. Concept Questions",
+    "text": "2. Concept Questions\n\nWhy must bootstrap resampling be with replacement, and what would happen without it?\nWhat null does a permutation test simulate, and why don’t we need to know any distribution’s shape?\nWhen does the bootstrap fail even with lots of data? Give one statistic and one data structure.\nHow does a bootstrap CI for a mean compare to the t-formula CI for near-normal data — and for skewed data?\nConceptually, how is K-fold cross-validation (0.5) a resampling method, and what statistic does it resample for?\n\n\n\nAnswers\n\n\nWith replacement generates variability — each replicate is a new pseudo-sample whose composition differs (some points twice, some never). Without replacement every replicate is the original sample in a different order — zero variability, zero information.\nThe null of exchangeability: group labels carry no information, so any shuffling of labels is as probable as the observed one. The p-value counts how often shuffled data produces a statistic at least as extreme as observed — no distributional formula required, only the labels being exchangeable under H₀.\n\nExtreme order statistics — the min/max (bootstrap resamples contain ≤ n distinct values; the max can never exceed the observed max, so its distribution is degenerate). (b) Dependent data — time series or spatial data: i.i.d. resampling destroys the dependence structure that the statistic is about (fixes exist: block bootstrap).\n\nNear-normal: nearly identical (bootstrap ≈ t-interval, slightly wider with percentile method). Skewed: the bootstrap CI inherits the skew of the statistic’s sampling distribution — often more honest than the symmetric t-CI (1.4 Exercise 3).\nCV repeatedly partitions the sample, recomputes model performance on held-out parts, and reads stability from the spread — resampling the rows rather than resampling within a statistic’s input. Bootstrap estimates the variability of a statistic; CV estimates the variability of an estimation procedure’s performance.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.5 Resampling Intuition"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-5-resampling-intuition.html#drills-exercises",
+    "href": "part-01-statistics-bridge/01-5-resampling-intuition.html#drills-exercises",
+    "title": "1.5 Resampling Intuition",
+    "section": "3. Drills & Exercises",
+    "text": "3. Drills & Exercises\n\nDrills\nPredict, then run.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nExercises (with solutions)\nExercise 1. Bootstrap the difference in medians between two skewed groups (5000 replicates), report the 95% percentile CI, and compare with the CI you’d get from a difference-in-means t-interval. Which pair of estimates is the better summary for skewed data and why?\n\n\nSolution\n\n\n\n\n\n\n\nFor skewed data the medians + bootstrap CI pair is the defensible summary: medians resist the tail, and the bootstrap CI carries the actual (asymmetric) uncertainty. The t-CI on means is dominated by a handful of large values and its symmetric shape misrepresents the uncertainty.\n\nExercise 2. Implement the permutation test for a difference in means as a reusable function perm_test(a, b, n_perm=10_000, seed=0), then apply it to (a) clearly separated groups, (b) identical distributions. Verify in case (b) that p-values are approximately uniform on (0,1) over 500 repeats — the defining calibration property of a valid test.\n\n\nSolution\n\n\n\n\n\n\n\nThe uniformity check in (b) is the gold-standard self-test of any test implementation: under a true null, p-values must be ~Uniform(0,1), so P(p &lt; α) = α. If your p-values pile up near 0 under the null, your permutation scheme is broken (usually: statistic computed on non-pooled data, or shuffling within groups).\n\nExercise 3. Bootstrap vs formula SE shootout. For n = 8, 30, 200 samples from a lognormal, compute (a) the t-formula SE of the mean, (b) the bootstrap SE of the mean, (c) the bootstrap SE of the median. Plot/inspect how the three quantities and their stability change with n. Write the two-sentence takeaway.\n\n\nSolution\n\n\n\n\n\n\n\nTakeaways: (1) formula and bootstrap SE of the mean agree closely — the bootstrap recovers textbook results, validating the machinery; (2) for skewed data the median’s bootstrap SE is smaller and its own sampling distribution is more stable — another argument for robust summaries on skewed biological measurements.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.5 Resampling Intuition"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-5-resampling-intuition.html#advanced-information-pitfalls",
+    "href": "part-01-statistics-bridge/01-5-resampling-intuition.html#advanced-information-pitfalls",
+    "title": "1.5 Resampling Intuition",
+    "section": "4. Advanced Information & Pitfalls",
+    "text": "4. Advanced Information & Pitfalls\n\nThe bootstrap resamples observations, not noise: each replicate should reproduce the original sample size and structure (paired rows stay paired; per-group sizes preserved by stratified bootstrapping).\nPercentile CIs under-cover for small n and skewed statistics — improvements (BCa) exist; know that “bootstrap CI” is a family, not one object. Report the method.\nPermutation tests require exchangeability under H₀ — with confounded group assignments (e.g. all treated samples run on batch 2), shuffling labels tests the wrong null. Design before inference.\nNumber of replicates: 1,000–10,000 for CIs; more for tail quantiles. Monte Carlo error of a percentile ≈ \\(\\sqrt{p(1-p)/B}\\) — at B = 1,000 the 2.5% quantile itself wobbles.\nBootstrap cannot see beyond the sample: it inherits your outliers and your range (the max degeneracy drill). If the sample missed the tails, the bootstrap is confidently wrong about them.\nrng.choice vs rng.integers indexing: rng.choice(x, size=(B, n), replace=True) in one call is far faster than a Python loop of resamples — vectorize your resampling like everything else.\n\n\nRead & Refactor AI Code\nThis AI-generated bootstrap has three bugs. Run, diagnose, fix.\n\n\n\n\n\n\n\n\nWhat’s wrong, and the fixed version\n\n\nreplace=False — every “replicate” is just the original data minus one point (a jackknife in disguise); no bootstrap variability.\nsize=len(data)-1 — replicates must match the original n; smaller samples underestimate the statistic’s variance.\n[5, 95] percentiles — that’s a 90% interval labeled as a CI; 95% needs the 2.5/97.5 percentiles. (Minor: a Python loop of 1,000 resamples is fine here but the vectorized form is idiomatic and 100× faster.)\n\n\n\n\n\n\n\nNote the outlier: watch how the bootstrap CI for the mean is stretched rightward while stat=np.median would give a tight, stable interval — run both and compare.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.5 Resampling Intuition"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-5-resampling-intuition.html#advanced-questions",
+    "href": "part-01-statistics-bridge/01-5-resampling-intuition.html#advanced-questions",
+    "title": "1.5 Resampling Intuition",
+    "section": "5. Advanced Questions",
+    "text": "5. Advanced Questions\nQ1. Explain precisely why the bootstrap estimate of a statistic’s SE converges to the true SE as n → ∞, and why the approximation is double (empirical distribution → population, plug-in resampling → true sampling distribution). Where does small n hurt first?\n\n\nHint\n\nThe bootstrap replaces F (unknown population CDF) with F̂ (empirical CDF). Two questions: how well does F̂ approximate F, and how well does the bootstrap world mimic the real one for your statistic?\n\n\n\nSolution\n\nThe bootstrap is a plug-in: it pretends F̂ (the empirical distribution — the sample itself) is the truth, then simulates sampling from F̂. By the Glivenko–Cantelli theorem, F̂ → F uniformly as n grows, so for statistics that depend smoothly on the distribution (means, moments, regression coefficients), the bootstrap SE → true SE. The error is two-layered: (1) F̂ ≠ F (sampling error of the original study — unavoidable, shrinks as n grows), and (2) the statistic’s behavior in the bootstrap world ≠ its behavior in the real world (mild for smooth statistics, severe for extremes/discontinuous ones like the max). Small n hurts first through layer (2) for non-smooth statistics and through percentile-CI undercoverage — with n = 10, the empirical distribution has only 10 distinct values and every resample is a sparse remix of them.\n\nQ2. Your permutation test compares a treated group (n = 6) to controls (n = 40). (a) How many distinct label assignments exist, and what is the smallest nonzero p-value the test can ever return? (b) What practical consequences does this have for small-n study design and for reporting “p &lt; 0.001” from a permutation test with 6+40 samples?\n\n\nSolution\n\n\n\\(\\binom{46}{6} = 9{,}366{,}819\\) distinct assignments (treated labels are indistinguishable among themselves). The smallest nonzero p is \\(1/\\binom{46}{6} \\approx 1.07 \\times 10^{-7}\\) — so in principle tiny p-values are attainable. (b) The real constraint is resolution vs replicates: with B = 10,000 random permutations, the add-one p-value has resolution ≈ 10⁻⁴ and Monte Carlo error ~\\(\\sqrt{p(1-p)/B}\\); reporting “p &lt; 0.001” from 10⁴ permutations is not supportable — report “p &lt; 10⁻⁴” or increase B. Design lesson: permutation tests inherit the exact-conditional guarantee but their resolution is bounded by combinatorics and B — small treated groups are fine for moderate p-values, hopeless for “highly significant” claims without huge B (or full enumeration).",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.5 Resampling Intuition"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-5-resampling-intuition.html#complex-questions",
+    "href": "part-01-statistics-bridge/01-5-resampling-intuition.html#complex-questions",
+    "title": "1.5 Resampling Intuition",
+    "section": "6. Complex Questions",
+    "text": "6. Complex Questions\nC1 (resampling × 0.5 Data splitting). Implement a bootstrap comparison of two models’ test accuracies: fit both models on each of 200 bootstrap resamples of the training set, evaluate both on the same fixed test set, and build the CI of the accuracy difference. Then explain why this underestimates the uncertainty from training-set variation compared to refitting on fresh splits, and how the “.632 bootstrap” style corrections (4.5) address the overlap problem.\nC2 (resampling × 4.6 Hyperparameter tuning preview). You tune a hyperparameter by picking the K-fold CV optimum, then report that optimum’s CV score as the performance estimate. Simulate this procedure under a null (no signal: y random) with 20 candidate values and show the optimistic bias (selected score vs true score on fresh data). Which resampling discipline (nested CV) fixes it, and what does this have in common with the optional-stopping bug of 1.4?",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.5 Resampling Intuition"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-5-resampling-intuition.html#summary",
+    "href": "part-01-statistics-bridge/01-5-resampling-intuition.html#summary",
+    "title": "1.5 Resampling Intuition",
+    "section": "7. Summary",
+    "text": "7. Summary\n\nBootstrap: resample rows with replacement, same n, recompute — the spread across replicates estimates uncertainty for almost any statistic.\nPermutation test: shuffle labels under exchangeability; the p-value is the rank of the observed statistic among shuffled ones; distribution-free by construction.\nJackknife: leave-one-out; cheap deterministic bias/SE estimates.\nPercentile bootstrap CIs match t-CIs for tame data and outperform them for skewed statistics.\nFailure modes: order statistics (max), dependent data, non-exchangeable labels, tiny n, and reading more precision out of B replicates than B provides.\nVectorize resampling: one rng.integers/choice call for all replicates.\nUncertainty about a statistic is solved; uncertainty about a model’s predictions is the subject of Part 4 — starting from why held-out data is the only honest judge: Part 2 builds the first models, and Part 4 formalizes their evaluation.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.5 Resampling Intuition"
+    ]
+  },
+  {
+    "objectID": "part-12-multiple-testing-bioinformatics/12-3-family-wise-error-rate.html",
+    "href": "part-12-multiple-testing-bioinformatics/12-3-family-wise-error-rate.html",
+    "title": "Coming soon",
+    "section": "",
+    "text": "This page has not been published yet. It is scheduled in the build order and will follow the same seven-section template as every other page.\nCheck back soon — progress is tracked in the course home."
+  },
+  {
+    "objectID": "part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.html",
+    "href": "part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.html",
+    "title": "Coming soon",
+    "section": "",
+    "text": "This page has not been published yet. It is scheduled in the build order and will follow the same seven-section template as every other page.\nCheck back soon — progress is tracked in the course home."
+  },
+  {
+    "objectID": "part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.html",
+    "href": "part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.html",
+    "title": "Coming soon",
+    "section": "",
+    "text": "This page has not been published yet. It is scheduled in the build order and will follow the same seven-section template as every other page.\nCheck back soon — progress is tracked in the course home."
+  },
+  {
+    "objectID": "part-12-multiple-testing-bioinformatics/12-6-differential-expression.html",
+    "href": "part-12-multiple-testing-bioinformatics/12-6-differential-expression.html",
+    "title": "Coming soon",
+    "section": "",
+    "text": "This page has not been published yet. It is scheduled in the build order and will follow the same seven-section template as every other page.\nCheck back soon — progress is tracked in the course home."
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-2-relationships.html",
+    "href": "part-01-statistics-bridge/01-2-relationships.html",
+    "title": "1.2 Relationships Between Variables",
+    "section": "",
+    "text": "How do two variables move together? Covariance and correlation quantify co-movement; regression (Part 2) will model it. The skill here is knowing what r measures, what it ignores, and the four ways it lies.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.2 Relationships Between Variables"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-2-relationships.html#basic-concept",
+    "href": "part-01-statistics-bridge/01-2-relationships.html#basic-concept",
+    "title": "1.2 Relationships Between Variables",
+    "section": "1. Basic Concept",
+    "text": "1. Basic Concept\nCovariance averages the products of paired deviations:\n\\[\\text{cov}(x, y) = \\frac{1}{n-1}\\sum_i (x_i - \\bar{x})(y_i - \\bar{y})\\]\nPositive when variables move together, negative when opposed — but its magnitude depends on the units (expression levels in raw counts vs log-CPM give different covariances for the same relationship). The Pearson correlation fixes units by dividing both SDs:\n\\[r = \\frac{\\text{cov}(x,y)}{s_x s_y} \\in [-1, 1]\\]\n\n\n\n\n\n\nKey reading: r measures linear association strength, not slope (slope lives in regression) and not agreement (r = 1 for y = x + 100, which disagrees by 100 everywhere).\nSpearman correlation = Pearson correlation applied to ranks. It detects any monotone relationship and shrugs at outliers:\n\n\n\n\n\n\nAnd the classical caution — curvature: quadratic data can have r ≈ 0 over a symmetric range even though the variables are perfectly dependent:",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.2 Relationships Between Variables"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-2-relationships.html#concept-questions",
+    "href": "part-01-statistics-bridge/01-2-relationships.html#concept-questions",
+    "title": "1.2 Relationships Between Variables",
+    "section": "2. Concept Questions",
+    "text": "2. Concept Questions\n\nWhy is covariance useless for comparing relationships measured in different units, and what exactly does dividing by \\(s_x s_y\\) fix?\nWhat is the relationship between r and the R² of simple linear regression?\nGive two datasets where Spearman = 1 but Pearson &lt; 1.\nDoes r = 0 mean “no relationship”? Does r = 0.9 mean “x causes y”?\nOne outlier flips your r from +0.6 to −0.6. Which coefficient is more trustworthy here, and why?\n\n\n\nAnswers\n\n\nCovariance’s magnitude scales with the units of both variables (cov(x, y) = 5 for x in minutes is 300 for x in seconds). Pearson divides by the product of SDs — a pure number in [−1, 1] — so relationships are comparable across studies, units, and scalings.\nFor simple linear regression, \\(R^2 = r^2\\) — the fraction of y’s variance explained by the best straight line. r = 0.7 → the line explains 49%.\nAny perfectly monotone but nonlinear pair: (x, eˣ), (x, x³) over positive x, (age, income) rising with diminishing returns. Ranks are identical; straightness is not.\nNo and no. r = 0 only rules out linear association (quadratics, U-shapes, interactions can be strong). r measures association; causation requires design (randomization, natural experiments) or much stronger modeling assumptions.\nSpearman. A single point moved Pearson’s estimate violently because r is built from raw deviations — the outlier dominates both \\(s_x\\), \\(s_y\\) and the cross-products. Spearman caps any point’s influence at “one rank step.”",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.2 Relationships Between Variables"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-2-relationships.html#drills-exercises",
+    "href": "part-01-statistics-bridge/01-2-relationships.html#drills-exercises",
+    "title": "1.2 Relationships Between Variables",
+    "section": "3. Drills & Exercises",
+    "text": "3. Drills & Exercises\n\nDrills\nPredict, then run.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nExercises (with solutions)\nExercise 1 — Anscombe’s quartet, cell 1. This classic dataset has 4 pairs with (nearly) identical mean, SD, r ≈ 0.816, and regression line — utterly different shapes. Build pair I and pair III, compute their summary statistics, and plot both.\n\n\nSolution\n\n\n\n\n\n\n\nIdentical r, identical fitted line — because r and OLS are single-number summaries that different data structures can satisfy. Summary statistics compress away exactly the things you care about; plotting is not optional.\n\nExercise 2. Construct data where adding ONE observation flips the sign of Pearson r (from negative to positive), while Spearman barely moves. Report all three r values before/after.\n\n\nSolution\n\n\n\n\n\n\n\nThe added point sits at the extreme corner, contributing huge cross-deviations \\((x_i-\\bar x)(y_i-\\bar y)\\) — enough to outvote 40 points. Spearman only sees “new highest x, new highest y” — one rank step on each side. Any reported Pearson on real data should come with a scatterplot or a rank-correlation cross-check.\n\nExercise 3. For a bivariate normal sample (n = 30, true ρ = 0), empirically show the sampling distribution of r under the null, and verify that |r| &gt; \\(2/\\sqrt{n-1}\\) (rough 5% rule) happens about 5% of the time.\n\n\nSolution\n\n\n\n\n\n\n\n≈ 0.05: with n = 30, “noise correlations” of ±0.37 are routine. Two implications: small-n correlation claims need formal tests (1.4), and large correlation matrices (0.3 pandas drills) will always show impressive-looking r values somewhere — that’s multiplication of opportunities, not biology.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.2 Relationships Between Variables"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-2-relationships.html#advanced-information-pitfalls",
+    "href": "part-01-statistics-bridge/01-2-relationships.html#advanced-information-pitfalls",
+    "title": "1.2 Relationships Between Variables",
+    "section": "4. Advanced Information & Pitfalls",
+    "text": "4. Advanced Information & Pitfalls\n\nCorrelation ≠ causation — and neither correlation nor its absence is about linear vs nonlinear: r ≈ 0 coexists with perfect functional dependence (the x² plot).\nRange restriction and range enhancement: selecting only high-GPA applicants lowers r; mixing two clusters inflates it (Simpson’s paradox lives here — see Complex Questions).\nPearson needs rough linearity and tolerates outliers badly; Spearman needs only monotonicity but discards magnitude information (two datasets with identical ranks can have very different practical effect sizes).\nCorrelation matrices in high dimensions (10,000 genes → 50M pairs): extreme r values appear by chance alone (Exercise 3 logic × opportunities). Multiple-testing discipline (Part 12) applies to “top correlated pairs” lists.\nAveraging correlations across groups is invalid (r is not on an additive scale — use Fisher z, or analyze per group).\nBootstrap or Fisher-z CI for r, never “r ± 0.05” from folklore. Formal test: stats.pearsonr returns the p-value alongside.\n\n\nRead & Refactor AI Code\nThis AI-generated “correlation report” has three bugs. Run, diagnose, fix.\n\n\n\n\n\n\n\n\nWhat’s wrong, and the fixed version\n\n\nr ≠ slope and ≠ causation. The slope estimate is np.polyfit’s job, and “causes” needs design evidence, not correlation.\nAveraging r across groups is invalid and hides sign flips; here group r’s may be +1 and −1, “averaging” to 0 while both groups have perfect (opposite) associations. Report per-group r (or Fisher-z average with justification).\nr ≈ 0 ≠ no relationship. The U-shaped dependence is perfect; Pearson only tests the linear projection.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.2 Relationships Between Variables"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-2-relationships.html#advanced-questions",
+    "href": "part-01-statistics-bridge/01-2-relationships.html#advanced-questions",
+    "title": "1.2 Relationships Between Variables",
+    "section": "5. Advanced Questions",
+    "text": "5. Advanced Questions\nQ1. Show that for simple linear regression the fitted slope is \\(b = r \\cdot (s_y / s_x)\\), and explain the two failure modes of “reading” r as if it were an effect size.\n\n\nHint\n\nWrite the OLS slope for standardized variables; then unstandardize.\n\n\n\nSolution\n\nStandardize both variables: \\(\\tilde x = (x-\\bar x)/s_x\\), \\(\\tilde y = (y-\\bar y)/s_y\\). For standardized data the OLS slope is \\(\\sum \\tilde x_i \\tilde y_i / \\sum \\tilde x_i^2 = (n-1)\\,\\text{cov}/(n-1)\\,\\text{var} = r\\). Rescaling back multiplies by \\(s_y/s_x\\), giving \\(b = r s_y/s_x\\). Failure modes: (1) slope from r — r = 0.5 means nothing about units; a weak correlation with huge \\(s_y/s_x\\) can be a big effect. (2) r as slope — the same physical relationship yields different r if you restrict the x-range (range restriction lowers both spread and r) while the slope \\(r s_y/s_x\\) is more stable. Report both: r (strength of linear association), slope (effect per unit x), CI each.\n\nQ2. The t-statistic for testing ρ = 0 is \\(t = r\\sqrt{(n-2)/(1-r^2)}\\). Verify numerically that stats.pearsonr’s p-value matches the two-sided t-test with df = n−2, then explain what happens to that p-value’s meaning when you compute it for the largest of 10,000 gene-pair correlations.\n\n\nSolution\n\n\n\n\n\n\n\nThe p-value is calibrated for one pre-specified pair. For the maximum over 10,000 pairs, the test is applied to the extreme order statistic of ~10,000 correlated tests: even under global null, the smallest p-value is routinely ≪ 0.05 (probability of at least one “significant” pair ≈ 1 − 0.95¹⁰⁰⁰⁰ ≈ 1). The honest procedure re-tests the selected pair in fresh data or applies family-wise/FDR correction — the entire subject of Part 12.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.2 Relationships Between Variables"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-2-relationships.html#complex-questions",
+    "href": "part-01-statistics-bridge/01-2-relationships.html#complex-questions",
+    "title": "1.2 Relationships Between Variables",
+    "section": "6. Complex Questions",
+    "text": "6. Complex Questions\nC1 (relationships × 0.3 pandas — Simpson’s paradox). Build 3 groups where within every group r(y, x) is positive, but pooled over all groups r is strongly negative. (Give group intercepts very different levels and equal within-group slopes.) Then answer: which correlation should a model use — and how does adding group dummies (2.6 Categorical predictors) resolve the conflict?\nC2 (relationships × 9.2 PCA preview). Generate 3 correlated variables, compute the correlation matrix, and its eigenvalues. What does the dominant eigenvalue/eigenvector tell you about how many “real directions” the data has? Relate this to why the scatter-matrix drill of 0.4 becomes unreadable at 50 variables and PCA becomes necessary.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.2 Relationships Between Variables"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-2-relationships.html#summary",
+    "href": "part-01-statistics-bridge/01-2-relationships.html#summary",
+    "title": "1.2 Relationships Between Variables",
+    "section": "7. Summary",
+    "text": "7. Summary\n\nCovariance is direction × scale; Pearson r standardizes it to [−1, 1]; Spearman replaces values with ranks.\nr describes linear association only: U-shapes hide at r ≈ 0; monotone curves lose r &lt; 1.\nr² is explained-variance for a straight line; slope is r·(sy/sx) — never confuse strength with effect size.\nOne outlier can flip Pearson; Spearman caps that influence — report both when data is dirty.\nSampling noise gives |r| ≈ 0.3 routinely at n = 30; scanning many pairs manufactures “discoveries.”\nPer-group correlation, plots, and range questions come before any causal sentence.\nAssociation is a description; deciding whether a pattern would reappear in new samples requires probability and inference — 1.3 Probability essentials.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.2 Relationships Between Variables"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-1-descriptive-statistics.html",
+    "href": "part-01-statistics-bridge/01-1-descriptive-statistics.html",
+    "title": "1.1 Descriptive Statistics",
+    "section": "",
+    "text": "Descriptive statistics compress a sample into a few honest numbers: where is the center, how wide is the spread, what shape is the distribution. Every model diagnostic, every “significant difference,” every anomaly alert you will ever compute rests on these primitives — so the definitions (including the ones with silent variants, like population vs sample SD) must be reflexes.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.1 Descriptive Statistics"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-1-descriptive-statistics.html#basic-concept",
+    "href": "part-01-statistics-bridge/01-1-descriptive-statistics.html#basic-concept",
+    "title": "1.1 Descriptive Statistics",
+    "section": "1. Basic Concept",
+    "text": "1. Basic Concept\nCenter. The mean \\(\\bar{x} = \\frac{1}{n}\\sum x_i\\) is the balance point; the median is the middle value by rank. They coincide for symmetric data; for right-skewed data, mean &gt; median (a few large values drag the mean).\nSpread. The variance is the average squared deviation from the mean. Two flavors:\n\\[s^2_{\\text{pop}} = \\frac{1}{n}\\sum (x_i - \\bar{x})^2 \\qquad s^2_{\\text{sample}} = \\frac{1}{n-1}\\sum (x_i - \\bar{x})^2\\]\nThe \\(n-1\\) (Bessel’s correction) in the sample version compensates for the fact that \\(\\bar{x}\\) was estimated from the same data — deviations from an estimated center are systematically too small. Standard deviation is the square root, back in data units.\n\n\n\n\n\n\nPosition and shape. Quartiles split the sorted data into quarters; the IQR (Q3 − Q1) is the spread of the middle half — robust to outliers. Skewness measures asymmetry (positive = right tail).\n\n\n\n\n\n\nRobustness ranking (how much a single extreme value can move the statistic):\n\nmean, SD — sensitive (breakdown point 0%)\nmedian, IQR — robust (breakdown point 50%)\ntrimmed mean — tunable middle ground",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.1 Descriptive Statistics"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-1-descriptive-statistics.html#concept-questions",
+    "href": "part-01-statistics-bridge/01-1-descriptive-statistics.html#concept-questions",
+    "title": "1.1 Descriptive Statistics",
+    "section": "2. Concept Questions",
+    "text": "2. Concept Questions\n\nWhy does the sample variance divide by \\(n-1\\) instead of \\(n\\)?\nYour gene-expression distribution has mean 210 and median 85. What shape do you suspect, and which two numbers would you report?\nIs the IQR affected by multiplying all values by 10? By adding one extreme value?\nWhen is the mode the most informative measure of center?\nWhat does ddof=0 vs ddof=1 change in np.std, and which does pandas use by default?\n\n\n\nAnswers\n\n\nDeviations are taken from the sample mean, which is itself fitted to the data; the fitted center absorbs part of the variability, shrinking deviations. Dividing by the degrees of freedom \\(n-1\\) unbias the estimate of the population variance (for normal data, exactly).\nStrong right skew (a minority of very high values). Report median and IQR (robust pair); if you must report the mean, report it with the median so the skew is visible.\nMultiplying by 10: IQR scales by 10 (it’s in data units). One extreme value beyond the fences: IQR is unaffected as long as it doesn’t cross the 25th/75th percentiles — that’s the point of quartile-based spread.\nFor categorical or discrete data (“most common category”), and for multimodal continuous data where mean and median both describe nothing real (“typical patient: bimodal, modes at X and Y”).\nddof = delta degrees of freedom subtracted from n. ddof=0 → population formula; ddof=1 → sample formula. NumPy defaults to 0, pandas to 1 — mixing pandas and NumPy without noticing this is a classic silent bug.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.1 Descriptive Statistics"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-1-descriptive-statistics.html#drills-exercises",
+    "href": "part-01-statistics-bridge/01-1-descriptive-statistics.html#drills-exercises",
+    "title": "1.1 Descriptive Statistics",
+    "section": "3. Drills & Exercises",
+    "text": "3. Drills & Exercises\n\nDrills\nPredict, then run.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nExercises (with solutions)\nExercise 1. Write summarize(x) returning {\"n\", \"mean\", \"sd\", \"median\", \"iqr\", \"min\", \"max\"} using sample SD. Test it on normal data and on lognormal data; state which summary number changes most between the two and why.\n\n\nSolution\n\n\n\n\n\n\n\nThe mean and SD blow up under lognormal data (they inherit the heavy tail), while median and IQR stay near their symmetric-data values — the empirical demonstration of robustness. Report median/IQR for skewed data.\n\nExercise 2. IQR outlier rule: flag values outside \\([Q_1 - 1.5\\,\\text{IQR},\\ Q_3 + 1.5\\,\\text{IQR}]\\) in the dataset below. Then compute z-scores and flag \\(|z| &gt; 3\\). Compare the flagged sets and explain the disagreement.\n\n\nSolution\n\n\n\n\n\n\n\nThe z-score rule uses the mean and SD — which the outlier itself inflates. One extreme value widened the SD so much that even the outlier isn’t 3 SDs out (masking). Quartile-based rules don’t have this self-blinding property: for small samples, prefer the IQR fence.\n\nExercise 3. Empirically verify Bessel’s correction: sample n = 5 points from a known distribution many times; for each sample compute variance with ddof=0 and ddof=1; average each. Which average converges to the true variance?\n\n\nSolution\n\n\n\n\n\n\n\nddof=0 averages to \\(0.8\\sigma^2\\) here (\\((n-1)/n = 4/5\\)) — a 20% underestimate, every time, silently. This is why the divisor choice is not a technicality.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.1 Descriptive Statistics"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-1-descriptive-statistics.html#advanced-information-pitfalls",
+    "href": "part-01-statistics-bridge/01-1-descriptive-statistics.html#advanced-information-pitfalls",
+    "title": "1.1 Descriptive Statistics",
+    "section": "4. Advanced Information & Pitfalls",
+    "text": "4. Advanced Information & Pitfalls\n\npandas vs NumPy ddof defaults disagree (pandas std/var use ddof=1; NumPy uses ddof=0). Numbers in mixed reports can differ by ~√(n/(n−1)) for no reason.\nNaN handling differs: np.mean poisons, np.nanmean skips, pandas .mean() skips and warns differently — know which behavior produced a reported number.\nPercentile interpolation: np.percentile linearly interpolates by default; small-n quartiles depend on this convention (9 conventions exist; R’s type=7 matches NumPy’s linear).\nSD is not the “typical deviation” for skewed data: with a heavy right tail, most deviations are below the SD. IQR communicates spread more honestly there.\nThe mean minimizes squared error, the median absolute error — which is why least squares regression (Part 2) is mean-focused and least-absolutes-deviations is median-focused.\nstats.mode behavior changed across SciPy versions (now returns a ModeResult object); pd.Series.mode is the stable, readable choice.\nDescriptives ≠ inference: a summary is a claim about this sample; Part 1.4 is about claims regarding the population.\n\n\nRead & Refactor AI Code\nThis AI-generated summary function has three bugs. Run it on the test data and find them.\n\n\n\n\n\n\n\n\nWhat’s wrong, and the fixed version\n\n\nPopulation SD (ddof=0) — for a sample summary this underestimates spread; specify and use ddof=1.\nNo NaN policy — the function dies on the NaN (mean → nan, max → nan) without telling the caller whether NaNs were dropped. Make the policy explicit.\nrange on data containing NaN raises/propagates nan; also “range” is a fragile descriptives choice (a single typo’d value sets it) — min/max separately at most, or a robust span.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.1 Descriptive Statistics"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-1-descriptive-statistics.html#advanced-questions",
+    "href": "part-01-statistics-bridge/01-1-descriptive-statistics.html#advanced-questions",
+    "title": "1.1 Descriptive Statistics",
+    "section": "5. Advanced Questions",
+    "text": "5. Advanced Questions\nQ1. Prove (or verify by simulation) that the sample mean is the value \\(c\\) minimizing \\(\\sum_i (x_i - c)^2\\), and the sample median minimizes \\(\\sum_i |x_i - c|\\). What does each say about which errors the mean vs median take most seriously?\n\n\nHint\n\nDifferentiate \\(\\sum (x_i-c)^2\\) in \\(c\\); for the absolute value, argue by moving \\(c\\) across data points and counting how many terms’ slope changes.\n\n\n\nSolution\n\nMean: \\(f(c)=\\sum(x_i-c)^2\\) has \\(f'(c) = -2\\sum(x_i-c)\\), zero exactly at \\(c=\\bar{x}\\) (second derivative \\(2n&gt;0\\)). Median: \\(g(c)=\\sum|x_i-c|\\) has slope \\(= (\\#\\,\\text{points} &lt; c) - (\\#\\,\\text{points} &gt; c)\\), which changes sign where the counts balance — the median. So the mean’s optimality is defined in squared error: a single far point contributes quadratically, dominating the objective — hence the mean chases outliers. The median’s objective is linear in each error: one far point costs the same as one near point — hence its robustness. This one paragraph explains robust statistics, why least-squares regression is outlier-sensitive, and why quantile regression exists.\n\nQ2. Two labs each report SD ≈ 2.0 for the same assay. Lab A ran n = 5, Lab B ran n = 5,000. Construct a scenario where both reports are true, and explain which additional number distinguishes them (preview: it is not the SD).\n\n\nSolution\n\nBoth labs can honestly report \\(s \\approx 2.0\\) — SD describes individual measurement spread and barely depends on n. What distinguishes them is the precision of their estimated means: the standard error \\(s/\\sqrt{n}\\) ≈ 0.89 for Lab A vs 0.028 for Lab B — a 30-fold difference. SD answers “how noisy is one measurement,” SE answers “how well do I know the center.” Confusing the two (reporting SD where SE is meant, or vice versa) is a notorious publication bug; the inference machinery that formalizes it arrives in 1.4 Statistical inference.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.1 Descriptive Statistics"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-1-descriptive-statistics.html#complex-questions",
+    "href": "part-01-statistics-bridge/01-1-descriptive-statistics.html#complex-questions",
+    "title": "1.1 Descriptive Statistics",
+    "section": "6. Complex Questions",
+    "text": "6. Complex Questions\nC1 (descriptives × 0.4 EDA). For the lognormal samples from Section 1, produce side-by-side: (a) histogram of x, (b) histogram of log x with a normal-density overlay scaled to the log data. Which single transformation converts all the robust-vs-sensitive summary disagreements (mean/median, SD/IQR) into non-issues, and what does that imply about when those disagreements matter?\nC2 (descriptives × 3.1.5 AUPRC preview). A screening cohort has 1% disease prevalence. Compute the mean/median of the binary label vector and explain, in descriptive-statistics language, why accuracy is a nearly useless summary for a classifier on this data (predicting all-healthy scores 99%). Which descriptive statistic of the confusion matrix would you report instead, and why is it robust to the prevalence imbalance?",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.1 Descriptive Statistics"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-1-descriptive-statistics.html#summary",
+    "href": "part-01-statistics-bridge/01-1-descriptive-statistics.html#summary",
+    "title": "1.1 Descriptive Statistics",
+    "section": "7. Summary",
+    "text": "7. Summary\n\nCenter: mean (balance, sensitive) vs median (rank, robust); skew shows as mean − median.\nSpread: SD for symmetric data, IQR for skewed; ddof=0 vs 1 is a real bias, and pandas/NumPy disagree by default.\nQuartiles + IQR fences detect outliers without being blinded by them; z-scores can be.\nNaN policy is part of the statistic: nan-skipping is a decision, not a default to trust blindly.\nMean ↔︎ squared error, median ↔︎ absolute error: robustness follows from the loss function.\nSD describes single measurements; SE describes the precision of a mean — next pages formalize this.\nSummaries describe samples; to argue about populations you need probability and inference: 1.2 Relationships first asks how two variables move together.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.1 Descriptive Statistics"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-3-probability-essentials.html",
+    "href": "part-01-statistics-bridge/01-3-probability-essentials.html",
+    "title": "1.3 Probability Essentials",
+    "section": "",
+    "text": "Probability is the language in which every model speaks: a predicted probability, a p-value, a 95% interval, a likelihood. This page drills the rules, the three distributions that do most of the work in ML (binomial, Poisson, normal), and the one formula — Bayes’ rule — that most people’s intuition gets wrong.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.3 Probability Essentials"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-3-probability-essentials.html#basic-concept",
+    "href": "part-01-statistics-bridge/01-3-probability-essentials.html#basic-concept",
+    "title": "1.3 Probability Essentials",
+    "section": "1. Basic Concept",
+    "text": "1. Basic Concept\nThe rules. For events A and B:\n\nComplement: \\(P(A^c) = 1 - P(A)\\) — “at least one” questions become “1 minus none.”\nAddition: \\(P(A \\cup B) = P(A) + P(B) - P(A \\cap B)\\) — the intersection is counted twice, subtract once.\nMultiplication / conditioning: \\(P(A \\cap B) = P(A \\mid B)\\,P(B)\\); independence means \\(P(A \\cap B) = P(A)P(B)\\), so for independent events conditioning changes nothing.\nBayes: \\(P(A \\mid B) = \\dfrac{P(B \\mid A)\\,P(A)}{P(B)}\\) — the flip between “evidence given cause” and “cause given evidence.”\n\n\n\n\n\n\n\nRandom variables and their machines. A distribution assigns probability to outcomes. The three workhorses:\n\n\n\n\n\n\n\n\n\nDistribution\nModels\nParameters\nscipy\n\n\n\n\nBinomial\n# successes in n independent yes/no trials\nn, p\nstats.binom\n\n\nPoisson\n# events in fixed time/space (counts, reads)\nλ (rate)\nstats.poisson\n\n\nNormal\nsums/averages of many small effects (CLT)\nμ, σ\nstats.norm\n\n\n\n\n\n\n\n\n\nExpectation and variance are the distribution’s center and spread: \\(E[X] = \\sum x\\,p(x)\\); for the sum of independent variables, means add and variances add (this additive rule powers everything from portfolio risk to the SE of a mean).",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.3 Probability Essentials"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-3-probability-essentials.html#concept-questions",
+    "href": "part-01-statistics-bridge/01-3-probability-essentials.html#concept-questions",
+    "title": "1.3 Probability Essentials",
+    "section": "2. Concept Questions",
+    "text": "2. Concept Questions\n\nA test is 99% sensitive and 99% specific; prevalence is 1/1000. Roughly what fraction of positive results are true positives, and which two quantities fought each other in the Bayes computation?\nWhen does Poisson model counts well, and what does it assume that binomial does not?\nWhat is P(X = 4.0) for a continuous random variable, and what do we evaluate instead?\nWhy do variances add but standard deviations don’t?\nIf A and B are independent with P(A) = 0.5, P(B) = 0.8, what is P(A ∪ B)?\n\n\n\nAnswers\n\n\nAbout 9%. The fight: the evidence actually observed (true positives, \\(0.99 \\times 0.001\\)) versus the much larger pool of false positives generated by the huge healthy majority (\\(0.01 \\times 0.999\\)). Base rate dominates when prevalence is low.\nPoisson fits counts of events in a fixed window when events are rare and independent (reads overlapping a gene, mutations per kb). It assumes events occur with a constant rate and no upper bound; binomial counts successes in a fixed number of trials n.\nZero — a point has no width, so its probability mass is 0. We evaluate \\(P(X \\le x)\\) (CDF) or \\(P(a &lt; X &lt; b)\\) (density integrated over the interval).\nVariance adds because the cross-terms of independent variables average to zero: \\(\\text{Var}(X+Y) = \\text{Var}(X)+\\text{Var}(Y)\\). SD is the square root of that sum, and square roots don’t add: \\(\\sqrt{a+b} \\ne \\sqrt a + \\sqrt b\\).\n\\(P(A\\cup B) = 0.5 + 0.8 - 0.5\\times0.8 = 0.9\\).",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.3 Probability Essentials"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-3-probability-essentials.html#drills-exercises",
+    "href": "part-01-statistics-bridge/01-3-probability-essentials.html#drills-exercises",
+    "title": "1.3 Probability Essentials",
+    "section": "3. Drills & Exercises",
+    "text": "3. Drills & Exercises\n\nDrills\nPredict, then run.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nExercises (with solutions)\nExercise 1 — the full Bayes computation. Disease prevalence 0.1%, test sensitivity 99%, specificity 99%. Compute (a) P(disease | positive), (b) the same for prevalence 10%, (c) how high specificity must be at 0.1% prevalence for PPV ≥ 50%. State each result as one sentence.\n\n\nSolution\n\n\n\n\n\n\n\n\n9% — a positive result is usually false at 0.1% prevalence. (b) 92% — the same test is excellent in a high-risk population. (c) specificity ≈ 99.90% — the false-positive rate per healthy person must be driven below the true prevalence. Same machine, three different decisions — this is why screening policies depend on prevalence, not just on test quality.\n\n\nExercise 2 — Monte Carlo verification. Verify analytically-computed probabilities by simulation: (a) at least one six in 4 rolls; (b) P(Binomial(20, 0.3) ≥ 10); (c) P(Normal(0,1) within ±1.5). Report simulated vs exact to 3 decimals.\n\n\nSolution\n\n\n\n\n\n\n\nNote the pattern — sf(9, ...) for “≥ 10” (sf is P(X &gt; k), so use k−1). Monte Carlo with N = 10⁶ carries ~0.05% MC error; agreement to 3 decimals is expected, and this verify-by-simulation habit will debug countless probability computations later.\n\nExercise 3 — the law of total probability in a lab setting. 1% of samples are contaminated. Contaminated samples fail QC 80% of the time; clean samples fail 2% of the time. What fraction of samples fail QC? Given a sample failed QC, what’s the probability it was contaminated?\n\n\nSolution\n\n\n\n\n\n\n\nTwo-step structure: total probability pools the failure rate across the two sample types; Bayes re-weights to ask about the cause. Even a 40× higher failure rate for contaminated samples only gets you to 27% — because clean samples are 99× more numerous. Always ask what population produced this positive.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.3 Probability Essentials"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-3-probability-essentials.html#advanced-information-pitfalls",
+    "href": "part-01-statistics-bridge/01-3-probability-essentials.html#advanced-information-pitfalls",
+    "title": "1.3 Probability Essentials",
+    "section": "4. Advanced Information & Pitfalls",
+    "text": "4. Advanced Information & Pitfalls\n\nP(A|B) vs P(B|A) — transposing the conditional is the prosecutor’s fallacy; DNA-match statistics are its most famous victim. Every Bayes computation should start by naming which conditional you have and which you want.\nIndependence is not “small correlation” and not “no obvious relationship” — it is \\(P(A \\cap B) = P(A)P(B)\\) exactly. Rarely true for biological measurements (batch, relatedness, shared environment).\npdf values are not probabilities — stats.norm.pdf(0) ≈ 0.4 yet P(X=0) = 0; the density integrates to probability. Only CDFs and intervals carry probability meaning.\nsf(k) = P(X &gt; k) (strictly greater) — the classic off-by-one: P(X ≥ 10) = sf(9), not sf(10). Write the inequality before writing the function call.\nPoisson has variance = mean; real count data routinely violates this (overdispersion) — the reason negative-binomial models exist in RNA-seq DE analysis (12.6).\nCLT applies to standardized sums of many independent contributions — not to heavy-tailed data at small n, and not to highly skewed counts at n = 5.\n\n\nRead & Refactor AI Code\nThis AI-generated “screening calculator” has three bugs. Run it, then fix.\n\n\n\n\n\n\n\n\nWhat’s wrong, and the fixed version\n\n\nComplement misuse: the stray “× 3” multiplies the none-detect probability by 3, producing a negative “probability”. The complement of “at least one” is “none”, full stop: \\(1 - 0.9^3\\).\nsf off-by-one: sf(8) = P(X &gt; 8) = P(X ≥ 9); for P(X ≥ 8) use sf(7).\npdf differences are not probabilities — subtracting densities is meaningless. Integrate: cdf(1.96) - cdf(-1.96).",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.3 Probability Essentials"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-3-probability-essentials.html#advanced-questions",
+    "href": "part-01-statistics-bridge/01-3-probability-essentials.html#advanced-questions",
+    "title": "1.3 Probability Essentials",
+    "section": "5. Advanced Questions",
+    "text": "5. Advanced Questions\nQ1. Derive the 9% PPV result symbolically and explain in terms of the Bayes numerator and denominator why increasing sensitivity barely helps at low prevalence, while increasing specificity helps enormously.\n\n\nHint\n\nWrite PPV \\(= \\frac{sp\\,\\pi}{sp\\,\\pi + (1-sc)(1-\\pi)}\\) and ask: which term shrinks when sens ↑ vs spec ↑, at \\(\\pi = 0.001\\)?\n\n\n\nSolution\n\nPPV \\(= \\dfrac{\\text{sens}\\cdot\\pi}{\\text{sens}\\cdot\\pi + (1-\\text{spec})(1-\\pi)}\\). At \\(\\pi = 0.001\\): the numerator term is ≈ sens × 0.001 — small no matter how good sens is (bounded by prevalence itself). The denominator’s second term is \\((1-\\text{spec}) \\times 0.999\\) — nearly the whole healthy population times the false-positive rate. Raising sens 0.99 → 0.999 multiplies the numerator by ~1.009; raising spec 0.99 → 0.999 divides the false-positive term by 10. At low prevalence, PPV is governed by specificity — which is why screening programs chase specificity and why confirmatory (more specific) tests follow any positive screen.\n\nQ2. Two independent watchtowers detect fires with probabilities 0.8 and 0.7 respectively. Given exactly one detection occurred, what is the probability it was tower 1? Compute symbolically and verify by Monte Carlo.\n\n\nHint\n\nEnumerate the four detection outcomes with their probabilities; condition on the two “exactly one” outcomes.\n\n\n\nSolution\n\nOutcomes: both \\(= 0.8 \\times 0.7 = 0.56\\); neither \\(= 0.2 \\times 0.3 = 0.06\\); only-1 \\(= 0.8 \\times 0.3 = 0.24\\); only-2 \\(= 0.2 \\times 0.7 = 0.14\\). Given “exactly one”, it was tower 1 with probability \\(0.24/(0.24 + 0.14) = 0.632\\).\n\n\n\n\n\n\nNote the method: enumerate + condition, or simulate — both beat formula-hunting when the event structure gets any more complicated.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.3 Probability Essentials"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-3-probability-essentials.html#complex-questions",
+    "href": "part-01-statistics-bridge/01-3-probability-essentials.html#complex-questions",
+    "title": "1.3 Probability Essentials",
+    "section": "6. Complex Questions",
+    "text": "6. Complex Questions\nC1 (probability × 0.5 Data splitting). A test set has n = 50 samples with true accuracy p = 0.8. Compute the exact probability (binomial) that the measured accuracy is ≥ 0.9 (i.e., ≥ 45 correct). Now compute the same for n = 500. What does each number say about the credibility of “90% accuracy!” claims at the two sample sizes — and connect this to the binomial SE formula used in 0.5 Q2.\nC2 (probability × 12.4 FDR preview). You test 10,000 genes for differential expression at α = 0.05; none are truly differential. (a) How many false positives do you expect? (b) What’s the probability of at least one? (c) If 100 are truly differential with 80% power, what is the positive predictive value of your “significant” list? This single calculation is the entire motivation for FDR correction — predict what q-values do before learning them.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.3 Probability Essentials"
+    ]
+  },
+  {
+    "objectID": "part-01-statistics-bridge/01-3-probability-essentials.html#summary",
+    "href": "part-01-statistics-bridge/01-3-probability-essentials.html#summary",
+    "title": "1.3 Probability Essentials",
+    "section": "7. Summary",
+    "text": "7. Summary\n\nComplement turns “at least one” into “1 − none”; addition subtracts the double-counted intersection.\nConditional probability is the primary object; independence is \\(P(A \\cap B) = P(A)P(B)\\), not an adjective.\nBayes’ rule converts P(evidence|cause) to P(cause|evidence); at low prevalence, specificity dominates PPV.\nBinomial = n trials; Poisson = counts in a window (variance = mean); Normal = the CLT’s destination.\npdf values are densities, not probabilities; CDF/sf carry probability, and sf is P(X &gt; k) — mind the off-by-one.\nVariances add for independent sums; SDs don’t.\nVerify any analytic probability with a Monte Carlo one-liner — cheap, and it catches unit/interval bugs.\nWith probability as the language, the next step is the sentence structure of statistics: estimation and testing — 1.4 Statistical inference.",
+    "crumbs": [
+      "Home",
+      "Part 1 — Statistics Bridge for ML",
+      "1.3 Probability Essentials"
+    ]
+  },
+  {
+    "objectID": "part-02-linear-regression/02-1-regression-setup.html",
+    "href": "part-02-linear-regression/02-1-regression-setup.html",
+    "title": "Coming soon",
+    "section": "",
+    "text": "This page has not been published yet. It is scheduled in the build order and will follow the same seven-section template as every other page.\nCheck back soon — progress is tracked in the course home."
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "ML, Statistics & LLM — Interactive Course",
+    "section": "",
+    "text": "An interactive course on machine learning, statistics, and large language models, with a running theme of biological data analysis. Every code cell on this site runs directly in your browser — no installation, no server, no account. It works especially well in Safari on iPad.",
+    "crumbs": [
+      "Home",
+      "ML, Statistics & LLM — Interactive Course"
+    ]
+  },
+  {
+    "objectID": "index.html#how-to-use-this-site",
+    "href": "index.html#how-to-use-this-site",
+    "title": "ML, Statistics & LLM — Interactive Course",
+    "section": "How to use this site",
+    "text": "How to use this site\n\nOpen a page (start with 0.1 Python for Numerical Work).\nRead the Basic Concept section and run the worked example by pressing Run Code on the cell.\nEdit the cell — change a number, swap a dataset — and run it again. This is where learning happens.\nAnswer the Concept Questions from memory, then do the Drills.\nWork through Exercises, Advanced Questions, and Complex Questions. Hints and full solutions are inside collapsible blocks — try the problem before opening them.\n\nYour edits stay on your device; refresh the page to return to the original code.",
+    "crumbs": [
+      "Home",
+      "ML, Statistics & LLM — Interactive Course"
+    ]
+  },
+  {
+    "objectID": "index.html#the-three-execution-tiers",
+    "href": "index.html#the-three-execution-tiers",
+    "title": "ML, Statistics & LLM — Interactive Course",
+    "section": "The three execution tiers",
+    "text": "The three execution tiers\n\n\n\n\n\n\n\n\nTier\nWhat it means\nWhere it runs\n\n\n\n\nT1 — Live\nCells are fully editable and runnable in-browser (Pyodide / webR)\nRight here, on this site\n\n\nT2 — Frozen output\nReal code with pre-computed outputs, plus a downloadable script\nRead here; run locally\n\n\nT3 — Colab/local\nLesson text + live concept cells, heavy compute via a Colab badge\nGoogle Colab or your machine\n\n\n\nParts 0–1 below are fully Tier 1. Later parts layer in T2 (Bioconductor differential expression) and T3 (PyTorch, single-cell, local LLMs).",
+    "crumbs": [
+      "Home",
+      "ML, Statistics & LLM — Interactive Course"
+    ]
+  },
+  {
+    "objectID": "index.html#course-map",
+    "href": "index.html#course-map",
+    "title": "ML, Statistics & LLM — Interactive Course",
+    "section": "Course map",
+    "text": "Course map\n\n\n\n\n\n\n\n\nPart\nTopic\nStatus\n\n\n\n\n0\nPython and Data Foundations\nBuilding now\n\n\n1\nStatistics Bridge for ML\nBuilding now\n\n\n2\nLinear Regression and Prediction\nPlanned\n\n\n3\nClassification and GLMs\nPlanned\n\n\n4\nValidation, Uncertainty, Model Selection\nPlanned\n\n\n5\nRegularization, Selection, High Dimensions\nPlanned\n\n\n6\nNonlinear Regression Models\nPlanned\n\n\n7\nTree-Based Models and Ensembles\nPlanned\n\n\n8\nSupport Vector Machines\nPlanned\n\n\n9\nUnsupervised Learning\nPlanned\n\n\n10\nDeep Learning with PyTorch\nPlanned (T3)\n\n\n11\nSurvival Analysis and Censored Data\nPlanned\n\n\n12\nMultiple Testing and Bioinformatics Statistics\nPlanned (12.6 is T2)\n\n\n13\nLarge Language Models\nPlanned (13.5–13.6 are T3)\n\n\nA\nDeriving the Formulas\nPlanned",
+    "crumbs": [
+      "Home",
+      "ML, Statistics & LLM — Interactive Course"
+    ]
+  },
+  {
+    "objectID": "index.html#whats-inside-each-page",
+    "href": "index.html#whats-inside-each-page",
+    "title": "ML, Statistics & LLM — Interactive Course",
+    "section": "What’s inside each page",
+    "text": "What’s inside each page\nEvery subtopic page follows the same seven-section template, so your study loop is always identical:\n\nBasic Concept — plain language + one worked example\nConcept Questions — check the concept landed\nDrills & Exercises — rebuild reflexes, then solve fuller problems\nAdvanced Information & Pitfalls — edge cases, and a flawed AI snippet to fix\nAdvanced Questions — with hints and solutions\nComplex Questions — deliberately cross topic boundaries\nSummary — takeaways and what comes next",
+    "crumbs": [
+      "Home",
+      "ML, Statistics & LLM — Interactive Course"
+    ]
+  },
+  {
+    "objectID": "index.html#quick-self-test",
+    "href": "index.html#quick-self-test",
+    "title": "ML, Statistics & LLM — Interactive Course",
+    "section": "Quick self-test",
+    "text": "Quick self-test\nRun this cell to confirm the live engine works on your device:\n\n\n\n\n\n\nIf the plot appears, you are ready. Start with Part 0.",
+    "crumbs": [
+      "Home",
+      "ML, Statistics & LLM — Interactive Course"
+    ]
+  },
+  {
+    "objectID": "part-09-unsupervised-learning/09-3-missing-values.html",
+    "href": "part-09-unsupervised-learning/09-3-missing-values.html",
+    "title": "Coming soon",
+    "section": "",
+    "text": "This page has not been published yet. It is scheduled in the build order and will follow the same seven-section template as every other page.\nCheck back soon — progress is tracked in the course home."
+  },
+  {
+    "objectID": "part-00-python-foundations/00-2-numpy.html",
+    "href": "part-00-python-foundations/00-2-numpy.html",
+    "title": "0.2 NumPy",
+    "section": "",
+    "text": "NumPy is the foundation of the entire Python scientific stack: pandas, scikit-learn, statsmodels, and PyTorch all speak NumPy arrays. The core skill is not memorizing functions — it is learning to think in whole-array operations instead of element-by-element loops.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.2 NumPy"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-2-numpy.html#basic-concept",
+    "href": "part-00-python-foundations/00-2-numpy.html#basic-concept",
+    "title": "0.2 NumPy",
+    "section": "1. Basic Concept",
+    "text": "1. Basic Concept\nA NumPy ndarray is an N-dimensional grid of values that are all the same type (dtype), stored in one contiguous block of memory. Because the data is homogeneous and contiguous, operations can be dispatched as compiled loops over memory — this is vectorization, and it is typically 10–100× faster than a Python loop.\nThree attributes define an array’s shape story:\n\n\n\n\n\n\nVectorization replaces loops. Here is the same computation both ways:\n\n\n\n\n\n\nBroadcasting is how NumPy applies operations between arrays of different but compatible shapes. Rule: compare shapes from the right; each dimension pair must be equal or one of them must be 1; missing (left) dimensions are treated as 1.\n\n\n\n\n\n\nThis is how you normalize a matrix by column means without writing a loop:",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.2 NumPy"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-2-numpy.html#concept-questions",
+    "href": "part-00-python-foundations/00-2-numpy.html#concept-questions",
+    "title": "0.2 NumPy",
+    "section": "2. Concept Questions",
+    "text": "2. Concept Questions\n\nWhat are the three attributes that describe an array’s structure?\nWhy is np.array([1, 2, 3]) * np.array([10, 20, 30]) not the dot product, and what is it?\nWhich shapes can broadcast together: (4, 3) with (3,)? (4, 3) with (4,)?\nWhat does axis=0 mean when calling .sum() on a 2-D array?\na = np.arange(5); b = a[::2]; b[0] = 99 — did a change? Why?\n\n\n\nAnswers\n\n\nshape (size per axis), dtype (element type), ndim (number of axes).\n* on arrays is elementwise multiplication → [10, 40, 90]. The dot product is a @ b → 140.\n(4, 3) with (3,): yes — (3,) is treated as (1, 3) and broadcasts across rows. (4, 3) with (4,): no — right-aligned, 3 vs 4 conflict → ValueError. Fix by making it a column: x[:, None] or x.reshape(-1, 1).\nCollapse axis 0, i.e. reduce across rows, producing one value per column.\nYes. Basic slicing returns a view sharing memory with a, so writing to b writes to a. Use b = a[::2].copy() when you need independence.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.2 NumPy"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-2-numpy.html#drills-exercises",
+    "href": "part-00-python-foundations/00-2-numpy.html#drills-exercises",
+    "title": "0.2 NumPy",
+    "section": "3. Drills & Exercises",
+    "text": "3. Drills & Exercises\n\nDrills\nPredict each output before running.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nExercises (with solutions)\nExercise 1. Given the expression matrix below (4 genes × 6 samples), z-score each gene (each row) using vectorized code — no loops.\n\n\nSolution\n\n\n\n\n\n\n\nThe keepdims=True keeps shape (4,1) so broadcasting subtracts the right mean from the right cells. Without it, (4,) broadcasts across the wrong axis and NumPy raises an error — or worse, silently “works” on a square matrix.\n\nExercise 2. Simulate 1,000 experiments of 100 fair coin flips each. Estimate the probability that an experiment yields more than 60 heads. Do it with one function call, no loops.\n\n\nSolution\n\n\n\n\n\n\n\nSanity check against theory: P(X &gt; 60), X~Binomial(100, 0.5) ≈ 0.0176 — (flips &gt; 60).mean() estimates it via Monte Carlo. The trick (condition).mean() — counting by averaging booleans — is used constantly in simulation work.\n\nExercise 3. Compute all pairwise Euclidean distances between the rows of a (5, 2) coordinate array using broadcasting only.\n\n\nSolution\n\n\n\n\n\n\n\nThe (i, 1, k) - (1, j, k) pattern broadcasts every row against every row simultaneously. This exact pattern reappears inside KNN, K-means, and kernel methods later in the course.\n\nExercise 4. One-hot encode the integer labels [2, 0, 3, 1] into a 4-column binary matrix without loops.\n\n\nSolution\n\n\n\n\n\n\n\nnp.eye(4) is the 4×4 identity; fancy-indexing its rows by labels selects row 2, row 0, etc. Same output as sklearn.preprocessing.OneHotEncoder, in one line.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.2 NumPy"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-2-numpy.html#advanced-information-pitfalls",
+    "href": "part-00-python-foundations/00-2-numpy.html#advanced-information-pitfalls",
+    "title": "0.2 NumPy",
+    "section": "4. Advanced Information & Pitfalls",
+    "text": "4. Advanced Information & Pitfalls\n\nViews vs copies. Slicing returns a view (memory shared, mutating it mutates the parent); fancy indexing and boolean masking return copies. Silent aliasing bugs look like “my data changed itself.”\nInteger overflow is silent. np.array([127], dtype=np.int8) + np.int8(1) wraps to -128 with no warning. NumPy does not upcast like Python ints.\nNaN poisons aggregates. np.mean of an array with one NaN is NaN. Use the nan* family (np.nanmean, np.nansum) — but think about why values are missing before averaging around them (see 9.3 Missing values later in the course).\nrng.integers(low, high) is high-exclusive; rng.random() spans [0, 1). Off-by-one here produces subtly wrong simulations.\nBroadcasting errors vs broadcasting bugs. Shape mismatches raise loud errors, but compatible misaligned shapes (e.g. (4,1) vs (4,)) broadcast “successfully” into something semantically wrong. Print .shape when results look insane.\nnp.round uses round-half-to-even, unlike naive expectations (np.round(2.5) → 2.0). Same rule as Python’s built-in round.\nFloating-point comparison: (a - b) == 0 fails for computed floats; use np.isclose / np.allclose for arrays.\n\n\nRead & Refactor AI Code\nThis AI-generated “normalizer” has three bugs. Run it, diagnose, fix.\n\n\n\n\n\n\n\n\nWhat’s wrong, and the fixed version\n\n\nWrong axis / loop mindset: it claims to normalize rows but computes statistics over X[:, j] — columns. For this square matrix the result is column z-scores, exposed by the two checks: row means are not 0, column SDs are 1. (On a non-square matrix the claim and code would diverge even more visibly.) The double loop is also exactly what NumPy exists to avoid.\nNo invariant check in the original: whoever ran this trusted it because column-SD printed 1s — a check that passes while testing the wrong axis. Always assert the invariant that matches the claim (row means ≈ 0 for row normalization).\nint8 overflow: values are within int8 range at construction, but adding 10 in int8 arithmetic wraps past 127 into negatives, silently. Cast to a wider dtype first.\n\n\n\n\n\n\n\nAnd the honest one-liner replacing the whole loop: (X - X.mean(axis=1, keepdims=True)) / X.std(axis=1, keepdims=True).",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.2 NumPy"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-2-numpy.html#advanced-questions",
+    "href": "part-00-python-foundations/00-2-numpy.html#advanced-questions",
+    "title": "0.2 NumPy",
+    "section": "5. Advanced Questions",
+    "text": "5. Advanced Questions\nQ1. Why is x[:, None] the standard fix when (n,) fails to broadcast against (n, m)? Explain using the right-to-left alignment rule, and give the two operations for which this asymmetry matters most (column-scaling and row-scaling).\n\n\nHint\n\nDraw (n,) as (1, n) after alignment and ask which axis it then stretches along.\n\n\n\nSolution\n\nRight-aligned, (n,) behaves like (1, n): it varies along columns, so M + v adds v[j] to every row’s j-th entry (row-constant). To scale/shift per row (statistics across columns), you need a (n, 1) array: x[:, None] inserts an axis so the vector varies down rows and broadcasts across columns. It matters most in (1) M - M.mean(axis=1, keepdims=True)-style centering and (2) distance computations A[:, None, :] - B[None, :, :]. The general discipline: every broadcast bug is a shape bug — print shapes, don’t guess.\n\nQ2. np.arange(0, 1, 0.1) and np.linspace(0, 1, 10) look like they should produce the same thing. Explain the actual difference and why linspace is preferred for evenly spaced sampling in continuous ranges.\n\n\nHint\n\nHow does each decide the step size, and which endpoint is excluded?\n\n\n\nSolution\n\narange(start, stop, step) computes values as start + k*step and excludes stop, accumulating floating-point step error along the way — so np.arange(0, 1, 0.1) yields 10 points ending at ≈0.9 (and can even produce a surprising extra point when the step doesn’t divide the range cleanly). linspace(start, stop, num) takes the count of points and includes both endpoints by default, placing them by index division so spacing is as even as binary floats allow. Rule of thumb: arange for integer steps (e.g. np.arange(10)), linspace for float sampling of an interval.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.2 NumPy"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-2-numpy.html#complex-questions",
+    "href": "part-00-python-foundations/00-2-numpy.html#complex-questions",
+    "title": "0.2 NumPy",
+    "section": "6. Complex Questions",
+    "text": "6. Complex Questions\nC1 (NumPy × 0.5 Data splitting). Using only rng.permutation and slicing, implement train_test_split(X, y, frac=0.8, seed=0) yourself. Then verify it agrees with sklearn.model_selection.train_test_split in spirit (same sizes, same seed → same partition) — where do the implementations necessarily differ? What does this exercise teach you about what random_state actually guarantees?\nC2 (NumPy × 9.2 PCA preview). Center a random (100, 3) matrix column-wise, compute its covariance with np.cov(Z, rowvar=False), and take np.linalg.eigh of it. What is the sum of eigenvalues, and how does it relate to np.trace of the covariance and to the total variance Z.var(axis=0, ddof=1).sum()? This identity (total variance = trace = sum of eigenvalues) is the backbone of PCA’s “explained variance ratio.”",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.2 NumPy"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-2-numpy.html#summary",
+    "href": "part-00-python-foundations/00-2-numpy.html#summary",
+    "title": "0.2 NumPy",
+    "section": "7. Summary",
+    "text": "7. Summary\n\nAn ndarray is a homogeneous, contiguous grid: shape, dtype, ndim describe everything.\nVectorization pushes loops into compiled code — think in whole-array expressions.\nBroadcasting aligns shapes from the right; 1s stretch; make column vectors with x[:, None].\nSlices are views, masks/fancy indices are copies; keepdims=True keeps broadcasting honest.\nBooleans sum as 1/0: (cond).mean() is an estimator, not a trick.\nWatch int8 overflow, NaN-poisoned aggregates, exclusive high in integers, and banker’s rounding.\nArrays hold the numbers; labeled data with mixed types needs pandas — next page.\n\nNext: 0.3 pandas puts names, labels, and mixed types on top of this machinery — and introduces its own selection and grouping semantics that you must drill separately.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.2 NumPy"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-5-data-splitting.html",
+    "href": "part-00-python-foundations/00-5-data-splitting.html",
+    "title": "0.5 Data Splitting",
+    "section": "",
+    "text": "Every model in this course will be judged by one rule: performance on data it did not see during training. The mechanics of splitting data seem trivial — and that’s exactly why leakage bugs are so common. This page drills the mechanics so they’re automatic before Part 2 builds models on top of them.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.5 Data Splitting"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-5-data-splitting.html#basic-concept",
+    "href": "part-00-python-foundations/00-5-data-splitting.html#basic-concept",
+    "title": "0.5 Data Splitting",
+    "section": "1. Basic Concept",
+    "text": "1. Basic Concept\nThe test set estimates how a model performs on new data. The core failure mode is leakage: any information from the test set (or from future data) influencing the training process inflates that estimate.\nThe basic protocol with sklearn.model_selection.train_test_split:\n\n\n\n\n\n\nrandom_state seeds the shuffling: same seed → identical split → reproducible results. It does not make the split “better.”\nFor classification with imbalanced classes, use stratify=y so each split preserves class proportions:\n\n\n\n\n\n\nOne split gives one noisy number. K-fold cross-validation averages over K splits — every sample is in a validation fold exactly once:",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.5 Data Splitting"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-5-data-splitting.html#concept-questions",
+    "href": "part-00-python-foundations/00-5-data-splitting.html#concept-questions",
+    "title": "0.5 Data Splitting",
+    "section": "2. Concept Questions",
+    "text": "2. Concept Questions\n\nWhy must the test set be used once, at the end — what exactly is lost if you peek repeatedly?\nWhat does stratify=y protect you from, and when is it useless?\nWhy does random_state matter in research code even when results “should” be stable?\nIn 5-fold CV, how many times is each sample used for validation, and how many times for training?\nYour test R² is better than your training R². Give one benign explanation and one suspicious one.\n\n\n\nAnswers\n\n\nRepeatedly peeking at test performance and making choices (features, hyperparameters, stopping) based on it trains on the test set through you: the estimate stops being out-of-sample and becomes optimistically biased. The test set’s value is spent by adaptation.\nIt preserves class proportions across splits — essential for rare classes (a 2% class can be absent from a small test split). Useless/unnecessary for regression (continuous y), and it can’t fix too small data: if a class has fewer members than folds, even stratified splitting fails.\nSame seed → same split → run-to-run reproducibility, which is what makes bug fixes, reviewer requests, and controlled comparisons possible. Unseeded splits confound “different partition” with “different method.”\nExactly once for validation; K−1 = 4 times for training (in different combinations).\nBenign: the test split happens to be easy, or training metrics are computed on a regularized objective (e.g. penalized loss) while test R² is unpenalized. Suspicious: leakage — test information reached training (scaled together, duplicated rows, feature derived from the outcome). Investigate, don’t celebrate.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.5 Data Splitting"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-5-data-splitting.html#drills-exercises",
+    "href": "part-00-python-foundations/00-5-data-splitting.html#drills-exercises",
+    "title": "0.5 Data Splitting",
+    "section": "3. Drills & Exercises",
+    "text": "3. Drills & Exercises\n\nDrills\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nExercises (with solutions)\nExercise 1. Simulate a small classification dataset (500 samples, 2% positives), split it badly (no stratify, seed chosen “unluckily”) and well (stratify). Report positives in each test set. Then quantify: repeat the unstratified split 500 times and report the range of positive counts in the test set.\n\n\nSolution\n\n\n\n\n\n\n\nA test set with zero positives makes recall, AUC, and AUPRC literally undefined. Stratification is not cosmetic.\n\nExercise 2. Write a 5-fold CV loop by hand (KFold + explicit fit/predict on a LinearRegression) for the synthetic regression data from Section 1, collecting validation R² per fold. Report the mean and the standard deviation across folds — then explain why that SD, not just the mean, matters.\n\n\nSolution\n\n\n\n\n\n\n\nThe mean estimates expected performance; the SD across folds estimates how stable that number is. Mean ± SD ≈ 0.85 ± 0.06 and mean ± SD ≈ 0.85 ± 0.30 are very different claims about your model — an unstable CV is a red flag for high variance (see 4.4 Bias–variance trade-off).\n\nExercise 3 — the leakage lab. Build a dataset where one feature is derived from the outcome (leaky = y + noise). Compare (a) a model trained with the leaky feature vs (b) without, using a proper split. Then do it “wrong”: scale X on the full dataset before splitting. Which comparisons change? Quantify each difference.\n\n\nSolution\n\n\n\n\n\n\n\nRead the results: the leaky feature produces near-perfect accuracy by construction — the single most common way “too good to be true” results reach publication. Pre-split scaling is the same crime at lower dose: test-row means/variances shaped the training inputs.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.5 Data Splitting"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-5-data-splitting.html#advanced-information-pitfalls",
+    "href": "part-00-python-foundations/00-5-data-splitting.html#advanced-information-pitfalls",
+    "title": "0.5 Data Splitting",
+    "section": "4. Advanced Information & Pitfalls",
+    "text": "4. Advanced Information & Pitfalls\n\nLeakage taxonomy: (1) feature leakage — a column derived from y (outcomes aggregated into features, “post-treatment” variables); (2) preprocessing leakage — scaling/imputation/feature selection fitted before the split; (3) duplication leakage — the same patient/sample appearing in train and test; (4) temporal leakage — shuffling time series so the model trains on the future.\nThe fix for (2) is always the same shape: fit the transformer inside the training fold only — StandardScaler().fit(X_tr), then .transform(X_te). In pipelines: make_pipeline(StandardScaler(), Ridge()) + cross_val_score does this mechanically and correctly.\nDuplicate rows before splitting: drop_duplicates / group-aware splitting by patient ID (GroupKFold) — not by row.\ntest_size semantics: float = proportion, int = absolute count. Tiny test sets (n &lt; ~30 per class) make every performance estimate mostly noise (4.1 The generalization problem).\nshuffle=False is the correct default for time-ordered data — train_test_split shuffles by default, which is wrong for temporal splits.\nReproducibility chain: seed the split and any stochastic model; a notebook is only reproducible if every source of randomness is pinned.\n\n\nRead & Refactor AI Code\nThis AI-generated evaluation pipeline contains three bugs, two of them leakage. Run it, then fix.\n\n\n\n\n\n\n\n\nWhat’s wrong, and the fixed version\n\n\nPre-split scaling — test statistics leaked into training inputs. Fit the scaler on X_tr only.\nNo stratification — with ~48% positives here it’s tolerable, but the code must not depend on luck; make stratify=y unconditional.\nEvaluating on training data — score(X_tr, y_tr) measures memorization, not generalization. Score on X_te, y_te.\n\n\n\n\n\n\n\nTest ≤ train, and both are believable — that’s what an honest pipeline looks like.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.5 Data Splitting"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-5-data-splitting.html#advanced-questions",
+    "href": "part-00-python-foundations/00-5-data-splitting.html#advanced-questions",
+    "title": "0.5 Data Splitting",
+    "section": "5. Advanced Questions",
+    "text": "5. Advanced Questions\nQ1. A reviewer asks why your cross-validation used shuffle=True, random_state=42. Justify both choices, and explain when shuffle=True would be wrong.\n\n\nHint\n\nWhat order were the rows in? What does an unshuffled KFold fold look like if the table is sorted by group or by time?\n\n\n\nSolution\n\nshuffle=True protects against order artifacts: real data frames are often sorted (by site, date, or outcome), and unshuffled KFold then makes folds that are systematically different from each other — e.g. sorted-by-class data can place an entire class in one fold, making it a training-only class for other folds. random_state makes the shuffling deterministic so the estimate is reproducible and comparable across code changes. shuffle=True is wrong when row order carries information: time series (train must precede test — use TimeSeriesSplit), spliced biological batches where you want to generalize to a new batch (use GroupKFold/leave-one-batch-out instead), and grouped data where rows share a subject (shuffle splits subject’s rows across train/test — leakage). The seed is part of the protocol, like the test set itself.\n\nQ2. Your test set has 200 samples and true accuracy 80%. What is the standard error of the measured accuracy, and what does that imply about differences of 1–2 points between two models’ test scores?\n\n\nHint\n\nBinomial SE = √(p(1−p)/n). Compute it for p = 0.8, n = 200.\n\n\n\nSolution\n\nSE = √(0.8·0.2/200) = √0.0008 ≈ 0.028 (2.8 percentage points). Two models measured 81% vs 83% on this test set differ by ~0.7 SE — indistinguishable from partition noise. Implications: (1) report uncertainty with test metrics, not just points; (2) prefer cross-validation for comparisons (averages over splits); (3) reserve the biggest test set you can afford; (4) resist leaderboard-grade conclusions from small test sets. This is the bridge to 4.1 The generalization problem and 4.3 Cross-validation.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.5 Data Splitting"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-5-data-splitting.html#complex-questions",
+    "href": "part-00-python-foundations/00-5-data-splitting.html#complex-questions",
+    "title": "0.5 Data Splitting",
+    "section": "6. Complex Questions",
+    "text": "6. Complex Questions\nC1 (splitting × 0.4 EDA). Construct a dataset where the test set’s marginal distribution differs visibly from training’s (e.g. sample y-dependent data, then split unstratified). Plot both test histograms. Then explain, quantitatively, how a covariate-shifted test set changes the meaning of every metric you compute on it — and why stratify/shuffling fixes the estimation but not a genuinely shifted deployment population.\nC2 (splitting × 1.5 Resampling). Repeated train/test splitting (50 random 80/20 splits) gives a distribution of test R². Compare its spread to the K-fold spread from Exercise 2. Which estimator has lower variance here, and what does each split in the repeated scheme share with the others that K-fold handles differently? (This previews why repeated CV and bootstrap (4.5 Bootstrap) exist.)",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.5 Data Splitting"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-5-data-splitting.html#summary",
+    "href": "part-00-python-foundations/00-5-data-splitting.html#summary",
+    "title": "0.5 Data Splitting",
+    "section": "7. Summary",
+    "text": "7. Summary\n\nTest data answers one question — “how does this do on new data?” — and must be spent once.\ntrain_test_split(test_size, random_state, stratify=y): stratify classes, seed everything.\nK-fold: every sample validated once; report mean and across-fold SD.\nLeakage has four faces: y-derived features, pre-fit preprocessing, duplicate subjects, shuffled time.\nThe universal fix: fit preprocessing inside training folds — or just use a Pipeline.\nSmall/imbalanced test sets produce undefined metrics and noisy numbers; SE of accuracy ≈ √(p(1−p)/n).\nPart 0’s toolkit is complete. Next, Part 1 builds the statistical language — centers, spread, probability, and inference — that turns those splits and plots into claims: 1.1 Descriptive statistics.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.5 Data Splitting"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-4-visualization-eda.html",
+    "href": "part-00-python-foundations/00-4-visualization-eda.html",
+    "title": "0.4 Visualisation & Exploratory Analysis",
+    "section": "",
+    "text": "Exploratory Data Analysis (EDA) is the discipline of interrogating data before modeling: distributions first, relationships second, anomalies always. matplotlib is the plotting engine under nearly every Python plotting library (pandas plotting calls it, seaborn wraps it), so we drill it directly.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.4 Visualisation & Exploratory Analysis"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-4-visualization-eda.html#basic-concept",
+    "href": "part-00-python-foundations/00-4-visualization-eda.html#basic-concept",
+    "title": "0.4 Visualisation & Exploratory Analysis",
+    "section": "1. Basic Concept",
+    "text": "1. Basic Concept\nmatplotlib has two layers: the pyplot state machine (plt.plot(...)) for quick plots, and the object-oriented interface (fig, ax = plt.subplots(); then ax.plot(...)) which is the right habit for anything non-trivial. Anatomy you should be able to name: Figure (the canvas), Axes (one plot panel), axis (with limits, ticks, labels), title, legend.\n\n\n\n\n\n\nThe three plots that carry 90% of EDA:\n\n\n\n\n\n\nEDA is a loop, not a plot. The minimal protocol you should run on any new table:\n\n.head(), .shape, .dtypes — what is this, actually?\n.describe() and .isna().sum() — ranges, centers, holes.\nHistogram of every numeric column — skew, multimodality, impossible values (negative ages).\nScatter/correlation for relationships you care about.\nBoxplots by group — does grouping explain spread?",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.4 Visualisation & Exploratory Analysis"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-4-visualization-eda.html#concept-questions",
+    "href": "part-00-python-foundations/00-4-visualization-eda.html#concept-questions",
+    "title": "0.4 Visualisation & Exploratory Analysis",
+    "section": "2. Concept Questions",
+    "text": "2. Concept Questions\n\nIn fig, ax = plt.subplots(), what is the type and role of ax?\nYour histogram has one tall bar at 0 and a flat sea of bars to the right. What transform should you almost certainly try?\nWhy is alpha=0.3 or smaller essential when scatter-plotting thousands of points?\nWhat does a boxplot’s whisker-cap convention actually mark, and what is plotted as individual points?\nName two questions a groupby + boxplot answers that describe() alone cannot.\n\n\n\nAnswers\n\n\nax is an Axes object — one panel. All plotting methods hang off it (ax.hist, ax.set_xlabel); the OO interface avoids pyplot’s hidden global state and is required for multi-panel figures.\nA log transform (np.log10 / np.log1p). Mean ≫ median in .describe() is the numeric tell; a spike at zero with a long right tail is the visual tell.\nOverplotting: with thousands of points, opaque markers hide density — the plot then shows only where points exist, not where they concentrate. Alpha (transparency) makes density visible as darkness.\nWhiskers mark the most extreme data points within 1.5×IQR of the quartiles; points beyond are drawn individually as (candidate) outliers. The fence is a convention, not a definition of “outlier.”\nWhether distributions differ in shape (not just center) between groups, and whether sample sizes are comparable (a tiny group’s mean is noise). describe() pools everything.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.4 Visualisation & Exploratory Analysis"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-4-visualization-eda.html#drills-exercises",
+    "href": "part-00-python-foundations/00-4-visualization-eda.html#drills-exercises",
+    "title": "0.4 Visualisation & Exploratory Analysis",
+    "section": "3. Drills & Exercises",
+    "text": "3. Drills & Exercises\n\nDrills\nSmall plotting reflexes. For each: predict the shape of the output, run, compare.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nExercises (with solutions)\nExercise 1. Full EDA pass on the simulated cohort in one figure: (a) 2×2 grid with histograms of age, log10(marker), a scatter of age vs log-marker, and a boxplot of log-marker by group. Every panel titled and every axis labeled.\n\n\nSolution\n\n\n\n\n\n\n\nNote the log transform before plotting the skewed marker — the histogram becomes readable and the boxplot comparison becomes fair.\n\nExercise 2. Demonstrate bin-width sensitivity: plot the same 200-point sample as 5, 20, and 100-bin histograms side by side. Write one sentence on what the “right” number of bins depends on.\n\n\nSolution\n\n\n\n\n\n\n\nThere is no “right” bin count — it depends on sample size and the question (rough guides: Sturges 1+log2(n), Freedman–Diaconis based on IQR). With n=200, 100 bins mostly display sampling noise; 5 bins can hide bimodality. Look at several.\n\nExercise 3. Build a scatter matrix (pairplot by hand): for the 3 numeric columns of the cohort, produce a 3×3 grid, diagonal = histograms, off-diagonal = scatter. No seaborn.\n\n\nSolution\n\n\n\n\n\n\n\nThis double loop is the whole idea of a pairs plot (R: GGally::ggpairs). You will later recognize PCA and clustering as ways to make such grids interpretable in high dimensions.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.4 Visualisation & Exploratory Analysis"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-4-visualization-eda.html#advanced-information-pitfalls",
+    "href": "part-00-python-foundations/00-4-visualization-eda.html#advanced-information-pitfalls",
+    "title": "0.4 Visualisation & Exploratory Analysis",
+    "section": "4. Advanced Information & Pitfalls",
+    "text": "4. Advanced Information & Pitfalls\n\nY-axis truncation exaggerates differences. Bar charts starting at non-zero are a classic misleading visual (and a classic reviewer complaint). For line charts truncation is fine; for bars, don’t.\nDual axes are a lie amplifier. Two independent y-scales let you manufacture any “correlation.” Prefer two stacked panels sharing an x-axis.\nLog scales with zeros/negatives break (log(0) = -inf): use symlog or transform with np.log1p after checking for non-positives.\nHistograms are model statements: bins impose structure that may not exist (bimodality can appear/vanish with bin width — Exercise 2).\nCorrelation plots lie under nonlinearity: r ≈ 0 says “no linear relation,” nothing more (see 1.2 Relationships).\nColorblind-safe palettes (tab10, viridis) and direct labeling beat red-green pairs and remote legends.\nmatplotlib in Pyodide: always end with plt.show(); set fig-width/fig-height cell options (inches) rather than figsize when you want consistent embedding.\n\n\nRead & Refactor AI Code\nThis AI-generated figure has four problems (three visual, one data). Run it, list them before opening the solution.\n\n\n\n\n\n\n\n\nWhat’s wrong, and the fixed version\n\n\nTruncated bar axis (y from 9.0): turns a modest mean difference into a towering bar. Bars must start at 0 — or better, show the distribution instead of two means.\nUnlabeled, indistinguishable scatter series: same color/marker for both groups, no legend, x-axis meaningless. Need labels + legend + real x (e.g. strip/jitter plot).\nWrong Axes: the histogram is drawn on the bar chart’s panel (axes[0]), overwriting the bars. Use the intended panel (axes[1] or a third).\nState-machine mixing: plt.show() after building with fig, axes is fine, but any further plt.hist-style calls would target the current figure implicitly. Stay in one interface.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.4 Visualisation & Exploratory Analysis"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-4-visualization-eda.html#advanced-questions",
+    "href": "part-00-python-foundations/00-4-visualization-eda.html#advanced-questions",
+    "title": "0.4 Visualisation & Exploratory Analysis",
+    "section": "5. Advanced Questions",
+    "text": "5. Advanced Questions\nQ1. A colleague says: “the histogram is bimodal, so there are two subpopulations.” Give three alternative explanations and describe the EDA you would run to distinguish them.\n\n\nHint\n\nThink: sampling noise (Exercise 2), mixtures of process regimes (batch), and transform artifacts.\n\n\n\nSolution\n\n\nSampling noise: with small n, bin counts fluctuate into a fake second mode — re-draw with different bin widths/seeds (Exercise 2 logic) and bootstrap the histogram. (b) Batch/technical structure: data collected in two runs, sites, or instruments — color the histogram by batch; check within-batch shape; a two-sample test across the suspected split (1.4 Statistical inference) should vanish within batch. (c) Transform artifact: e.g. log of a mixture of a point-mass at zero plus positives, or periodic rounding (integer counts). Plot untransformed, check value granularity. Also consider a genuine mixture — but the burden of proof is after (a)–(c) are excluded: overlay a fitted two-component normal mixture and check the gap depth.\n\n\nQ2. Explain why ax.set_yscale(\"log\") often “fixes” a scatter where the vertical spread grows with x, and what that visual pattern implies for modeling choices later (name the variance structure).\n\n\nSolution\n\nFunnel-shaped residuals — spread proportional to the mean level — indicate multiplicative noise: y = f(x)·ε rather than y = f(x) + ε. Multiplicative error becomes additive and roughly homoscedastic after a log transform, which is why log axes tidy such plots. Modeling consequence: fit the model to log(y) (or use a GLM with a log link and variance proportional to mean², gamma/Poisson-style), rather than vanilla least squares which weights the large-y points overwhelmingly. The EDA observation is literally a specification diagnostic for Part 2 regression.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.4 Visualisation & Exploratory Analysis"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-4-visualization-eda.html#complex-questions",
+    "href": "part-00-python-foundations/00-4-visualization-eda.html#complex-questions",
+    "title": "0.4 Visualisation & Exploratory Analysis",
+    "section": "6. Complex Questions",
+    "text": "6. Complex Questions\nC1 (EDA × 0.3 pandas). Using groupby + the plotting drills, construct the “small multiples” figure: one histogram per group on a shared x-range. Which two pandas/matplotlib mechanics make shared scales essential for honest comparison, and what does each group’s count tell you about how much to trust each panel?\nC2 (EDA × 1.1 Descriptive statistics). Generate lognormal data, then plot mean and median of increasing samples (n = 5, 10, 50, 200, 1000, each resampled many times) as dot strips. Which estimator’s strip narrows faster, and how does the histogram shape you saw in Section 1 predict that result? Connect: skew → sampling distribution of the mean vs median → why “median for skewed data” is a precision claim, not just an aesthetic one.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.4 Visualisation & Exploratory Analysis"
+    ]
+  },
+  {
+    "objectID": "part-00-python-foundations/00-4-visualization-eda.html#summary",
+    "href": "part-00-python-foundations/00-4-visualization-eda.html#summary",
+    "title": "0.4 Visualisation & Exploratory Analysis",
+    "section": "7. Summary",
+    "text": "7. Summary\n\nEDA protocol: head/dtypes → describe/isna → distributions → relationships → by-group comparisons.\nUse the OO interface (fig, ax = plt.subplots()); label everything; end cells with plt.show().\nAlpha and jitter reveal density; truncated bar axes and dual y-axes manufacture stories.\nTransform skewed data (log) before comparing and plotting — mean ≫ median is the flag.\nBin width is an assumption; look at several before claiming structure.\nBoxplots compare distributions; scatter matrices compare everything pairwise.\nPictures suggest; only inference decides — next page sets up the train/test discipline that makes model evaluation honest: 0.5 Data splitting.",
+    "crumbs": [
+      "Home",
+      "Part 0 — Python & Data Foundations",
+      "0.4 Visualisation & Exploratory Analysis"
+    ]
+  },
+  {
+    "objectID": "part-04-validation-model-selection/04-6-hyperparameter-tuning.html",
+    "href": "part-04-validation-model-selection/04-6-hyperparameter-tuning.html",
+    "title": "Coming soon",
+    "section": "",
+    "text": "This page has not been published yet. It is scheduled in the build order and will follow the same seven-section template as every other page.\nCheck back soon — progress is tracked in the course home."
+  },
+  {
+    "objectID": "part-04-validation-model-selection/04-5-bootstrap.html",
+    "href": "part-04-validation-model-selection/04-5-bootstrap.html",
+    "title": "Coming soon",
+    "section": "",
+    "text": "This page has not been published yet. It is scheduled in the build order and will follow the same seven-section template as every other page.\nCheck back soon — progress is tracked in the course home."
+  }
+]
