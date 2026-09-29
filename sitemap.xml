@@ -1,64 +1,80 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-13-large-language-models/13-8-applications-next-steps.html</loc>
-    <lastmod>2026-09-29T04:09:42.695Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/appendix-a-derivations/a-2-least-squares-is-mle.html</loc>
+    <lastmod>2026-09-28T10:13:52.347Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-13-large-language-models/13-6-customization.html</loc>
-    <lastmod>2026-09-28T10:20:25.200Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/appendix-a-derivations/a-7-auprc-trapezoidal.html</loc>
+    <lastmod>2026-09-28T10:18:02.030Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-13-large-language-models/13-4-model-families.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/appendix-a-derivations/a-6-pca-first-component.html</loc>
+    <lastmod>2026-09-28T10:17:44.714Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/appendix-a-derivations/a-4-ridge-regression.html</loc>
+    <lastmod>2026-09-28T10:13:52.347Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-13-large-language-models/13-7-evaluation-limitations.html</loc>
     <lastmod>2026-09-28T10:13:52.345Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-13-large-language-models/13-2-transformer-architecture.html</loc>
-    <lastmod>2026-09-28T10:14:47.515Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-13-large-language-models/13-5-local-deployment.html</loc>
+    <lastmod>2026-09-28T10:13:52.345Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-12-multiple-testing-bioinformatics/12-6-differential-expression.html</loc>
-    <lastmod>2026-09-27T18:36:31.226Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-13-large-language-models/13-3-training-pipeline.html</loc>
+    <lastmod>2026-09-29T04:09:42.695Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-12-multiple-testing-bioinformatics/12-3-family-wise-error-rate.html</loc>
-    <lastmod>2026-09-28T03:29:24.041Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-13-large-language-models/13-1-foundations.html</loc>
+    <lastmod>2026-09-28T10:20:46.402Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.html</loc>
-    <lastmod>2026-09-27T23:50:43.179Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.html</loc>
+    <lastmod>2026-09-28T07:59:23.046Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-11-survival-analysis/11-4-hazard-functions.html</loc>
-    <lastmod>2026-09-27T23:37:10.691Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-12-multiple-testing-bioinformatics/12-2-why-multiple-testing-is-dangerous.html</loc>
+    <lastmod>2026-09-27T23:52:34.305Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-11-survival-analysis/11-2-kaplan-meier.html</loc>
-    <lastmod>2026-09-27T22:53:01.388Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-11-survival-analysis/11-5-cox-model.html</loc>
+    <lastmod>2026-09-27T23:37:03.904Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-9-attention-transformers.html</loc>
-    <lastmod>2026-09-28T06:37:53.628Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-11-survival-analysis/11-3-log-rank-test.html</loc>
+    <lastmod>2026-09-27T23:06:44.820Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-7-recurrent-networks.html</loc>
-    <lastmod>2026-09-28T06:42:55.785Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-11-survival-analysis/11-1-why-survival-is-special.html</loc>
+    <lastmod>2026-09-27T22:50:44.356Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-5-regularization-for-nns.html</loc>
-    <lastmod>2026-09-28T06:42:22.511Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-8-lstm-gru.html</loc>
+    <lastmod>2026-09-28T06:37:18.471Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-3-multilayer-networks.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-6-convolutional-nets.html</loc>
+    <lastmod>2026-09-28T06:36:51.426Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-4-gradient-descent-backprop.html</loc>
     <lastmod>2026-09-28T06:42:14.195Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-10-when-deep-learning-is-appropriate.html</loc>
-    <lastmod>2026-09-28T06:43:02.435Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-2-single-layer-networks.html</loc>
+    <lastmod>2026-09-28T06:42:14.218Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-1-pytorch-foundations.html</loc>
+    <lastmod>2026-09-28T06:42:14.195Z</lastmod>
   </url>
   <url>
     <loc>https://enduringchung.github.io/ml-interactive-course/part-09-unsupervised-learning/09-6-practical-clustering.html</loc>
-    <lastmod>2026-09-28T16:52:03.262Z</lastmod>
+    <lastmod>2026-09-29T04:48:42.324Z</lastmod>
   </url>
   <url>
     <loc>https://enduringchung.github.io/ml-interactive-course/part-09-unsupervised-learning/09-4-k-means.html</loc>
@@ -190,7 +206,7 @@
   </url>
   <url>
     <loc>https://enduringchung.github.io/ml-interactive-course/index.html</loc>
-    <lastmod>2026-09-28T10:09:06.872Z</lastmod>
+    <lastmod>2026-09-29T04:48:12.526Z</lastmod>
   </url>
   <url>
     <loc>https://enduringchung.github.io/ml-interactive-course/part-00-python-foundations/00-1-python-basics.html</loc>
@@ -325,59 +341,75 @@
     <lastmod>2026-09-27T18:36:31.241Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-1-pytorch-foundations.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-09-unsupervised-learning/09-7-manifolds-and-embeddings.html</loc>
+    <lastmod>2026-09-29T04:52:32.742Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-10-when-deep-learning-is-appropriate.html</loc>
+    <lastmod>2026-09-28T06:43:02.435Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-3-multilayer-networks.html</loc>
     <lastmod>2026-09-28T06:42:14.195Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-2-single-layer-networks.html</loc>
-    <lastmod>2026-09-28T06:42:14.218Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-5-regularization-for-nns.html</loc>
+    <lastmod>2026-09-28T06:42:22.511Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-4-gradient-descent-backprop.html</loc>
-    <lastmod>2026-09-28T06:42:14.195Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-7-recurrent-networks.html</loc>
+    <lastmod>2026-09-28T06:42:55.785Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-6-convolutional-nets.html</loc>
-    <lastmod>2026-09-28T06:36:51.426Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-9-attention-transformers.html</loc>
+    <lastmod>2026-09-28T06:37:53.628Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-10-deep-learning/10-8-lstm-gru.html</loc>
-    <lastmod>2026-09-28T06:37:18.471Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-11-survival-analysis/11-2-kaplan-meier.html</loc>
+    <lastmod>2026-09-27T22:53:01.388Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-11-survival-analysis/11-1-why-survival-is-special.html</loc>
-    <lastmod>2026-09-27T22:50:44.356Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-11-survival-analysis/11-4-hazard-functions.html</loc>
+    <lastmod>2026-09-27T23:37:10.691Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-11-survival-analysis/11-3-log-rank-test.html</loc>
-    <lastmod>2026-09-27T23:06:44.820Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.html</loc>
+    <lastmod>2026-09-27T23:50:43.179Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-11-survival-analysis/11-5-cox-model.html</loc>
-    <lastmod>2026-09-27T23:37:03.904Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-12-multiple-testing-bioinformatics/12-3-family-wise-error-rate.html</loc>
+    <lastmod>2026-09-28T03:29:24.041Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-12-multiple-testing-bioinformatics/12-2-why-multiple-testing-is-dangerous.html</loc>
-    <lastmod>2026-09-27T23:52:34.305Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-12-multiple-testing-bioinformatics/12-6-differential-expression.html</loc>
+    <lastmod>2026-09-27T18:36:31.226Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.html</loc>
-    <lastmod>2026-09-28T07:59:23.046Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-13-large-language-models/13-2-transformer-architecture.html</loc>
+    <lastmod>2026-09-28T10:14:47.515Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-13-large-language-models/13-1-foundations.html</loc>
-    <lastmod>2026-09-28T10:20:46.402Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-13-large-language-models/13-4-model-families.html</loc>
+    <lastmod>2026-09-28T10:13:52.345Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-13-large-language-models/13-3-training-pipeline.html</loc>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-13-large-language-models/13-6-customization.html</loc>
+    <lastmod>2026-09-28T10:20:25.200Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/part-13-large-language-models/13-8-applications-next-steps.html</loc>
     <lastmod>2026-09-29T04:09:42.695Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-13-large-language-models/13-5-local-deployment.html</loc>
-    <lastmod>2026-09-28T10:13:52.345Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/appendix-a-derivations/a-3-logistic-gradient.html</loc>
+    <lastmod>2026-09-28T10:13:52.347Z</lastmod>
   </url>
   <url>
-    <loc>https://enduringchung.github.io/ml-interactive-course/part-13-large-language-models/13-7-evaluation-limitations.html</loc>
-    <lastmod>2026-09-28T10:13:52.345Z</lastmod>
+    <loc>https://enduringchung.github.io/ml-interactive-course/appendix-a-derivations/a-1-normal-equations.html</loc>
+    <lastmod>2026-09-28T10:13:52.346Z</lastmod>
+  </url>
+  <url>
+    <loc>https://enduringchung.github.io/ml-interactive-course/appendix-a-derivations/a-5-lasso-no-closed-form.html</loc>
+    <lastmod>2026-09-28T10:13:52.348Z</lastmod>
   </url>
 </urlset>

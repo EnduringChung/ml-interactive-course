@@ -33,7 +33,7 @@ ul.task-list li input[type="checkbox"] {
 <script src="../site_libs/quarto-search/fuse.min.js"></script>
 <script src="../site_libs/quarto-search/quarto-search.js"></script>
 <meta name="quarto:offset" content="../">
-<link href="../part-10-deep-learning/10-1-pytorch-foundations.html" rel="next">
+<link href="../part-09-unsupervised-learning/09-7-manifolds-and-embeddings.html" rel="next">
 <link href="../part-09-unsupervised-learning/09-5-hierarchical-clustering.html" rel="prev">
 <script src="../site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
@@ -642,6 +642,12 @@ ul.task-list li input[type="checkbox"] {
  <span class="menu-text">9.6 Practical Clustering Issues</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-09-unsupervised-learning/09-7-manifolds-and-embeddings.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">9.7 Manifolds, t-SNE, UMAP &amp; Autoencoders</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -869,8 +875,44 @@ ul.task-list li input[type="checkbox"] {
       </div>
       <ul id="quarto-sidebar-section-15" class="collapse list-unstyled sidebar-section depth1 ">  
           <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendix-a-derivations/a-1-normal-equations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">A.1 Normal Equations for Linear Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendix-a-derivations/a-2-least-squares-is-mle.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">A.2 Why Least Squares Is Maximum Likelihood</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendix-a-derivations/a-3-logistic-gradient.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">A.3 Logistic Regression: Deriving the Gradient</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
  <span class="menu-text">appendix-a-derivations/a-4-ridge-closed-form.qmd</span>
   </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendix-a-derivations/a-5-lasso-no-closed-form.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">A.5 Why Lasso Has No Closed Form</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendix-a-derivations/a-6-pca-first-component.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">A.6 PCA: Deriving the First Principal Component</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendix-a-derivations/a-7-auprc-trapezoidal.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">A.7 AUPRC Trapezoidal Estimator, Worked Example</span></a>
+  </div>
+</li>
       </ul>
   </li>
     </ul>
@@ -1149,7 +1191,7 @@ The gap peaks at the planted k: within-consensus near 1, between near 0 only whe
 <li>Mixed data: encoding weight is a hyperparameter; outliers are audited before k; batch is audited before biology.</li>
 <li>Consensus/co-association matrices are the strongest internal reproducibility evidence — algorithm agreement, not truth.</li>
 <li>Clusters as downstream covariates are estimated quantities: their uncertainty propagates; disclose the two-stage design.</li>
-<li>The unsupervised toolkit is complete. From here the course’s remaining parts (survival analysis, multiple testing, LLMs) lean on it — and on everything Parts 0–8 drilled: this was the checklist chapter.</li>
+<li>The unsupervised toolkit is complete. From here the course’s remaining parts (survival analysis, multiple testing, LLMs) lean on it — and on everything Parts 0–8 drilled: this was the checklist chapter. The one tool the checklist did not cover is <strong>manifold embedding</strong> — t-SNE, UMAP, and autoencoders, which find <em>curved</em> structure that <a href="../part-09-unsupervised-learning/09-2-principal-component-analysis.html">9.2</a>’s linear projections cannot: <a href="../part-09-unsupervised-learning/09-7-manifolds-and-embeddings.html">9.7</a>.</li>
 </ul>
 
 
@@ -1591,8 +1633,8 @@ window._ojs.runtime.interpretFromScriptTags();
       </a>          
   </div>
   <div class="nav-page nav-page-next">
-      <a href="../part-10-deep-learning/10-1-pytorch-foundations.html" class="pagination-link" aria-label="10.1 PyTorch Foundations">
-        <span class="nav-page-text">10.1 PyTorch Foundations</span> <i class="bi bi-arrow-right-short"></i>
+      <a href="../part-09-unsupervised-learning/09-7-manifolds-and-embeddings.html" class="pagination-link" aria-label="9.7 Manifolds, t-SNE, UMAP &amp; Autoencoders">
+        <span class="nav-page-text">9.7 Manifolds, t-SNE, UMAP &amp; Autoencoders</span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>

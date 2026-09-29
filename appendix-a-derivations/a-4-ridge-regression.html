@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>A.4 Ridge Regression: Deriving the Closed Form – ML, Statistics &amp; LLM — Interactive Course</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../">
+<script src="../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../site_libs/quarto-html/popper.min.js"></script>
+<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../site_libs/bootstrap/bootstrap-84cfdeff8e8ddd510a79be3971e85af5.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script src="../site_libs/quarto-contrib/live-runtime/live-runtime.js" type="module"></script>
+<link href="../site_libs/quarto-contrib/live-runtime/live-runtime.css" rel="stylesheet">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<script type="module" src="../site_libs/quarto-ojs/quarto-ojs-runtime.js"></script>
+<link href="../site_libs/quarto-ojs/quarto-ojs.css" rel="stylesheet">
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+
+<body class="nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="../index.html">
+    <span class="navbar-title">ML, Statistics &amp; LLM — Interactive Course</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll me-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="../index.html"> 
+<span class="menu-text">Home</span></a>
+  </li>  
+</ul>
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/EnduringChung/ml-interactive-course"> <i class="bi bi-github" role="img">
+</i> 
+<span class="menu-text"></span></a>
+  </li>  
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul class="collapse">
+  <li><a href="#basic-concept" id="toc-basic-concept" class="nav-link active" data-scroll-target="#basic-concept">1. Basic Concept</a></li>
+  <li><a href="#concept-questions" id="toc-concept-questions" class="nav-link" data-scroll-target="#concept-questions">2. Concept Questions</a></li>
+  <li><a href="#drills-exercises" id="toc-drills-exercises" class="nav-link" data-scroll-target="#drills-exercises">3. Drills &amp; Exercises</a></li>
+  <li><a href="#advanced-information-pitfalls" id="toc-advanced-information-pitfalls" class="nav-link" data-scroll-target="#advanced-information-pitfalls">4. Advanced Information &amp; Pitfalls</a></li>
+  <li><a href="#advanced-questions" id="toc-advanced-questions" class="nav-link" data-scroll-target="#advanced-questions">5. Advanced Questions</a></li>
+  <li><a href="#complex-questions" id="toc-complex-questions" class="nav-link" data-scroll-target="#complex-questions">6. Complex Questions</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">7. Summary</a></li>
+  </ul>
+<div class="toc-actions"><ul class="collapse"><li><a href="https://github.com/EnduringChung/ml-interactive-course/edit/main/appendix-a-derivations/a-4-ridge-regression.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/EnduringChung/ml-interactive-course/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">A.4 Ridge Regression: Deriving the Closed Form</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p><a href="../appendix-a-derivations/a-1-normal-equations.html">A.1</a>’s normal equations break when <span class="math inline">\(X^\top X\)</span> is singular; <a href="../appendix-a-derivations/a-3-logistic-gradient.html">A.3</a>’s likelihood breaks under separation. Ridge regression is the one-line fix for both: add <span class="math inline">\(\lambda\|\beta\|^2\)</span> to the objective. This page derives the closed form, shows why <span class="math inline">\(\lambda I\)</span> is exactly the right repair, and reads the solution through the SVD — where ridge’s behavior becomes visible.</p>
+<blockquote class="blockquote">
+<p><strong>Tier 1 — every cell below runs live (sympy for the symbolic derivation, NumPy for the check).</strong></p>
+</blockquote>
+<section id="basic-concept" class="level2">
+<h2 class="anchored" data-anchor-id="basic-concept">1. Basic Concept</h2>
+<p><strong>The objective.</strong> Ridge minimizes the residual sum of squares plus a penalty proportional to the squared coefficient magnitude:</p>
+<p><span class="math display">\[\hat\beta_\lambda = \arg\min_\beta \; \underbrace{(y - X\beta)^\top(y - X\beta)}_{\text{RSS}} + \lambda \underbrace{\beta^\top\beta}_{\|\beta\|^2}\]</span></p>
+<p><strong>The derivation</strong> — <a href="../appendix-a-derivations/a-1-normal-equations.html">A.1</a>’s calculus with one extra term:</p>
+<div>
+<div id="pyodide-1" class="exercise-cell">
+
+</div>
+<script type="pyodide-1-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IHN5bXB5IGFzIHNwXG5cblggPSBzcC5NYXRyaXgoc3Auc3ltYm9scygneDo0JywgcmVhbD1UcnVlKSkucmVzaGFwZSgyLCAyKVxuYmV0YSA9IHNwLk1hdHJpeChzcC5zeW1ib2xzKCdiMCBiMScsIHJlYWw9VHJ1ZSkpXG55ID0gc3AuTWF0cml4KHNwLnN5bWJvbHMoJ3kwIHkxJywgcmVhbD1UcnVlKSlcbmxhbSA9IHNwLnN5bWJvbHMoJ2xhbWJkYScsIHBvc2l0aXZlPVRydWUpXG5cbnJlc2lkID0geSAtIFggKiBiZXRhXG5vYmogPSAocmVzaWQuVCAqIHJlc2lkKVswXSArIGxhbSAqIChiZXRhLlQgKiBiZXRhKVswXVxuZ3JhZCA9IFtzcC5kaWZmKG9iaiwgYikgZm9yIGIgaW4gYmV0YV1cbnByaW50KFwi4oiCb2JqZWN0aXZlL+KIgs6yID1cIiwgZ3JhZClcblxuWHRYID0gWC5UICogWFxuWHR5ID0gWC5UICogeVxuIyB0aGUgZ3JhZGllbnQgaXMgLTIoWF5UIFggzrIgLSBYXlQgeSkgKyAyzrvOsiA9IDAgIC0+ICAoWF5UIFggKyDOu0kpzrIgPSBYXlQgeVxucHJpbnQoXCJcXG5ncmFkaWVudCA9PSDiiJIywrdbKFheVCBYICsgzrtJKc6yIOKIkiBYXlQgeV06XCIsXG4gICAgICBhbGwoc3Auc2ltcGxpZnkoZ3JhZFtpXSArIDIgKiAoKFh0WCArIGxhbSAqIHNwLmV5ZSgyKSkgKiBiZXRhIC0gWHR5KVtpXSkgPT0gMFxuICAgICAgICAgIGZvciBpIGluIHJhbmdlKDIpKSlcbnByaW50KFwiXFxuc29sdXRpb246IM6yzIIgPSAoWF5UIFggKyDOu0kp4oG7wrkgWF5UIHkgIOKAlCBbQS4xXSdzIGZvcm11bGEgd2l0aCDOu0kgYWRkZWRcIikifQ==
+</script>
+</div>
+<p>Setting the gradient to zero: <span class="math inline">\(-2X^\top(X\beta - y) + 2\lambda\beta = 0\)</span>, i.e.</p>
+<p><span class="math display">\[(X^\top X + \lambda I)\,\beta = X^\top y \qquad\Longrightarrow\qquad \hat\beta_\lambda = (X^\top X + \lambda I)^{-1}X^\top y\]</span></p>
+<p><strong>Why <span class="math inline">\(\lambda I\)</span> is exactly the right repair:</strong> <span class="math inline">\(X^\top X\)</span> is positive <em>semi</em>definite — its eigenvalues are <span class="math inline">\(\ge 0\)</span>, and singularity means some are exactly zero (the collinear directions of <a href="../appendix-a-derivations/a-1-normal-equations.html">A.1</a>). Adding <span class="math inline">\(\lambda I\)</span> shifts <em>every</em> eigenvalue up by <span class="math inline">\(\lambda\)</span> — the zero eigenvalues become <span class="math inline">\(\lambda &gt; 0\)</span>, the matrix becomes positive <em>definite</em>, and the inverse exists for any <span class="math inline">\(\lambda &gt; 0\)</span>. The penalty doesn’t just regularize — it <em>repairs the algebra</em>.</p>
+<p><strong>The numerical check:</strong></p>
+<div>
+<div id="pyodide-2" class="exercise-cell">
+
+</div>
+<script type="pyodide-2-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG5cbnJuZyA9IG5wLnJhbmRvbS5kZWZhdWx0X3JuZygwKVxubiwgcCA9IDEwMCwgM1xuWCA9IG5wLmNvbHVtbl9zdGFjayhbbnAub25lcyhuKSwgcm5nLm5vcm1hbChzaXplPShuLCBwIC0gMSkpXSlcbmJldGFfdHJ1ZSA9IG5wLmFycmF5KFsxLjAsIDIuMCwgLTEuMF0pXG55ID0gWCBAIGJldGFfdHJ1ZSArIHJuZy5ub3JtYWwoMCwgMC41LCBuKVxuXG5kZWYgcmlkZ2UoWCwgeSwgbGFtKTpcbiAgICBwcCA9IFguc2hhcGVbMV1cbiAgICByZXR1cm4gbnAubGluYWxnLnNvbHZlKFguVCBAIFggKyBsYW0gKiBucC5leWUocHApLCBYLlQgQCB5KVxuXG5mb3IgbGFtIGluIFswLjAwMSwgMC4xLCAxLCAxMCwgMTAwXTpcbiAgICBiID0gcmlkZ2UoWCwgeSwgbGFtKVxuICAgIHJzcyA9IG5wLnN1bSgoeSAtIFggQCBiKSoqMilcbiAgICBwcmludChmXCLOuz17bGFtOj42fTogzrLMgj17bnAucm91bmQoYiwgMyl9ICBSU1M9e3JzczouM2Z9ICB8fM6yfHw9e25wLmxpbmFsZy5ub3JtKGIpOi4zZn1cIikifQ==
+</script>
+</div>
+</section>
+<section id="concept-questions" class="level2">
+<h2 class="anchored" data-anchor-id="concept-questions">2. Concept Questions</h2>
+<ol type="1">
+<li>The ridge solution is <span class="math inline">\((X^\top X + \lambda I)^{-1}X^\top y\)</span>. What happens as <span class="math inline">\(\lambda \to 0\)</span> and as <span class="math inline">\(\lambda \to \infty\)</span>, and why are both limits the “right” answers?</li>
+<li>The SVD view: with <span class="math inline">\(X = UDV^\top\)</span>, show <span class="math inline">\(\hat\beta_\lambda = \sum_j \frac{d_j}{d_j^2 + \lambda} (u_j^\top y) v_j\)</span>. Which singular directions does ridge shrink most, and why is that the <em>right</em> thing to shrink?</li>
+<li>Why is the intercept (and generally, any unpenalized coefficient) excluded from the penalty? What breaks if you penalize it?</li>
+<li>Ridge requires standardized features — why does the penalty’s <em>scale-dependence</em> make standardization a mathematical requirement, not a convenience?</li>
+<li>The Bayesian reading (<a href="../appendix-a-derivations/a-2-least-squares-is-mle.html">A.2</a> Q2): ridge is the posterior mode under <span class="math inline">\(\beta \sim N(0, \tau^2 I)\)</span>. What does <span class="math inline">\(\lambda = \sigma^2/\tau^2\)</span> mean in words, and how does it tell you when to use a large <span class="math inline">\(\lambda\)</span>?</li>
+</ol>
+<details>
+<summary>
+Answers
+</summary>
+<ol type="1">
+<li><span class="math inline">\(\lambda \to 0\)</span>: <span class="math inline">\(\hat\beta_\lambda \to (X^\top X)^{-1}X^\top y\)</span> — the OLS solution (recovered when <span class="math inline">\(X^\top X\)</span> is invertible). <span class="math inline">\(\lambda \to \infty\)</span>: every coefficient <span class="math inline">\(\to 0\)</span> — the penalty dominates and the model predicts the mean. Both limits are the correct extremes: no regularization and total shrinkage.</li>
+<li>The shrinkage factor is <span class="math inline">\(\frac{d_j^2}{d_j^2 + \lambda}\)</span> (multiplying the OLS coefficient’s component along <span class="math inline">\(v_j\)</span>). Directions with large singular values <span class="math inline">\(d_j\)</span> (strong, well-identified signal) are barely shrunk; directions with small <span class="math inline">\(d_j\)</span> (weak, noisy — the collinear ones) are shrunk toward zero. Ridge spends its bias budget exactly where the data is weakest — the <a href="../part-04-validation-model-selection/04-4-bias-variance.html">4.4</a> trade-off made visible in the spectrum.</li>
+<li>The intercept represents the mean of <span class="math inline">\(y\)</span> — penalizing it shrinks the <em>predictions</em> toward zero, which is wrong whenever the outcome’s mean isn’t zero (it forces the other coefficients to compensate, biasing them). The calibration guarantee (<span class="math inline">\(\sum r_i = 0\)</span>, <a href="../appendix-a-derivations/a-2-least-squares-is-mle.html">A.2</a>) also breaks. Standard practice: center <span class="math inline">\(y\)</span> and <span class="math inline">\(X\)</span>, fit without an intercept, add the mean back.</li>
+<li>The penalty <span class="math inline">\(\lambda\|\beta\|^2\)</span> is in <em>units of the coefficients</em> — and the units depend on the feature’s scale. A feature measured in millimeters has coefficients 1000× smaller than the same feature in meters, so the penalty treats them 1000× differently. Standardizing (mean 0, variance 1) puts every feature in the same units, making <span class="math inline">\(\lambda\)</span> comparable across coefficients — without it, <span class="math inline">\(\lambda\)</span> is not one knob but a different knob per feature.</li>
+<li><span class="math inline">\(\lambda = \sigma^2/\tau^2\)</span> is the noise-to-prior ratio: <span class="math inline">\(\sigma^2\)</span> is how noisy the data is, <span class="math inline">\(\tau^2\)</span> is how large you believe the coefficients are <em>a priori</em>. Large <span class="math inline">\(\lambda\)</span> = noisy data or small believed effects = shrink hard. This makes <span class="math inline">\(\lambda\)</span> interpretable: it’s not a magic number but a statement about signal-to-noise, and cross-validation (<a href="../part-04-validation-model-selection/04-6-hyperparameter-tuning.html">4.6</a>) is just estimating that ratio from the data.</li>
+</ol>
+</details>
+</section>
+<section id="drills-exercises" class="level2">
+<h2 class="anchored" data-anchor-id="drills-exercises">3. Drills &amp; Exercises</h2>
+<section id="drills" class="level3">
+<h3 class="anchored" data-anchor-id="drills">Drills</h3>
+<p>Predict, then run.</p>
+<div>
+<div id="pyodide-3" class="exercise-cell">
+
+</div>
+<script type="pyodide-3-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG4jIHRoZSBlaWdlbnZhbHVlIHJlcGFpcjogWF5UIFggc2luZ3VsYXIsIFheVCBYICsgzrtJIGlzIG5vdFxucm5nID0gbnAucmFuZG9tLmRlZmF1bHRfcm5nKDApXG5YID0gcm5nLm5vcm1hbChzaXplPSg1MCwgNCkpXG5YWzosIDNdID0gWFs6LCAxXSArIFhbOiwgMl0gICAgICAgICAgICAgICAgICAgICAgIyBleGFjdCBjb2xsaW5lYXJpdHlcbmVpZyA9IG5wLmxpbmFsZy5laWd2YWxzaChYLlQgQCBYKVxucHJpbnQoXCJlaWcoWF5UIFgpOlwiLCBucC5yb3VuZChlaWcsIDYpLCBcIi0+IHNtYWxsZXN0IGlzIDAgKHNpbmd1bGFyKVwiKVxucHJpbnQoXCJlaWcoWF5UIFggKyBJKTpcIiwgbnAucm91bmQoZWlnICsgMSwgNiksIFwiLT4gYWxsIHBvc2l0aXZlIChpbnZlcnRpYmxlKVwiKSJ9
+</script>
+</div>
+<div>
+<div id="pyodide-4" class="exercise-cell">
+
+</div>
+<script type="pyodide-4-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG4jIHRoZSBTVkQgc2hyaW5rYWdlIGZhY3RvcnMgZMKyLyhkwrIrzrspXG5kID0gbnAuYXJyYXkoWzEwLCAzLCAxLCAwLjFdKSAgICAgICAgICAgICAgICAgICAgIyBzaW5ndWxhciB2YWx1ZXMsIHN0cm9uZyB0byB3ZWFrXG5mb3IgbGFtIGluIFswLjEsIDEsIDEwXTpcbiAgICBmID0gZCoqMiAvIChkKioyICsgbGFtKVxuICAgIHByaW50KGZcIs67PXtsYW06PjR9OiBzaHJpbmthZ2Uge25wLnJvdW5kKGYsIDMpfSAgKHN0cm9uZyBkaXJzIGtlcHQsIHdlYWsgZGlycyBzaHJ1bmspXCIpIn0=
+</script>
+</div>
+<div>
+<div id="pyodide-5" class="exercise-cell">
+
+</div>
+<script type="pyodide-5-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG4jIHNjYWxlIGRlcGVuZGVuY2U6IHRoZSBzYW1lIG1vZGVsLCB0d28gdW5pdHNcbnJuZyA9IG5wLnJhbmRvbS5kZWZhdWx0X3JuZygxKVxueCA9IHJuZy5ub3JtYWwoc2l6ZT0yMDApXG55ID0gMTAwMCAqIHggKyBybmcubm9ybWFsKDAsIDEsIDIwMCkgICAgICAgICAgICAgIyBzbG9wZSBpcyAxMDAwIGluIHRoZXNlIHVuaXRzXG5YID0gbnAuY29sdW1uX3N0YWNrKFtucC5vbmVzKDIwMCksIHhdKVxuZm9yIGxhbSBpbiBbMS4wXTpcbiAgICBiX3JhdyA9IG5wLmxpbmFsZy5zb2x2ZShYLlQgQCBYICsgbGFtICogbnAuZXllKDIpLCBYLlQgQCB5KVxuICAgIHhzID0gKHggLSB4Lm1lYW4oKSkgLyB4LnN0ZCgpICAgICAgICAgICAgICAgICMgc3RhbmRhcmRpemVkXG4gICAgWHMgPSBucC5jb2x1bW5fc3RhY2soW25wLm9uZXMoMjAwKSwgeHNdKVxuICAgIGJfc3RkID0gbnAubGluYWxnLnNvbHZlKFhzLlQgQCBYcyArIGxhbSAqIG5wLmV5ZSgyKSwgWHMuVCBAIHkpXG4gICAgcHJpbnQoZlwicmF3IHVuaXRzOiAgICBzbG9wZSB7Yl9yYXdbMV06LjJmfVwiKVxuICAgIHByaW50KGZcInN0YW5kYXJkaXplZDogc2xvcGUge2Jfc3RkWzFdOi4yZn0gKHNhbWUgzrssIHZlcnkgZGlmZmVyZW50IGVmZmVjdClcIikifQ==
+</script>
+</div>
+<div>
+<div id="pyodide-6" class="exercise-cell">
+
+</div>
+<script type="pyodide-6-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiaW1wb3J0IG51bXB5IGFzIG5wXG4jIHJpZGdlIHZzIE9MUyB1bmRlciBjb2xsaW5lYXJpdHk6IHZhcmlhbmNlIHJlZHVjdGlvbiBpbiBhY3Rpb25cbnJuZyA9IG5wLnJhbmRvbS5kZWZhdWx0X3JuZygyKVxubiwgcCA9IDYwLCA1XG5YID0gcm5nLm5vcm1hbChzaXplPShuLCBwKSlcblhbOiwgNF0gPSBYWzosIDNdICsgcm5nLm5vcm1hbCgwLCAwLjAxLCBuKSAgICAgICAgIyBuZWFybHkgY29sbGluZWFyXG5iZXRhX3RydWUgPSBucC5hcnJheShbMS4sIDEuLCAxLiwgMS4sIDEuXSlcbm9sc192YXJzLCByaWRnZV92YXJzID0gW10sIFtdXG5mb3IgXyBpbiByYW5nZSgzMDAwKTpcbiAgICB5ID0gWCBAIGJldGFfdHJ1ZSArIHJuZy5ub3JtYWwoMCwgMSwgbilcbiAgICBiX29scyA9IG5wLmxpbmFsZy5sc3RzcShYLCB5LCByY29uZD1Ob25lKVswXVxuICAgIGJfcmlkZ2UgPSBucC5saW5hbGcuc29sdmUoWC5UIEAgWCArIDEwICogbnAuZXllKHApLCBYLlQgQCB5KVxuICAgIG9sc192YXJzLmFwcGVuZChiX29scyk7IHJpZGdlX3ZhcnMuYXBwZW5kKGJfcmlkZ2UpXG5vbHNfdmFycywgcmlkZ2VfdmFycyA9IG5wLmFycmF5KG9sc192YXJzKSwgbnAuYXJyYXkocmlkZ2VfdmFycylcbnByaW50KGZcIlZhciBvZiBPTFMgZXN0aW1hdGVzIChtZWFuKTogICAge29sc192YXJzLnZhcigwKS5tZWFuKCk6LjRmfVwiKVxucHJpbnQoZlwiVmFyIG9mIHJpZGdlIGVzdGltYXRlcyAobWVhbik6ICB7cmlkZ2VfdmFycy52YXIoMCkubWVhbigpOi40Zn0gIDwtIGxvd2VyIHZhcmlhbmNlXCIpXG5wcmludChmXCJNU0Ugb2YgT0xTOiAgICB7KChvbHNfdmFycyAtIGJldGFfdHJ1ZSkqKjIpLm1lYW4oKTouNGZ9XCIpXG5wcmludChmXCJNU0Ugb2YgcmlkZ2U6ICB7KChyaWRnZV92YXJzIC0gYmV0YV90cnVlKSoqMikubWVhbigpOi40Zn0gIDwtIGJpYXMtdmFyaWFuY2UsIFs0LjRdXCIpIn0=
+</script>
+</div>
+</section>
+<section id="exercises-with-solutions" class="level3">
+<h3 class="anchored" data-anchor-id="exercises-with-solutions">Exercises (with solutions)</h3>
+<p><strong>Exercise 1.</strong> Derive the SVD form of the ridge solution: with <span class="math inline">\(X = UDV^\top\)</span> ( <span class="math inline">\(D\)</span> diagonal with <span class="math inline">\(d_j\)</span> ), show <span class="math inline">\(\hat\beta_\lambda = V \,\text{diag}\!\left(\frac{d_j}{d_j^2 + \lambda}\right) U^\top y\)</span>, and verify it against the direct solve on a random matrix. Then state what happens to the coefficients along each singular direction as <span class="math inline">\(\lambda\)</span> grows.</p>
+<details>
+<summary>
+Solution
+</summary>
+<div>
+<div id="pyodide-7" class="exercise-cell">
+
+</div>
+<script type="pyodide-7-contents">
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxucm5nID0gbnAucmFuZG9tLmRlZmF1bHRfcm5nKDApXG5uLCBwID0gNTAsIDVcblggPSBybmcubm9ybWFsKHNpemU9KG4sIHApKVxueSA9IHJuZy5ub3JtYWwoc2l6ZT1uKVxubGFtID0gMi4wXG5cbiMgZGlyZWN0IHNvbHZlXG5iX2RpcmVjdCA9IG5wLmxpbmFsZy5zb2x2ZShYLlQgQCBYICsgbGFtICogbnAuZXllKHApLCBYLlQgQCB5KVxuXG4jIFNWRCBmb3JtXG5VLCBkLCBWdCA9IG5wLmxpbmFsZy5zdmQoWCwgZnVsbF9tYXRyaWNlcz1GYWxzZSlcbmJfc3ZkID0gVnQuVCBAICgoZCAvIChkKioyICsgbGFtKSkgKiAoVS5UIEAgeSkpXG5wcmludChcIm1heCB8ZGlyZWN0IOKIkiBTVkQgZm9ybXw6XCIsIG5wLmFicyhiX2RpcmVjdCAtIGJfc3ZkKS5tYXgoKSlcbnByaW50KFwiXFxuY29lZmZpY2llbnQgc2hyaW5rYWdlIHBlciBzaW5ndWxhciBkaXJlY3Rpb246XCIpXG5mb3IgaiwgZGogaW4gZW51bWVyYXRlKGQpOlxuICAgIHByaW50KGZcIiAgZF97an0gPSB7ZGo6NS4yZn06IGZhY3RvciBkLyhkwrIrzrspID0ge2RqLyhkaioqMiArIGxhbSk6LjRmfSBcIlxuICAgICAgICAgIGZcIihPTFMgd291bGQgYmUgMS9kID0gezEvZGo6LjRmfSlcIikifQ==
+</script>
+</div>
+The SVD form: <span class="math inline">\(X^\top X = VD^2V^\top\)</span>, so <span class="math inline">\((X^\top X + \lambda I)^{-1} = V\,\text{diag}\!\left(\frac{1}{d_j^2 + \lambda}\right)V^\top\)</span>, and <span class="math inline">\(\hat\beta_\lambda = V\,\text{diag}\!\left(\frac{d_j}{d_j^2 + \lambda}\right)U^\top y\)</span>. The OLS solution has factor <span class="math inline">\(1/d_j\)</span> along direction <span class="math inline">\(j\)</span> — which <em>explodes</em> for small <span class="math inline">\(d_j\)</span> (the collinear directions). Ridge’s factor <span class="math inline">\(\frac{d_j}{d_j^2 + \lambda}\)</span> is bounded by <span class="math inline">\(\frac{1}{2\sqrt{\lambda}}\)</span> — no explosion, ever. As <span class="math inline">\(\lambda\)</span> grows, every direction shrinks toward zero, but the small-<span class="math inline">\(d_j\)</span> directions shrink <em>first</em> (their factor hits half-max at <span class="math inline">\(d_j = \sqrt{\lambda}\)</span>). Ridge is a <em>spectral filter</em>: it keeps the well-identified directions and damps the noisy ones.
+</details>
+<p><strong>Exercise 2.</strong> The Bayesian derivation: place the prior <span class="math inline">\(\beta \sim N(0, \tau^2 I)\)</span> on the coefficients of the <a href="../appendix-a-derivations/a-2-least-squares-is-mle.html">A.2</a> Gaussian model and derive the posterior mode. Show it equals the ridge solution with <span class="math inline">\(\lambda = \sigma^2/\tau^2\)</span>, and verify numerically that the posterior mean (which equals the mode here) shrinks toward zero as the prior tightens.</p>
+<details>
+<summary>
+Solution
+</summary>
+<div>
+<div id="pyodide-8" class="exercise-cell">
+
+</div>
+<script type="pyodide-8-contents">
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBzeW1weSBhcyBzcFxuXG4jIGxvZyBwb3N0ZXJpb3Ig4oidIGxvZy1saWtlbGlob29kICsgbG9nLXByaW9yXG5uLCBzMiwgdDIgPSBzcC5zeW1ib2xzKCduIHNpZ21hMiB0YXUyJywgcG9zaXRpdmU9VHJ1ZSlcblJTUyA9IHNwLnN5bWJvbHMoJ1JTUycsIHBvc2l0aXZlPVRydWUpXG5iZXRhX25vcm0gPSBzcC5zeW1ib2xzKCdiZXRhX25vcm0nLCBwb3NpdGl2ZT1UcnVlKSAgICMgzrLhtYDOslxubG9nX3Bvc3QgPSAtbi8yKnNwLmxvZygyKnNwLnBpKSAtIG4vMipzcC5sb2coczIpIC0gUlNTLygyKnMyKSAtIGJldGFfbm9ybS8oMip0MilcbiMgdGhlIM6yLWRlcGVuZGVudCBwYXJ0OiAtUlNTLygyz4PCsikgLSDOsuG1gM6yLygyz4TCsilcbiMgbWF4aW1pemluZyBvdmVyIM6yOiBtaW5pbWl6ZSBSU1MgKyAoz4PCsi/PhMKyKcK3zrLhtYDOsiAgLT4gIHJpZGdlIHdpdGggzrsgPSDPg8KyL8+EwrJcbmxhbSA9IHNwLnN5bWJvbHMoJ2xhbWJkYScsIHBvc2l0aXZlPVRydWUpXG5wcmludChcIs6yLWRlcGVuZGVudCBwYXJ0IG9mIGxvZy1wb3N0ZXJpb3I6IC1SU1MvKDLPg8KyKSDiiJIgzrLhtYDOsi8oMs+EwrIpXCIpXG5wcmludChcIj0+IHBvc3RlcmlvciBtb2RlID0gcmlkZ2Ugc29sdXRpb24gd2l0aCDOuyA9IM+DwrIvz4TCsiA9XCIsIHNwLnNpbXBsaWZ5KHMyL3QyKSkifQ==
+</script>
+</div>
+The posterior is Gaussian (likelihood Gaussian × prior Gaussian = Gaussian), so the mode equals the mean, and it is exactly the ridge solution with <span class="math inline">\(\lambda = \sigma^2/\tau^2\)</span>. The prior’s meaning: “before the data, I believe the coefficients are zero-centered with spread <span class="math inline">\(\tau\)</span>.” The posterior is a precision-weighted compromise: data precision <span class="math inline">\(1/\sigma^2\)</span> pulls toward the OLS solution, prior precision <span class="math inline">\(1/\tau^2\)</span> pulls toward zero, and <span class="math inline">\(\lambda\)</span> is the exchange rate between them. Numerical check: as <span class="math inline">\(\tau^2\)</span> decreases (tighter prior), the posterior mean shrinks toward zero — the prior’s pull strengthens.
+</details>
+<p><strong>Exercise 3.</strong> The <span class="math inline">\(\lambda\)</span> path: compute ridge solutions for <span class="math inline">\(\lambda\)</span> on a log grid from <span class="math inline">\(10^{-4}\)</span> to <span class="math inline">\(10^4\)</span> on a collinear dataset, and plot each coefficient against <span class="math inline">\(\lambda\)</span> (a <em>regularization path</em>). Verify three behaviors: (a) as <span class="math inline">\(\lambda \to 0\)</span>, the coefficients approach the OLS solution (which may be wild under collinearity); (b) as <span class="math inline">\(\lambda\)</span> grows, all coefficients shrink smoothly to zero; (c) the collinear pair’s coefficients <em>share</em> the signal as <span class="math inline">\(\lambda\)</span> grows (they move together) — ridge’s “fairness” toward correlated features.</p>
+<details>
+<summary>
+Solution
+</summary>
+<div>
+<div id="pyodide-9" class="exercise-cell">
+
+</div>
+<script type="pyodide-9-contents">
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlLCJmaWctaGVpZ2h0IjozLjIsImZpZy13aWR0aCI6N30sImNvZGUiOiJpbXBvcnQgbnVtcHkgYXMgbnBcbmltcG9ydCBtYXRwbG90bGliLnB5cGxvdCBhcyBwbHRcblxucm5nID0gbnAucmFuZG9tLmRlZmF1bHRfcm5nKDMpXG5uLCBwID0gMTAwLCA0XG5YID0gcm5nLm5vcm1hbChzaXplPShuLCBwKSlcblhbOiwgM10gPSBYWzosIDJdICsgcm5nLm5vcm1hbCgwLCAwLjAxLCBuKSAgICAgICAgIyBjb2xsaW5lYXIgcGFpcjogeDMg4omIIHgyXG5iZXRhX3RydWUgPSBucC5hcnJheShbMS4sIDIuLCAzLiwgMC5dKVxueSA9IFggQCBiZXRhX3RydWUgKyBybmcubm9ybWFsKDAsIDAuNSwgbilcblxubGFtcyA9IG5wLmxvZ3NwYWNlKC00LCA0LCAyMDApXG5wYXRoID0gbnAuYXJyYXkoW25wLmxpbmFsZy5zb2x2ZShYLlQgQCBYICsgbGFtICogbnAuZXllKHApLCBYLlQgQCB5KSBmb3IgbGFtIGluIGxhbXNdKVxuXG5maWcsIGF4ID0gcGx0LnN1YnBsb3RzKGZpZ3NpemU9KDcsIDMuMikpXG5mb3IgaiBpbiByYW5nZShwKTpcbiAgICBheC5wbG90KGxhbXMsIHBhdGhbOiwgal0sIGx3PTEuNSwgbGFiZWw9ZlwizrJ7an1cIiArIChcIiAoY29sbGluZWFyKVwiIGlmIGogPT0gMyBlbHNlIFwiXCIpKVxuYXguc2V0X3hzY2FsZShcImxvZ1wiKVxuYXguc2V0KHhsYWJlbD1cIs67IChsb2cgc2NhbGUpXCIsIHlsYWJlbD1cImNvZWZmaWNpZW50IHZhbHVlXCIsXG4gICAgICAgdGl0bGU9XCJ0aGUgcmVndWxhcml6YXRpb24gcGF0aDogc21vb3RoIHNocmlua2FnZSwgbm8gd2lsZCBzd2luZ3NcIilcbmF4LmxlZ2VuZChmb250c2l6ZT04KVxucGx0LnNob3coKVxuXG5wcmludChcImFzIM674oaSMDogY29lZmZpY2llbnRzIGFwcHJvYWNoIE9MUyAod2lsZCB1bmRlciBjb2xsaW5lYXJpdHkpOlwiLFxuICAgICAgbnAucm91bmQocGF0aFswXSwgMikpXG5wcmludChcImFzIM674oaS4oieOiBhbGwgY29lZmZpY2llbnRzIOKGkiAwOlwiLCBucC5yb3VuZChwYXRoWy0xXSwgNCkpXG5wcmludChcInRoZSBjb2xsaW5lYXIgcGFpciBzaGFyZXMgdGhlIHNpZ25hbDogzrIyIGFuZCDOsjMgbW92ZSB0b2dldGhlclwiKSJ9
+</script>
+</div>
+The path is the bias–variance trade-off (<a href="../part-04-validation-model-selection/04-4-bias-variance.html">4.4</a>) made visible: at the left edge, OLS’s variance is on full display (the collinear coefficients swing wildly); as <span class="math inline">\(\lambda\)</span> grows, the variance collapses and the bias grows smoothly. The collinear pair’s “sharing” is ridge’s answer to <a href="../part-05-regularization-high-dimensions/05-1-feature-selection.html">5.1</a>’s selection problem: where lasso picks one of the correlated features, ridge keeps both and splits the effect — the coefficients move together, and the <em>sum</em> is stable even as the individual split wobbles.
+</details>
+</section>
+</section>
+<section id="advanced-information-pitfalls" class="level2">
+<h2 class="anchored" data-anchor-id="advanced-information-pitfalls">4. Advanced Information &amp; Pitfalls</h2>
+<ul>
+<li><strong><span class="math inline">\(\lambda\)</span> is in units of the data.</strong> The objective is <span class="math inline">\(\text{RSS} + \lambda\|\beta\|^2\)</span> — RSS is in units of <span class="math inline">\(y^2\)</span>, so <span class="math inline">\(\lambda\)</span>’s meaning depends on <span class="math inline">\(n\)</span> and the feature scales. This is why every implementation standardizes first and why <span class="math inline">\(\lambda\)</span> values aren’t comparable across datasets. The path (Exercise 3) is the scale-free way to see it.</li>
+<li><strong>Don’t penalize the intercept</strong> — and more generally, don’t penalize coefficients you <em>want</em> at their natural value (e.g., a known confounder). Partial penalization (penalty factors) is the generalization.</li>
+<li><strong>Ridge never zeroes a coefficient</strong> — the L2 ball is round, so the solution is always interior (all coefficients nonzero). If you need <em>selection</em> (exact zeros), that’s lasso’s L1 diamond — <a href="../appendix-a-derivations/a-5-lasso-no-closed-form.html">A.5</a> derives why the shapes differ. Elastic net (<a href="../part-05-regularization-high-dimensions/05-4-elastic-net.html">5.4</a>) mixes the two.</li>
+<li><strong>The SVD view is the right mental model:</strong> ridge = spectral filter. Small singular values = directions the data doesn’t identify = noise amplification; ridge damps them. When you understand the solution as “OLS with the noisy directions filtered,” the hyperparameter choice becomes intuitive.</li>
+<li><strong>Generalized ridge:</strong> any positive definite matrix <span class="math inline">\(P\)</span> can replace <span class="math inline">\(I\)</span> — <span class="math inline">\(\text{RSS} + \lambda\beta^\top P\beta\)</span> encodes <em>structured</em> priors (e.g., <span class="math inline">\(P\)</span> = a graph Laplacian for spatial smoothness). The derivation is identical; only the meaning of the penalty changes.</li>
+</ul>
+<section id="read-refactor-ai-code" class="level3">
+<h3 class="anchored" data-anchor-id="read-refactor-ai-code">Read &amp; Refactor AI Code</h3>
+<p>This AI-generated ridge solver has <strong>three bugs</strong>. Diagnose before running the fixed version.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># AI-generated: ridge regression (will not run here — spot the bugs)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ridge(X, y, lam):</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    n, p <span class="op">=</span> X.shape</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    beta <span class="op">=</span> np.linalg.solve(X.T <span class="op">@</span> X <span class="op">+</span> lam <span class="op">*</span> np.eye(p), X.T <span class="op">@</span> y)   <span class="co"># </span><span class="al">BUG</span><span class="co"> 1 (below)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> beta</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> standardize(X):</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> X <span class="op">/</span> X.std(axis<span class="op">=</span><span class="dv">0</span>)                    <span class="co"># </span><span class="al">BUG</span><span class="co"> 2</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>X <span class="op">=</span> np.array([[<span class="dv">1</span>, <span class="dv">2</span>], [<span class="dv">1</span>, <span class="dv">4</span>], [<span class="dv">1</span>, <span class="dv">6</span>]], dtype<span class="op">=</span><span class="bu">float</span>)   <span class="co"># </span><span class="al">BUG</span><span class="co"> 3</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>y <span class="op">=</span> np.array([<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>], dtype<span class="op">=</span><span class="bu">float</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<details>
+<summary>
+What’s wrong, and the fix
+</summary>
+<ol type="1">
+<li><strong>The intercept is penalized:</strong> the <code>np.eye(p)</code> adds <span class="math inline">\(\lambda\)</span> to the intercept’s diagonal too — shrinking the mean of <span class="math inline">\(y\)</span> toward zero and biasing every slope. Fix: penalize only the non-intercept coefficients — add <span class="math inline">\(\lambda\)</span> to the submatrix, or center <span class="math inline">\(y\)</span> and <span class="math inline">\(X\)</span> and fit without an intercept.</li>
+<li><strong>Standardization without centering:</strong> <code>X / X.std()</code> scales but doesn’t center — the features keep their means, so the intercept column (if present) isn’t orthogonal to them, and the penalty still distorts the fit. Standardization is <em>both</em>: <code>(X - X.mean(0)) / X.std(0)</code>.</li>
+<li><strong>The design matrix is integer-typed:</strong> <code>np.array([[1, 2], ...])</code> without <code>dtype=float</code> creates int64 — <code>X.T @ X</code> is integer arithmetic and the solve can silently truncate. Always cast.</li>
+</ol>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># fixed</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> standardize(X):</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    X <span class="op">=</span> np.asarray(X, dtype<span class="op">=</span><span class="bu">float</span>)</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> (X <span class="op">-</span> X.mean(axis<span class="op">=</span><span class="dv">0</span>)) <span class="op">/</span> X.std(axis<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ridge(X, y, lam):</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    X <span class="op">=</span> np.asarray(X, dtype<span class="op">=</span><span class="bu">float</span>)<span class="op">;</span> y <span class="op">=</span> np.asarray(y, dtype<span class="op">=</span><span class="bu">float</span>)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    yc <span class="op">=</span> y <span class="op">-</span> y.mean()</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    Xc <span class="op">=</span> standardize(X[:, <span class="dv">1</span>:])                     <span class="co"># center + scale the features</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    beta <span class="op">=</span> np.linalg.solve(Xc.T <span class="op">@</span> Xc <span class="op">+</span> lam <span class="op">*</span> np.eye(Xc.shape[<span class="dv">1</span>]), Xc.T <span class="op">@</span> yc)</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> np.concatenate([[y.mean()], beta])     <span class="co"># intercept = mean (unpenalized)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</section>
+</section>
+<section id="advanced-questions" class="level2">
+<h2 class="anchored" data-anchor-id="advanced-questions">5. Advanced Questions</h2>
+<p><strong>Q1.</strong> Ridge as a spectral filter, quantified: using the SVD form, compute the <em>effective degrees of freedom</em> of a ridge fit: <span class="math inline">\(\text{df}(\lambda) = \sum_j \frac{d_j^2}{d_j^2 + \lambda}\)</span>. Show it decreases from <span class="math inline">\(p\)</span> (at <span class="math inline">\(\lambda = 0\)</span>) to <span class="math inline">\(0\)</span> (as <span class="math inline">\(\lambda \to \infty\)</span>), and verify it against the hat matrix trace <span class="math inline">\(\text{tr}(H_\lambda)\)</span> where <span class="math inline">\(H_\lambda = X(X^\top X + \lambda I)^{-1}X^\top\)</span>. Then state why this is the right complexity measure for the bias–variance trade-off.</p>
+<details>
+<summary>
+Hint
+</summary>
+The hat matrix’s trace counts the “number of parameters the fit effectively uses” — for OLS it’s exactly <span class="math inline">\(p\)</span>; for ridge it’s the sum of the shrinkage factors.
+</details>
+<details>
+<summary>
+Solution
+</summary>
+<span class="math inline">\(H_\lambda = X(X^\top X + \lambda I)^{-1}X^\top = U\,\text{diag}\!\left(\frac{d_j^2}{d_j^2 + \lambda}\right)U^\top\)</span>, so <span class="math inline">\(\text{tr}(H_\lambda) = \sum_j \frac{d_j^2}{d_j^2 + \lambda}\)</span>. At <span class="math inline">\(\lambda = 0\)</span> the sum is <span class="math inline">\(p\)</span> (OLS uses all <span class="math inline">\(p\)</span> directions); as <span class="math inline">\(\lambda \to \infty\)</span> it decays to 0 (the fit uses nothing). Each direction contributes its shrinkage factor — the well-identified directions count almost fully, the noisy ones count not at all. This is the right complexity measure because the variance of the fit is <span class="math inline">\(\sigma^2 \text{tr}(H_\lambda^2)\)</span> and the effective number of parameters controls the variance–bias balance: <span class="math inline">\(\text{df}(\lambda)\)</span> is the dial of <a href="../part-04-validation-model-selection/04-4-bias-variance.html">4.4</a>, set by <span class="math inline">\(\lambda\)</span>. It’s also what makes generalized cross-validation (<a href="../part-05-regularization-high-dimensions/05-2-ridge-regression.html">5.2</a>) cheap: GCV’s formula only needs <span class="math inline">\(\text{tr}(H_\lambda)\)</span>, not the full hat matrix.
+</details>
+<p><strong>Q2.</strong> The limit connection — ridge as OLS on augmented data: show that the ridge solution is the OLS solution on the augmented system <span class="math inline">\(\tilde X = [X; \sqrt{\lambda}\,I]\)</span>, <span class="math inline">\(\tilde y = [y; 0]\)</span> — stack <span class="math inline">\(\sqrt{\lambda}\)</span> rows of “the coefficients should be zero” onto the data. Then state the two readings this gives: (a) the penalty as <em>data</em> (pseudo-observations pulling <span class="math inline">\(\beta\)</span> to zero), and (b) why this makes ridge’s solution always exist even when <span class="math inline">\(X^\top X\)</span> is singular.</p>
+<details>
+<summary>
+Hint
+</summary>
+The augmented RSS is <span class="math inline">\(\|y - X\beta\|^2 + \lambda\|\beta\|^2\)</span> — exactly the ridge objective. The normal equations of the augmented system are the ridge normal equations.
+</details>
+<details>
+<summary>
+Solution
+</summary>
+The augmented OLS problem <span class="math inline">\(\min_\beta \|\tilde y - \tilde X\beta\|^2\)</span> has objective <span class="math inline">\(\|y - X\beta\|^2 + \|\sqrt{\lambda}I\beta - 0\|^2 = \text{RSS} + \lambda\|\beta\|^2\)</span> — the ridge objective, so the solutions coincide. Reading (a): the penalty is <span class="math inline">\(p\)</span> extra <em>observations</em> saying “the coefficient vector is zero,” each with weight <span class="math inline">\(\sqrt{\lambda}\)</span> — the prior made literal. Reading (b): the augmented design <span class="math inline">\(\tilde X = [X; \sqrt{\lambda}I]\)</span> has full column rank for any <span class="math inline">\(\lambda &gt; 0\)</span> (the appended <span class="math inline">\(\sqrt{\lambda}I\)</span> supplies the missing directions), so <span class="math inline">\(\tilde X^\top \tilde X = X^\top X + \lambda I\)</span> is always invertible — ridge is OLS on a system the data alone couldn’t identify. This is the cleanest statement of what regularization <em>is</em>: <strong>adding just enough information to make the problem well-posed</strong>, whether that information is a prior, a penalty, or pseudo-data.
+</details>
+</section>
+<section id="complex-questions" class="level2">
+<h2 class="anchored" data-anchor-id="complex-questions">6. Complex Questions</h2>
+<p><strong>C1 (ridge × <a href="../appendix-a-derivations/a-5-lasso-no-closed-form.html">A.5 lasso</a> × <a href="../part-05-regularization-high-dimensions/05-3-lasso-regression.html">5.3</a>).</strong> Ridge’s L2 ball gives smooth shrinkage; lasso’s L1 diamond gives exact zeros. Derive both from the same constrained form — <span class="math inline">\(\min \text{RSS}\)</span> s.t. <span class="math inline">\(\|\beta\|_q \le t\)</span> — and show the constraint’s <em>shape</em> (round vs pointy) is the whole difference: the round ball’s smooth boundary is never axis-aligned, so the constrained solution never lands exactly on an axis; the diamond’s corners are on the axes, so the solution lands there and zeroes coefficients. The geometry of the constraint is the geometry of the solution.</p>
+<p><strong>C2 (ridge × <a href="../appendix-a-derivations/a-6-pca-first-component.html">A.6 PCA</a> × <a href="../part-05-regularization-high-dimensions/05-5-pcr-pls.html">5.5</a>).</strong> Ridge and PCR both damp the small singular directions of <span class="math inline">\(X\)</span> — ridge smoothly, PCR by truncation. Show that PCR (regress <span class="math inline">\(y\)</span> on the top-<span class="math inline">\(k\)</span> principal components) is the <span class="math inline">\(\lambda \to \infty\)</span> limit of ridge <em>per direction</em>: ridge with <span class="math inline">\(\lambda\)</span> between <span class="math inline">\(d_{k+1}^2\)</span> and <span class="math inline">\(d_k^2\)</span> keeps directions <span class="math inline">\(1..k\)</span> almost fully and damps the rest — a soft truncation. Then state when you’d prefer each (interpretability vs smoothness), and why partial least squares (<a href="../part-05-regularization-high-dimensions/05-5-pcr-pls.html">5.5</a>) — which finds directions that matter for <span class="math inline">\(y\)</span>, not just <span class="math inline">\(X\)</span> — is the <span class="math inline">\(y\)</span>-aware version of the same idea.</p>
+</section>
+<section id="summary" class="level2">
+<h2 class="anchored" data-anchor-id="summary">7. Summary</h2>
+<ul>
+<li>Ridge: <span class="math inline">\(\hat\beta_\lambda = (X^\top X + \lambda I)^{-1}X^\top y\)</span> — <a href="../appendix-a-derivations/a-1-normal-equations.html">A.1</a>’s normal equations with <span class="math inline">\(\lambda I\)</span> added.</li>
+<li><span class="math inline">\(\lambda I\)</span> shifts every eigenvalue up by <span class="math inline">\(\lambda\)</span>: the singular directions become invertible — the penalty <em>repairs the algebra</em>.</li>
+<li>The SVD view: ridge shrinks each singular direction by <span class="math inline">\(\frac{d_j^2}{d_j^2 + \lambda}\)</span> — strong directions kept, weak directions damped. OLS’s <span class="math inline">\(1/d_j\)</span> explosion is bounded by <span class="math inline">\(1/(2\sqrt{\lambda})\)</span>.</li>
+<li>Standardize first (the penalty is scale-dependent); never penalize the intercept.</li>
+<li>Ridge is the posterior mode under <span class="math inline">\(\beta \sim N(0, \tau^2 I)\)</span> — <span class="math inline">\(\lambda = \sigma^2/\tau^2\)</span>, the noise-to-prior ratio.</li>
+<li>Ridge = OLS on augmented data <span class="math inline">\([X; \sqrt{\lambda}I]\)</span>, <span class="math inline">\([y; 0]\)</span> — regularization as information, not magic.</li>
+<li>Next: <a href="../appendix-a-derivations/a-5-lasso-no-closed-form.html">A.5 Why lasso has no closed form</a> — the L1 penalty’s kink, and why it buys sparsity at the price of closedness.</li>
+</ul>
+
+
+<script type="pyodide-data">
+eyJvcHRpb25zIjp7ImVudiI6eyJQTE9UTFlfUkVOREVSRVIiOiJwbG90bHlfbWltZXR5cGUifSwiaW5kZXhVUkwiOiJodHRwczovL2Nkbi5qc2RlbGl2ci5uZXQvcHlvZGlkZS92MC4yOC4xL2Z1bGwvIn0sInBhY2thZ2VzIjp7InBrZ3MiOlsicHlvZGlkZV9odHRwIiwibWljcm9waXAiLCJpcHl0aG9uIiwibnVtcHkiLCJzeW1weSJdfX0=
+</script>
+<script type="ojs-module-contents">
+eyJjb250ZW50cyI6W3siY2VsbE5hbWUiOiJweW9kaWRlLTkiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoiX3B5b2RpZGVfdmFsdWVfOSA9IHtcbiAgY29uc3QgeyBoaWdobGlnaHRQeXRob24sIGI2NERlY29kZX0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS05LWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgLy8gRGVmYXVsdCBldmFsdWF0aW9uIGNvbmZpZ3VyYXRpb25cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oe1xuICAgIGlkOiBcInB5b2RpZGUtOS1jb250ZW50c1wiLFxuICAgIGVjaG86IHRydWUsXG4gICAgb3V0cHV0OiB0cnVlXG4gIH0sIGJsb2NrLmF0dHIpO1xuXG4gIC8vIEV2YWx1YXRlIHRoZSBwcm92aWRlZCBQeXRob24gY29kZVxuICBjb25zdCByZXN1bHQgPSBweW9kaWRlT2pzLnByb2Nlc3Moe2NvZGU6IGJsb2NrLmNvZGUsIG9wdGlvbnN9LCB7fSk7XG5cbiAgLy8gRWFybHkgeWllbGQgd2hpbGUgd2Ugd2FpdCBmb3IgdGhlIGZpcnN0IGV2YWx1YXRpb24gYW5kIHJlbmRlclxuICBpZiAob3B0aW9ucy5vdXRwdXQgJiYgIShcIjlcIiBpbiBweW9kaWRlT2pzLnJlbmRlcmVkT2pzKSkge1xuICAgIGNvbnN0IGNvbnRhaW5lciA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJkaXZcIik7XG4gICAgY29uc3Qgc3Bpbm5lciA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJkaXZcIik7XG5cbiAgICBpZiAob3B0aW9ucy5lY2hvKSB7XG4gICAgICAvLyBTaG93IG91dHB1dCBhcyBoaWdobGlnaHRlZCBzb3VyY2VcbiAgICAgIGNvbnN0IHByZUVsZW0gPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwicHJlXCIpO1xuICAgICAgY29udGFpbmVyLmNsYXNzTmFtZSA9IFwic291cmNlQ29kZVwiO1xuICAgICAgcHJlRWxlbS5jbGFzc05hbWUgPSBcInNvdXJjZUNvZGUgcHl0aG9uXCI7XG4gICAgICBwcmVFbGVtLmFwcGVuZENoaWxkKGhpZ2hsaWdodFB5dGhvbihibG9jay5jb2RlKSk7XG4gICAgICBzcGlubmVyLmNsYXNzTmFtZSA9IFwic3Bpbm5lci1ncm93IHNwaW5uZXItZ3Jvdy1zbSBtLTIgcG9zaXRpb24tYWJzb2x1dGUgdG9wLTAgZW5kLTBcIjtcbiAgICAgIHByZUVsZW0uYXBwZW5kQ2hpbGQoc3Bpbm5lcik7XG4gICAgICBjb250YWluZXIuYXBwZW5kQ2hpbGQocHJlRWxlbSk7XG4gICAgfSBlbHNlIHtcbiAgICAgIHNwaW5uZXIuY2xhc3NOYW1lID0gXCJzcGlubmVyLWJvcmRlciBzcGlubmVyLWJvcmRlci1zbVwiO1xuICAgICAgY29udGFpbmVyLmFwcGVuZENoaWxkKHNwaW5uZXIpO1xuICAgIH1cblxuICAgIHlpZWxkIGNvbnRhaW5lcjtcbiAgfVxuXG4gIHB5b2RpZGVPanMucmVuZGVyZWRPanNbXCI5XCJdID0gdHJ1ZTtcbiAgeWllbGQgYXdhaXQgcmVzdWx0O1xufVxuIn0seyJjZWxsTmFtZSI6InB5b2RpZGUtOCIsImlubGluZSI6ZmFsc2UsIm1ldGhvZE5hbWUiOiJpbnRlcnByZXQiLCJzb3VyY2UiOiJfcHlvZGlkZV92YWx1ZV84ID0ge1xuICBjb25zdCB7IGhpZ2hsaWdodFB5dGhvbiwgYjY0RGVjb2RlfSA9IHdpbmRvdy5fZXhlcmNpc2Vfb2pzX3J1bnRpbWU7XG5cbiAgY29uc3Qgc2NyaXB0Q29udGVudCA9IGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3IoYHNjcmlwdFt0eXBlPVxcXCJweW9kaWRlLTgtY29udGVudHNcXFwiXWApLnRleHRDb250ZW50O1xuICBjb25zdCBibG9jayA9IEpTT04ucGFyc2UoYjY0RGVjb2RlKHNjcmlwdENvbnRlbnQpKTtcblxuICAvLyBEZWZhdWx0IGV2YWx1YXRpb24gY29uZmlndXJhdGlvblxuICBjb25zdCBvcHRpb25zID0gT2JqZWN0LmFzc2lnbih7XG4gICAgaWQ6IFwicHlvZGlkZS04LWNvbnRlbnRzXCIsXG4gICAgZWNobzogdHJ1ZSxcbiAgICBvdXRwdXQ6IHRydWVcbiAgfSwgYmxvY2suYXR0cik7XG5cbiAgLy8gRXZhbHVhdGUgdGhlIHByb3ZpZGVkIFB5dGhvbiBjb2RlXG4gIGNvbnN0IHJlc3VsdCA9IHB5b2RpZGVPanMucHJvY2Vzcyh7Y29kZTogYmxvY2suY29kZSwgb3B0aW9uc30sIHt9KTtcblxuICAvLyBFYXJseSB5aWVsZCB3aGlsZSB3ZSB3YWl0IGZvciB0aGUgZmlyc3QgZXZhbHVhdGlvbiBhbmQgcmVuZGVyXG4gIGlmIChvcHRpb25zLm91dHB1dCAmJiAhKFwiOFwiIGluIHB5b2RpZGVPanMucmVuZGVyZWRPanMpKSB7XG4gICAgY29uc3QgY29udGFpbmVyID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcImRpdlwiKTtcbiAgICBjb25zdCBzcGlubmVyID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcImRpdlwiKTtcblxuICAgIGlmIChvcHRpb25zLmVjaG8pIHtcbiAgICAgIC8vIFNob3cgb3V0cHV0IGFzIGhpZ2hsaWdodGVkIHNvdXJjZVxuICAgICAgY29uc3QgcHJlRWxlbSA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJwcmVcIik7XG4gICAgICBjb250YWluZXIuY2xhc3NOYW1lID0gXCJzb3VyY2VDb2RlXCI7XG4gICAgICBwcmVFbGVtLmNsYXNzTmFtZSA9IFwic291cmNlQ29kZSBweXRob25cIjtcbiAgICAgIHByZUVsZW0uYXBwZW5kQ2hpbGQoaGlnaGxpZ2h0UHl0aG9uKGJsb2NrLmNvZGUpKTtcbiAgICAgIHNwaW5uZXIuY2xhc3NOYW1lID0gXCJzcGlubmVyLWdyb3cgc3Bpbm5lci1ncm93LXNtIG0tMiBwb3NpdGlvbi1hYnNvbHV0ZSB0b3AtMCBlbmQtMFwiO1xuICAgICAgcHJlRWxlbS5hcHBlbmRDaGlsZChzcGlubmVyKTtcbiAgICAgIGNvbnRhaW5lci5hcHBlbmRDaGlsZChwcmVFbGVtKTtcbiAgICB9IGVsc2Uge1xuICAgICAgc3Bpbm5lci5jbGFzc05hbWUgPSBcInNwaW5uZXItYm9yZGVyIHNwaW5uZXItYm9yZGVyLXNtXCI7XG4gICAgICBjb250YWluZXIuYXBwZW5kQ2hpbGQoc3Bpbm5lcik7XG4gICAgfVxuXG4gICAgeWllbGQgY29udGFpbmVyO1xuICB9XG5cbiAgcHlvZGlkZU9qcy5yZW5kZXJlZE9qc1tcIjhcIl0gPSB0cnVlO1xuICB5aWVsZCBhd2FpdCByZXN1bHQ7XG59XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS03IiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6Il9weW9kaWRlX3ZhbHVlXzcgPSB7XG4gIGNvbnN0IHsgaGlnaGxpZ2h0UHl0aG9uLCBiNjREZWNvZGV9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtNy1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIC8vIERlZmF1bHQgZXZhbHVhdGlvbiBjb25maWd1cmF0aW9uXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHtcbiAgICBpZDogXCJweW9kaWRlLTctY29udGVudHNcIixcbiAgICBlY2hvOiB0cnVlLFxuICAgIG91dHB1dDogdHJ1ZVxuICB9LCBibG9jay5hdHRyKTtcblxuICAvLyBFdmFsdWF0ZSB0aGUgcHJvdmlkZWQgUHl0aG9uIGNvZGVcbiAgY29uc3QgcmVzdWx0ID0gcHlvZGlkZU9qcy5wcm9jZXNzKHtjb2RlOiBibG9jay5jb2RlLCBvcHRpb25zfSwge30pO1xuXG4gIC8vIEVhcmx5IHlpZWxkIHdoaWxlIHdlIHdhaXQgZm9yIHRoZSBmaXJzdCBldmFsdWF0aW9uIGFuZCByZW5kZXJcbiAgaWYgKG9wdGlvbnMub3V0cHV0ICYmICEoXCI3XCIgaW4gcHlvZGlkZU9qcy5yZW5kZXJlZE9qcykpIHtcbiAgICBjb25zdCBjb250YWluZXIgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpO1xuICAgIGNvbnN0IHNwaW5uZXIgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpO1xuXG4gICAgaWYgKG9wdGlvbnMuZWNobykge1xuICAgICAgLy8gU2hvdyBvdXRwdXQgYXMgaGlnaGxpZ2h0ZWQgc291cmNlXG4gICAgICBjb25zdCBwcmVFbGVtID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcInByZVwiKTtcbiAgICAgIGNvbnRhaW5lci5jbGFzc05hbWUgPSBcInNvdXJjZUNvZGVcIjtcbiAgICAgIHByZUVsZW0uY2xhc3NOYW1lID0gXCJzb3VyY2VDb2RlIHB5dGhvblwiO1xuICAgICAgcHJlRWxlbS5hcHBlbmRDaGlsZChoaWdobGlnaHRQeXRob24oYmxvY2suY29kZSkpO1xuICAgICAgc3Bpbm5lci5jbGFzc05hbWUgPSBcInNwaW5uZXItZ3JvdyBzcGlubmVyLWdyb3ctc20gbS0yIHBvc2l0aW9uLWFic29sdXRlIHRvcC0wIGVuZC0wXCI7XG4gICAgICBwcmVFbGVtLmFwcGVuZENoaWxkKHNwaW5uZXIpO1xuICAgICAgY29udGFpbmVyLmFwcGVuZENoaWxkKHByZUVsZW0pO1xuICAgIH0gZWxzZSB7XG4gICAgICBzcGlubmVyLmNsYXNzTmFtZSA9IFwic3Bpbm5lci1ib3JkZXIgc3Bpbm5lci1ib3JkZXItc21cIjtcbiAgICAgIGNvbnRhaW5lci5hcHBlbmRDaGlsZChzcGlubmVyKTtcbiAgICB9XG5cbiAgICB5aWVsZCBjb250YWluZXI7XG4gIH1cblxuICBweW9kaWRlT2pzLnJlbmRlcmVkT2pzW1wiN1wiXSA9IHRydWU7XG4gIHlpZWxkIGF3YWl0IHJlc3VsdDtcbn1cbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTYiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoidmlld29mIF9weW9kaWRlX2VkaXRvcl82ID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS02LWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtNi1jb250ZW50c2AgfSwgYmxvY2suYXR0cik7XG4gIGNvbnN0IGVkaXRvciA9IG5ldyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IoXG4gICAgcHlvZGlkZU9qcy5weW9kaWRlUHJvbWlzZSxcbiAgICBibG9jay5jb2RlLFxuICAgIG9wdGlvbnNcbiAgKTtcblxuICByZXR1cm4gZWRpdG9yLmNvbnRhaW5lcjtcbn1cbl9weW9kaWRlX3ZhbHVlXzYgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzYsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTUiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoidmlld29mIF9weW9kaWRlX2VkaXRvcl81ID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS01LWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtNS1jb250ZW50c2AgfSwgYmxvY2suYXR0cik7XG4gIGNvbnN0IGVkaXRvciA9IG5ldyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IoXG4gICAgcHlvZGlkZU9qcy5weW9kaWRlUHJvbWlzZSxcbiAgICBibG9jay5jb2RlLFxuICAgIG9wdGlvbnNcbiAgKTtcblxuICByZXR1cm4gZWRpdG9yLmNvbnRhaW5lcjtcbn1cbl9weW9kaWRlX3ZhbHVlXzUgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzUsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTQiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoidmlld29mIF9weW9kaWRlX2VkaXRvcl80ID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS00LWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtNC1jb250ZW50c2AgfSwgYmxvY2suYXR0cik7XG4gIGNvbnN0IGVkaXRvciA9IG5ldyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IoXG4gICAgcHlvZGlkZU9qcy5weW9kaWRlUHJvbWlzZSxcbiAgICBibG9jay5jb2RlLFxuICAgIG9wdGlvbnNcbiAgKTtcblxuICByZXR1cm4gZWRpdG9yLmNvbnRhaW5lcjtcbn1cbl9weW9kaWRlX3ZhbHVlXzQgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzQsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTMiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoidmlld29mIF9weW9kaWRlX2VkaXRvcl8zID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS0zLWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtMy1jb250ZW50c2AgfSwgYmxvY2suYXR0cik7XG4gIGNvbnN0IGVkaXRvciA9IG5ldyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IoXG4gICAgcHlvZGlkZU9qcy5weW9kaWRlUHJvbWlzZSxcbiAgICBibG9jay5jb2RlLFxuICAgIG9wdGlvbnNcbiAgKTtcblxuICByZXR1cm4gZWRpdG9yLmNvbnRhaW5lcjtcbn1cbl9weW9kaWRlX3ZhbHVlXzMgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzMsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTIiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoidmlld29mIF9weW9kaWRlX2VkaXRvcl8yID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS0yLWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtMi1jb250ZW50c2AgfSwgYmxvY2suYXR0cik7XG4gIGNvbnN0IGVkaXRvciA9IG5ldyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IoXG4gICAgcHlvZGlkZU9qcy5weW9kaWRlUHJvbWlzZSxcbiAgICBibG9jay5jb2RlLFxuICAgIG9wdGlvbnNcbiAgKTtcblxuICByZXR1cm4gZWRpdG9yLmNvbnRhaW5lcjtcbn1cbl9weW9kaWRlX3ZhbHVlXzIgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzIsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTEiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoidmlld29mIF9weW9kaWRlX2VkaXRvcl8xID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS0xLWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtMS1jb250ZW50c2AgfSwgYmxvY2suYXR0cik7XG4gIGNvbnN0IGVkaXRvciA9IG5ldyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IoXG4gICAgcHlvZGlkZU9qcy5weW9kaWRlUHJvbWlzZSxcbiAgICBibG9jay5jb2RlLFxuICAgIG9wdGlvbnNcbiAgKTtcblxuICByZXR1cm4gZWRpdG9yLmNvbnRhaW5lcjtcbn1cbl9weW9kaWRlX3ZhbHVlXzEgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzEsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLXByZWx1ZGUiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0UXVpZXQiLCJzb3VyY2UiOiJweW9kaWRlT2pzID0ge1xuICBjb25zdCB7XG4gICAgUHlvZGlkZUV2YWx1YXRvcixcbiAgICBQeW9kaWRlRW52aXJvbm1lbnRNYW5hZ2VyLFxuICAgIHNldHVwUHl0aG9uLFxuICAgIHN0YXJ0UHlvZGlkZVdvcmtlcixcbiAgICBiNjREZWNvZGUsXG4gICAgY29sbGFwc2VQYXRoLFxuICB9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzdGF0dXNDb250YWluZXIgPSBkb2N1bWVudC5nZXRFbGVtZW50QnlJZChcImV4ZXJjaXNlLWxvYWRpbmctc3RhdHVzXCIpO1xuICBjb25zdCBpbmRpY2F0b3JDb250YWluZXIgPSBkb2N1bWVudC5nZXRFbGVtZW50QnlJZChcImV4ZXJjaXNlLWxvYWRpbmctaW5kaWNhdG9yXCIpO1xuICBpbmRpY2F0b3JDb250YWluZXIuY2xhc3NMaXN0LnJlbW92ZShcImQtbm9uZVwiKTtcblxuICBsZXQgc3RhdHVzVGV4dCA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJkaXZcIilcbiAgc3RhdHVzVGV4dC5jbGFzc0xpc3QgPSBcImV4ZXJjaXNlLWxvYWRpbmctZGV0YWlsc1wiO1xuICBzdGF0dXNUZXh0ID0gc3RhdHVzQ29udGFpbmVyLmFwcGVuZENoaWxkKHN0YXR1c1RleHQpO1xuICBzdGF0dXNUZXh0LnRleHRDb250ZW50ID0gYEluaXRpYWxpc2VgO1xuXG4gIC8vIEhvaXN0IGluZGljYXRvciBvdXQgZnJvbSBmaW5hbCBzbGlkZSB3aGVuIHJ1bm5pbmcgdW5kZXIgcmV2ZWFsXG4gIGNvbnN0IHJldmVhbFN0YXR1cyA9IGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3IoXCIucmV2ZWFsIC5leGVyY2lzZS1sb2FkaW5nLWluZGljYXRvclwiKTtcbiAgaWYgKHJldmVhbFN0YXR1cykge1xuICAgIHJldmVhbFN0YXR1cy5yZW1vdmUoKTtcbiAgICBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKFwiLnJldmVhbCA+IC5zbGlkZXNcIikuYXBwZW5kQ2hpbGQocmV2ZWFsU3RhdHVzKTtcbiAgfVxuXG4gIC8vIE1ha2UgYW55IHJldmVhbCBzbGlkZXMgd2l0aCBsaXZlIGNlbGxzIHNjcm9sbGFibGVcbiAgZG9jdW1lbnQucXVlcnlTZWxlY3RvckFsbChcIi5yZXZlYWwgLmV4ZXJjaXNlLWNlbGxcIikuZm9yRWFjaCgoZWwpID0+IHtcbiAgICBlbC5jbG9zZXN0KCdzZWN0aW9uLnNsaWRlJykuY2xhc3NMaXN0LmFkZChcInNjcm9sbGFibGVcIik7XG4gIH0pXG5cbiAgLy8gUHlvZGlkZSBzdXBwbGVtZW50YWwgZGF0YSBhbmQgb3B0aW9uc1xuICBjb25zdCBkYXRhQ29udGVudCA9IGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3IoYHNjcmlwdFt0eXBlPVxcXCJweW9kaWRlLWRhdGFcXFwiXWApLnRleHRDb250ZW50O1xuICBjb25zdCBkYXRhID0gSlNPTi5wYXJzZShiNjREZWNvZGUoZGF0YUNvbnRlbnQpKTtcblxuICAvLyBHcmFiIGxpc3Qgb2YgcmVzb3VyY2VzIHRvIGJlIGRvd25sb2FkZWRcbiAgY29uc3QgZmlsZXNDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInZmcy1maWxlXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgZmlsZXMgPSBKU09OLnBhcnNlKGI2NERlY29kZShmaWxlc0NvbnRlbnQpKTtcblxuICBsZXQgcHlvZGlkZVByb21pc2UgPSAoYXN5bmMgKCkgPT4ge1xuICAgIHN0YXR1c1RleHQudGV4dENvbnRlbnQgPSBgRG93bmxvYWRpbmcgUHlvZGlkZWA7XG4gICAgY29uc3QgcHlvZGlkZSA9IGF3YWl0IHN0YXJ0UHlvZGlkZVdvcmtlcihkYXRhLm9wdGlvbnMpO1xuXG4gICAgc3RhdHVzVGV4dC50ZXh0Q29udGVudCA9IGBEb3dubG9hZGluZyBwYWNrYWdlOiBtaWNyb3BpcGA7XG4gICAgYXdhaXQgcHlvZGlkZS5sb2FkUGFja2FnZShcIm1pY3JvcGlwXCIpO1xuICAgIGNvbnN0IG1pY3JvcGlwID0gYXdhaXQgcHlvZGlkZS5weWltcG9ydChcIm1pY3JvcGlwXCIpO1xuICAgIGF3YWl0IGRhdGEucGFja2FnZXMucGtncy5tYXAoKHBrZykgPT4gKCkgPT4ge1xuICAgICAgc3RhdHVzVGV4dC50ZXh0Q29udGVudCA9IGBEb3dubG9hZGluZyBwYWNrYWdlOiAke3BrZ31gO1xuICAgICAgcmV0dXJuIG1pY3JvcGlwLmluc3RhbGwocGtnKTtcbiAgICB9KS5yZWR1Y2UoKGN1ciwgbmV4dCkgPT4gY3VyLnRoZW4obmV4dCksIFByb21pc2UucmVzb2x2ZSgpKTtcbiAgICBhd2FpdCBtaWNyb3BpcC5kZXN0cm95KCk7XG5cbiAgICAvLyBEb3dubG9hZCBhbmQgaW5zdGFsbCByZXNvdXJjZXNcbiAgICBhd2FpdCBmaWxlcy5tYXAoKGZpbGUpID0+IGFzeW5jICgpID0+IHtcbiAgICAgIGNvbnN0IG5hbWUgPSBmaWxlLnN1YnN0cmluZyhmaWxlLmxhc3RJbmRleE9mKCcvJykgKyAxKTtcbiAgICAgIHN0YXR1c1RleHQudGV4dENvbnRlbnQgPSBgRG93bmxvYWRpbmcgcmVzb3VyY2U6ICR7bmFtZX1gO1xuICAgICAgY29uc3QgcmVzcG9uc2UgPSBhd2FpdCBmZXRjaChmaWxlKTtcbiAgICAgIGlmICghcmVzcG9uc2Uub2spIHtcbiAgICAgICAgdGhyb3cgbmV3IEVycm9yKGBDYW4ndCBkb3dubG9hZCBcXGAke2ZpbGV9XFxgLiBFcnJvciAke3Jlc3BvbnNlLnN0YXR1c306IFwiJHtyZXNwb25zZS5zdGF0dXNUZXh0fVwiLmApO1xuICAgICAgfVxuICAgICAgY29uc3QgZGF0YSA9IGF3YWl0IHJlc3BvbnNlLmFycmF5QnVmZmVyKCk7XG5cbiAgICAgIC8vIFN0b3JlIFVSTHMgaW4gdGhlIGN3ZCB3aXRob3V0IGFueSBzdWJkaXJlY3Rvcnkgc3RydWN0dXJlXG4gICAgICBpZiAoZmlsZS5pbmNsdWRlcyhcIjovL1wiKSkge1xuICAgICAgICBmaWxlID0gbmFtZTtcbiAgICAgIH1cblxuICAgICAgLy8gQ29sbGFwc2UgaGlnaGVyIGRpcmVjdG9yeSBzdHJ1Y3R1cmVcbiAgICAgIGZpbGUgPSBjb2xsYXBzZVBhdGgoZmlsZSk7XG5cbiAgICAgIC8vIENyZWF0ZSBkaXJlY3RvcnkgdHJlZSwgaWdub3JpbmcgXCJkaXJlY3RvcnkgZXhpc3RzXCIgVkZTIGVycm9yc1xuICAgICAgY29uc3QgcGFydHMgPSBmaWxlLnNwbGl0KCcvJykuc2xpY2UoMCwgLTEpO1xuICAgICAgbGV0IHBhdGggPSAnJztcbiAgICAgIHdoaWxlIChwYXJ0cy5sZW5ndGggPiAwKSB7XG4gICAgICAgIHBhdGggKz0gcGFydHMuc2hpZnQoKSArICcvJztcbiAgICAgICAgdHJ5IHtcbiAgICAgICAgICBhd2FpdCBweW9kaWRlLkZTLm1rZGlyKHBhdGgpO1xuICAgICAgICB9IGNhdGNoIChlKSB7XG4gICAgICAgICAgaWYgKGUubmFtZSAhPT0gXCJFcnJub0Vycm9yXCIpIHRocm93IGU7XG4gICAgICAgICAgaWYgKGUuZXJybm8gIT09IDIwKSB7XG4gICAgICAgICAgICBjb25zdCBlcnJvclRleHRQdHIgPSBhd2FpdCBweW9kaWRlLl9tb2R1bGUuX3N0cmVycm9yKGUuZXJybm8pO1xuICAgICAgICAgICAgY29uc3QgZXJyb3JUZXh0ID0gYXdhaXQgcHlvZGlkZS5fbW9kdWxlLlVURjhUb1N0cmluZyhlcnJvclRleHRQdHIpO1xuICAgICAgICAgICAgdGhyb3cgbmV3IEVycm9yKGBGaWxlc3lzdGVtIEVycm9yICR7ZS5lcnJub30gXCIke2Vycm9yVGV4dH1cIi5gKTtcbiAgICAgICAgICB9XG4gICAgICAgIH1cbiAgICAgIH1cblxuICAgICAgLy8gV3JpdGUgdGhpcyBmaWxlIHRvIHRoZSBWRlNcbiAgICAgIHRyeSB7XG4gICAgICAgIHJldHVybiBhd2FpdCBweW9kaWRlLkZTLndyaXRlRmlsZShmaWxlLCBuZXcgVWludDhBcnJheShkYXRhKSk7XG4gICAgICB9IGNhdGNoIChlKSB7XG4gICAgICAgIGlmIChlLm5hbWUgIT09IFwiRXJybm9FcnJvclwiKSB0aHJvdyBlO1xuICAgICAgICBjb25zdCBlcnJvclRleHRQdHIgPSBhd2FpdCBweW9kaWRlLl9tb2R1bGUuX3N0cmVycm9yKGUuZXJybm8pO1xuICAgICAgICBjb25zdCBlcnJvclRleHQgPSBhd2FpdCBweW9kaWRlLl9tb2R1bGUuVVRGOFRvU3RyaW5nKGVycm9yVGV4dFB0cik7XG4gICAgICAgIHRocm93IG5ldyBFcnJvcihgRmlsZXN5c3RlbSBFcnJvciAke2UuZXJybm99IFwiJHtlcnJvclRleHR9XCIuYCk7XG4gICAgICB9XG4gICAgfSkucmVkdWNlKChjdXIsIG5leHQpID0+IGN1ci50aGVuKG5leHQpLCBQcm9taXNlLnJlc29sdmUoKSk7XG5cbiAgICBzdGF0dXNUZXh0LnRleHRDb250ZW50ID0gYFB5b2RpZGUgZW52aXJvbm1lbnQgc2V0dXBgO1xuICAgIGF3YWl0IHNldHVwUHl0aG9uKHB5b2RpZGUpO1xuXG4gICAgc3RhdHVzVGV4dC5yZW1vdmUoKTtcbiAgICBpZiAoc3RhdHVzQ29udGFpbmVyLmNoaWxkcmVuLmxlbmd0aCA9PSAwKSB7XG4gICAgICBzdGF0dXNDb250YWluZXIucGFyZW50Tm9kZS5yZW1vdmUoKTtcbiAgICB9XG4gICAgcmV0dXJuIHB5b2RpZGU7XG4gIH0pKCkuY2F0Y2goKGVycikgPT4ge1xuICAgIHN0YXR1c1RleHQuc3R5bGUuY29sb3IgPSBcInZhcigtLWV4ZXJjaXNlLWVkaXRvci1obC1lciwgI0FEMDAwMClcIjtcbiAgICBzdGF0dXNUZXh0LnRleHRDb250ZW50ID0gZXJyLm1lc3NhZ2U7XG4gICAgLy9pbmRpY2F0b3JDb250YWluZXIucXVlcnlTZWxlY3RvcihcIi5zcGlubmVyLWdyb3dcIikuY2xhc3NMaXN0LmFkZChcImQtbm9uZVwiKTtcbiAgICB0aHJvdyBlcnI7XG4gIH0pO1xuXG4gIC8vIEtlZXAgdHJhY2sgb2YgaW5pdGlhbCBPSlMgYmxvY2sgcmVuZGVyXG4gIGNvbnN0IHJlbmRlcmVkT2pzID0ge307XG5cbiAgY29uc3QgcHJvY2VzcyA9IGFzeW5jIChjb250ZXh0LCBpbnB1dHMpID0+IHtcbiAgICBjb25zdCBweW9kaWRlID0gYXdhaXQgcHlvZGlkZVByb21pc2U7XG4gICAgY29uc3QgZXZhbHVhdG9yID0gbmV3IFB5b2RpZGVFdmFsdWF0b3IocHlvZGlkZSwgY29udGV4dCk7XG4gICAgYXdhaXQgZXZhbHVhdG9yLnByb2Nlc3MoaW5wdXRzKTtcbiAgICByZXR1cm4gZXZhbHVhdG9yLmNvbnRhaW5lcjtcbiAgfVxuXG4gIHJldHVybiB7XG4gICAgcHlvZGlkZVByb21pc2UsXG4gICAgcmVuZGVyZWRPanMsXG4gICAgcHJvY2VzcyxcbiAgfTtcbn1cbiJ9XX0=
+</script>
+<div id="exercise-loading-indicator" class="exercise-loading-indicator d-none d-flex align-items-center gap-2">
+<div id="exercise-loading-status" class="d-flex gap-2">
+
+</div>
+<div class="spinner-grow spinner-grow-sm">
+
+</div>
+</div>
+<script type="vfs-file">
+W10=
+</script>
+</section>
+
+</main> <!-- /main -->
+<script type="ojs-module-contents">
+eyJjb250ZW50cyI6W119
+</script>
+<script type="module">
+if (window.location.protocol === "file:") { alert("The OJS runtime does not work with file:// URLs. Please use a web server to view this document."); }
+window._ojs.paths.runtimeToDoc = "../../appendix-a-derivations";
+window._ojs.paths.runtimeToRoot = "../..";
+window._ojs.paths.docToRoot = "..";
+window._ojs.selfContained = false;
+window._ojs.runtime.interpretFromScriptTags();
+</script>
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/enduringchung\.github\.io\/ml-interactive-course\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/EnduringChung/ml-interactive-course/edit/main/appendix-a-derivations/a-4-ridge-regression.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/EnduringChung/ml-interactive-course/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>

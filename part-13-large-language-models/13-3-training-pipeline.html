@@ -706,6 +706,12 @@ window.Quarto = {
  <span class="menu-text">9.6 Practical Clustering Issues</span></a>
   </div>
 </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-09-unsupervised-learning/09-7-manifolds-and-embeddings.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">9.7 Manifolds, t-SNE, UMAP &amp; Autoencoders</span></a>
+  </div>
+</li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
@@ -933,8 +939,44 @@ window.Quarto = {
       </div>
       <ul id="quarto-sidebar-section-15" class="collapse list-unstyled sidebar-section depth1 ">  
           <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendix-a-derivations/a-1-normal-equations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">A.1 Normal Equations for Linear Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendix-a-derivations/a-2-least-squares-is-mle.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">A.2 Why Least Squares Is Maximum Likelihood</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendix-a-derivations/a-3-logistic-gradient.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">A.3 Logistic Regression: Deriving the Gradient</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
  <span class="menu-text">appendix-a-derivations/a-4-ridge-closed-form.qmd</span>
   </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendix-a-derivations/a-5-lasso-no-closed-form.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">A.5 Why Lasso Has No Closed Form</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendix-a-derivations/a-6-pca-first-component.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">A.6 PCA: Deriving the First Principal Component</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../appendix-a-derivations/a-7-auprc-trapezoidal.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">A.7 AUPRC Trapezoidal Estimator, Worked Example</span></a>
+  </div>
+</li>
       </ul>
   </li>
     </ul>
@@ -985,7 +1027,7 @@ window.Quarto = {
 </blockquote>
 <section id="basic-concept" class="level2">
 <h2 class="anchored" data-anchor-id="basic-concept">1. Basic Concept</h2>
-<p><strong>Stage 1 — Pretraining.</strong> The model (randomly initialized transformer, <a href="../part-13-large-language-models/13-2-transformer-architecture.html">13.2</a>) is trained on next-token prediction over a huge, lightly filtered corpus — trillions of tokens from web pages, books, code. The loss is cross-entropy, which by <a href="../appendix-a-derivations/a-2-least-squares-is-mle.qmd">A.2</a>’s logic is exactly maximum likelihood: the model learns the conditional distribution of text. Everything the model “knows” is statistical structure extracted from this corpus — facts, style, reasoning patterns, and the corpus’s biases.</p>
+<p><strong>Stage 1 — Pretraining.</strong> The model (randomly initialized transformer, <a href="../part-13-large-language-models/13-2-transformer-architecture.html">13.2</a>) is trained on next-token prediction over a huge, lightly filtered corpus — trillions of tokens from web pages, books, code. The loss is cross-entropy, which by <a href="../appendix-a-derivations/a-2-least-squares-is-mle.html">A.2</a>’s logic is exactly maximum likelihood: the model learns the conditional distribution of text. Everything the model “knows” is statistical structure extracted from this corpus — facts, style, reasoning patterns, and the corpus’s biases.</p>
 <p><strong>Stage 2 — Supervised fine-tuning (SFT).</strong> Pretrained models are bad at <em>following instructions</em> — they continue text, they don’t answer questions. SFT trains on hundreds of thousands of human-written (instruction, response) pairs, same next-token loss, now on the response tokens only. This teaches the <em>format</em> of helpful behavior.</p>
 <p><strong>Stage 3 — Alignment (RLHF / DPO).</strong> SFT alone produces a model that imitates response <em>style</em>; alignment shapes <em>preferences</em>. RLHF: collect human comparisons of responses, train a reward model, then optimize the policy against it with PPO. DPO: a simpler, stable reformulation that skips the explicit reward model — directly optimizing the policy on preference pairs. Both answer “helpful, honest, harmless” at a level SFT can’t reach from demonstrations alone.</p>
 <p><strong>What’s new relative to <a href="../part-10-deep-learning/10-4-gradient-descent-backprop.html">10.4</a>’s loop:</strong> the loop itself (forward → loss → backward → update) is identical. The engineering that scale demands:</p>
@@ -1068,7 +1110,7 @@ eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiIyBkZWR1cCByZWZsZXg6IGV4
 </section>
 <section id="exercises-with-solutions" class="level3">
 <h3 class="anchored" data-anchor-id="exercises-with-solutions">Exercises (with solutions)</h3>
-<p><strong>Exercise 1.</strong> The neural bigram converges to the counting estimate: after training the Section 1 model, extract the model’s implied conditional probabilities <span class="math inline">\(P_\theta(\text{next} \mid \text{cur}) = \text{softmax}(W)\)</span> and compare them to the <a href="../part-13-large-language-models/13-1-foundations.html">13.1</a> counting estimate <span class="math inline">\(\text{count}(w_t, w_{t+1}) / \text{count}(w_t)\)</span> for every (context, next) pair. Report the maximum absolute difference. Then explain <em>why</em> they must agree — connect to <a href="../appendix-a-derivations/a-2-least-squares-is-mle.qmd">A.2</a>: cross-entropy MLE on one-hot inputs is the empirical conditional distribution.</p>
+<p><strong>Exercise 1.</strong> The neural bigram converges to the counting estimate: after training the Section 1 model, extract the model’s implied conditional probabilities <span class="math inline">\(P_\theta(\text{next} \mid \text{cur}) = \text{softmax}(W)\)</span> and compare them to the <a href="../part-13-large-language-models/13-1-foundations.html">13.1</a> counting estimate <span class="math inline">\(\text{count}(w_t, w_{t+1}) / \text{count}(w_t)\)</span> for every (context, next) pair. Report the maximum absolute difference. Then explain <em>why</em> they must agree — connect to <a href="../appendix-a-derivations/a-2-least-squares-is-mle.html">A.2</a>: cross-entropy MLE on one-hot inputs is the empirical conditional distribution.</p>
 <details>
 <summary>
 Solution
@@ -1081,7 +1123,7 @@ Solution
 eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuaW1wb3J0IHJlXG5mcm9tIGNvbGxlY3Rpb25zIGltcG9ydCBDb3VudGVyXG5cbnRleHQgPSAoXCJ0aGUgY2F0IHNhdCBvbiB0aGUgbWF0IHRoZSBjYXQgYXRlIHRoZSByYXQgdGhlIHJhdCByYW4gXCJcbiAgICAgICAgXCJ0aGUgZG9nIGNoYXNlZCB0aGUgY2F0IHRoZSBjYXQgc2F0IGFnYWluIHRoZSBkb2cgYmFya2VkXCIpXG50b2tlbnMgPSByZS5maW5kYWxsKHJcIlxcdyt8W15cXHdcXHNdXCIsIHRleHQubG93ZXIoKSlcbnZvY2FiID0gc29ydGVkKHNldCh0b2tlbnMpKTsgViA9IGxlbih2b2NhYilcbnRvazJpZCA9IHt0OiBpIGZvciBpLCB0IGluIGVudW1lcmF0ZSh2b2NhYil9XG5pZHMgPSBbdG9rMmlkW3RdIGZvciB0IGluIHRva2Vuc11cblxuVyA9IG5wLnplcm9zKChWLCBWKSk7IGxyID0gNS4wXG5mb3IgZXBvY2ggaW4gcmFuZ2UoMjAwKTpcbiAgICBsb2dpdHMgPSBXW2lkc1s6LTFdXVxuICAgIHogPSBsb2dpdHMgLSBsb2dpdHMubWF4KC0xLCBrZWVwZGltcz1UcnVlKVxuICAgIHAgPSBucC5leHAoeik7IHAgLz0gcC5zdW0oLTEsIGtlZXBkaW1zPVRydWUpXG4gICAgZyA9IHA7IGdbbnAuYXJhbmdlKGxlbihpZHMpLTEpLCBpZHNbMTpdXSAtPSAxOyBnIC89IGxlbihpZHMpIC0gMVxuICAgIGRXID0gbnAuemVyb3NfbGlrZShXKTsgbnAuYWRkLmF0KGRXLCBpZHNbOi0xXSwgZylcbiAgICBXIC09IGxyICogZFdcblxubW9kZWxfcCA9IG5wLmV4cChXIC0gVy5tYXgoLTEsIGtlZXBkaW1zPVRydWUpKVxubW9kZWxfcCAvPSBtb2RlbF9wLnN1bSgtMSwga2VlcGRpbXM9VHJ1ZSlcbmNvdW50cyA9IENvdW50ZXIoemlwKHRva2VucywgdG9rZW5zWzE6XSkpOyBjdHggPSBDb3VudGVyKHRva2Vucylcbm1heF9kaWZmID0gMC4wXG5mb3IgKGEsIGIpLCBjIGluIGNvdW50cy5pdGVtcygpOlxuICAgIG1heF9kaWZmID0gbWF4KG1heF9kaWZmLCBhYnMobW9kZWxfcFt0b2syaWRbYV0sIHRvazJpZFtiXV0gLSBjIC8gY3R4W2FdKSlcbnByaW50KFwibWF4IHxuZXVyYWwgTUxFIC0gY291bnRpbmcgZXN0aW1hdGV8OlwiLCByb3VuZChtYXhfZGlmZiwgNSkpIn0=
 </script>
 </div>
-They agree to optimization error. Why: with one-hot inputs, the model’s conditional is <span class="math inline">\(\text{softmax}(W_{w_t})\)</span>, and cross-entropy MLE for a linear model on one-hot features has the closed form “the empirical conditional distribution” — exactly the counting estimate (this is the multinomial-logit version of <a href="../appendix-a-derivations/a-2-least-squares-is-mle.qmd">A.2</a>: MLE of a linear-Gaussian is the least-squares solution; MLE of a linear-multinomial is the empirical frequencies). Gradient descent finds it because the loss is convex in <span class="math inline">\(W\)</span>. The deep-LLM takeaway: pretraining is the same MLE, just with a nonlinear feature extractor (the transformer) in front of the softmax — the counting model is the degenerate zero-layer case.
+They agree to optimization error. Why: with one-hot inputs, the model’s conditional is <span class="math inline">\(\text{softmax}(W_{w_t})\)</span>, and cross-entropy MLE for a linear model on one-hot features has the closed form “the empirical conditional distribution” — exactly the counting estimate (this is the multinomial-logit version of <a href="../appendix-a-derivations/a-2-least-squares-is-mle.html">A.2</a>: MLE of a linear-Gaussian is the least-squares solution; MLE of a linear-multinomial is the empirical frequencies). Gradient descent finds it because the loss is convex in <span class="math inline">\(W\)</span>. The deep-LLM takeaway: pretraining is the same MLE, just with a nonlinear feature extractor (the transformer) in front of the softmax — the counting model is the degenerate zero-layer case.
 </details>
 <p><strong>Exercise 2.</strong> Learning-rate schedule, measured: rerun the Section 1 training with (a) constant LR = 50, (b) constant LR = 0.01, (c) warmup-then-decay (linear warmup over 20 epochs to 5, then cosine decay to 0.5). Plot all three loss curves. Diagnose what (a) does (divergence/oscillation) and what (b) does (slow convergence), and state why the schedule matters more at real scale.</p>
 <details>
@@ -1163,7 +1205,7 @@ What’s wrong, and the fix
 </section>
 <section id="advanced-questions" class="level2">
 <h2 class="anchored" data-anchor-id="advanced-questions">5. Advanced Questions</h2>
-<p><strong>Q1.</strong> Pretraining as maximum likelihood, formally: write the pretraining objective for a corpus of sequences, show it decomposes into a sum of next-token cross-entropies, and state the two ways it differs from the <a href="../appendix-a-derivations/a-2-least-squares-is-mle.qmd">A.2</a> Gaussian story (the noise model, and what “least squares” becomes). Then explain why the <em>same</em> objective, at trillion-token scale, produces emergent capabilities — and what the theoretical objection is.</p>
+<p><strong>Q1.</strong> Pretraining as maximum likelihood, formally: write the pretraining objective for a corpus of sequences, show it decomposes into a sum of next-token cross-entropies, and state the two ways it differs from the <a href="../appendix-a-derivations/a-2-least-squares-is-mle.html">A.2</a> Gaussian story (the noise model, and what “least squares” becomes). Then explain why the <em>same</em> objective, at trillion-token scale, produces emergent capabilities — and what the theoretical objection is.</p>
 <details>
 <summary>
 Hint
@@ -1192,7 +1234,7 @@ Sketch: web 50% (the long tail — the model must handle <em>all</em> language, 
 </section>
 <section id="complex-questions" class="level2">
 <h2 class="anchored" data-anchor-id="complex-questions">6. Complex Questions</h2>
-<p><strong>C1 (training × <a href="../part-10-deep-learning/10-4-gradient-descent-backprop.html">10.4 backprop</a> × <a href="../appendix-a-derivations/a-2-least-squares-is-mle.qmd">A.2 MLE</a>).</strong> The Section 1 toy model’s gradient (<code>g = p; g[...] -= 1</code>) is the softmax-cross-entropy gradient — derive it from scratch (softmax Jacobian, one-hot target) and verify it against finite differences on a 3×3 <span class="math inline">\(W\)</span>. Then state the general pattern: for any GLM with a canonical link, the gradient of the negative log-likelihood is (prediction − target) × features — the same form as <a href="../appendix-a-derivations/a-3-logistic-gradient.qmd">A.3</a>’s logistic gradient. This is why LLM training “just works” with generic autodiff: the loss surface is as well-behaved as logistic regression’s.</p>
+<p><strong>C1 (training × <a href="../part-10-deep-learning/10-4-gradient-descent-backprop.html">10.4 backprop</a> × <a href="../appendix-a-derivations/a-2-least-squares-is-mle.html">A.2 MLE</a>).</strong> The Section 1 toy model’s gradient (<code>g = p; g[...] -= 1</code>) is the softmax-cross-entropy gradient — derive it from scratch (softmax Jacobian, one-hot target) and verify it against finite differences on a 3×3 <span class="math inline">\(W\)</span>. Then state the general pattern: for any GLM with a canonical link, the gradient of the negative log-likelihood is (prediction − target) × features — the same form as <a href="../appendix-a-derivations/a-3-logistic-gradient.html">A.3</a>’s logistic gradient. This is why LLM training “just works” with generic autodiff: the loss surface is as well-behaved as logistic regression’s.</p>
 <p><strong>C2 (training × <a href="../part-12-multiple-testing-bioinformatics/12-2-why-multiple-testing-is-dangerous.html">12.2 multiple testing</a> × <a href="../part-13-large-language-models/13-7-evaluation-limitations.html">13.7</a>).</strong> The field’s evaluation problem is <a href="../part-12-multiple-testing-bioinformatics/12-2-why-multiple-testing-is-dangerous.html">12.2</a> at industrial scale: every lab evaluates on overlapping benchmarks, selects the best checkpoint/prompt/mix, and reports the winner. Write the critique in the language of Part 12 — selection-as-inference, the winner’s curse, and the pre-registration fix — and state why the <em>training-data</em> version of the problem (contamination, Exercise 3) is the harder one to fix, because the training corpus is a moving target.</p>
 </section>
 <section id="summary" class="level2">
@@ -1200,7 +1242,7 @@ Sketch: web 50% (the long tail — the model must handle <em>all</em> language, 
 <ul>
 <li>Pretraining = next-token maximum likelihood on a massive corpus; SFT teaches instruction format; RLHF/DPO aligns preferences — three stages, one objective family.</li>
 <li>The training loop is <a href="../part-10-deep-learning/10-4-gradient-descent-backprop.html">10.4</a>’s loop; scale adds distributed training, mixed precision, and the LR schedule (warmup + cosine).</li>
-<li>A neural bigram trained by GD converges to the counting estimate — cross-entropy MLE on one-hot inputs is the empirical conditional distribution (the multinomial version of <a href="../appendix-a-derivations/a-2-least-squares-is-mle.qmd">A.2</a>).</li>
+<li>A neural bigram trained by GD converges to the counting estimate — cross-entropy MLE on one-hot inputs is the empirical conditional distribution (the multinomial version of <a href="../appendix-a-derivations/a-2-least-squares-is-mle.html">A.2</a>).</li>
 <li>The loss floor is the data’s own entropy; zero loss means deterministic data, not a perfect model.</li>
 <li>Data curation (dedup, quality, contamination control) matters more than architecture at the margin; the model learns the corpus’s biases as fluently as its facts.</li>
 <li>Alignment shapes behavior but can’t create capability; reward hacking is the alignment-stage failure mode.</li>
