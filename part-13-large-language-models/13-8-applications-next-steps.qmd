@@ -166,7 +166,7 @@ for r in [0.05, 0.1, 0.2, 0.3, 0.5]:
     prec = labels_sorted[:k].mean()
     print(f"{r:>12.0%} {recall:>8.3f} {prec:>16.3f}")
 
-# AUPRC: area under precision-recall (trapezoidal, [A.7](appendix-a-derivations/a-7-auprc-trapezoidal.qmd))
+# AUPRC: area under precision-recall (trapezoidal, [A.7](../appendix-a-derivations/a-7-auprc-trapezoidal.qmd))
 tp = np.cumsum(labels_sorted)
 prec_curve = tp / np.arange(1, n + 1)
 rec_curve = tp / n_rel

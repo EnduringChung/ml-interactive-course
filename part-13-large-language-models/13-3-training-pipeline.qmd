@@ -14,7 +14,7 @@ pyodide:
 
 ## 1. Basic Concept
 
-**Stage 1 — Pretraining.** The model (randomly initialized transformer, [13.2](13-2-transformer-architecture.qmd)) is trained on next-token prediction over a huge, lightly filtered corpus — trillions of tokens from web pages, books, code. The loss is cross-entropy, which by [A.2](appendix-a-derivations/a-2-least-squares-is-mle.qmd)'s logic is exactly maximum likelihood: the model learns the conditional distribution of text. Everything the model "knows" is statistical structure extracted from this corpus — facts, style, reasoning patterns, and the corpus's biases.
+**Stage 1 — Pretraining.** The model (randomly initialized transformer, [13.2](13-2-transformer-architecture.qmd)) is trained on next-token prediction over a huge, lightly filtered corpus — trillions of tokens from web pages, books, code. The loss is cross-entropy, which by [A.2](../appendix-a-derivations/a-2-least-squares-is-mle.qmd)'s logic is exactly maximum likelihood: the model learns the conditional distribution of text. Everything the model "knows" is statistical structure extracted from this corpus — facts, style, reasoning patterns, and the corpus's biases.
 
 **Stage 2 — Supervised fine-tuning (SFT).** Pretrained models are bad at *following instructions* — they continue text, they don't answer questions. SFT trains on hundreds of thousands of human-written (instruction, response) pairs, same next-token loss, now on the response tokens only. This teaches the *format* of helpful behavior.
 
@@ -145,7 +145,7 @@ for i in range(len(docs)):
 
 ### Exercises (with solutions)
 
-**Exercise 1.** The neural bigram converges to the counting estimate: after training the Section 1 model, extract the model's implied conditional probabilities $P_\theta(\text{next} \mid \text{cur}) = \text{softmax}(W)$ and compare them to the [13.1](13-1-foundations.qmd) counting estimate $\text{count}(w_t, w_{t+1}) / \text{count}(w_t)$ for every (context, next) pair. Report the maximum absolute difference. Then explain *why* they must agree — connect to [A.2](appendix-a-derivations/a-2-least-squares-is-mle.qmd): cross-entropy MLE on one-hot inputs is the empirical conditional distribution.
+**Exercise 1.** The neural bigram converges to the counting estimate: after training the Section 1 model, extract the model's implied conditional probabilities $P_\theta(\text{next} \mid \text{cur}) = \text{softmax}(W)$ and compare them to the [13.1](13-1-foundations.qmd) counting estimate $\text{count}(w_t, w_{t+1}) / \text{count}(w_t)$ for every (context, next) pair. Report the maximum absolute difference. Then explain *why* they must agree — connect to [A.2](../appendix-a-derivations/a-2-least-squares-is-mle.qmd): cross-entropy MLE on one-hot inputs is the empirical conditional distribution.
 
 <details>
 <summary>Solution</summary>
@@ -181,7 +181,7 @@ for (a, b), c in counts.items():
 print("max |neural MLE - counting estimate|:", round(max_diff, 5))
 ```
 
-They agree to optimization error. Why: with one-hot inputs, the model's conditional is $\text{softmax}(W_{w_t})$, and cross-entropy MLE for a linear model on one-hot features has the closed form "the empirical conditional distribution" — exactly the counting estimate (this is the multinomial-logit version of [A.2](appendix-a-derivations/a-2-least-squares-is-mle.qmd): MLE of a linear-Gaussian is the least-squares solution; MLE of a linear-multinomial is the empirical frequencies). Gradient descent finds it because the loss is convex in $W$. The deep-LLM takeaway: pretraining is the same MLE, just with a nonlinear feature extractor (the transformer) in front of the softmax — the counting model is the degenerate zero-layer case.
+They agree to optimization error. Why: with one-hot inputs, the model's conditional is $\text{softmax}(W_{w_t})$, and cross-entropy MLE for a linear model on one-hot features has the closed form "the empirical conditional distribution" — exactly the counting estimate (this is the multinomial-logit version of [A.2](../appendix-a-derivations/a-2-least-squares-is-mle.qmd): MLE of a linear-Gaussian is the least-squares solution; MLE of a linear-multinomial is the empirical frequencies). Gradient descent finds it because the loss is convex in $W$. The deep-LLM takeaway: pretraining is the same MLE, just with a nonlinear feature extractor (the transformer) in front of the softmax — the counting model is the degenerate zero-layer case.
 </details>
 
 **Exercise 2.** Learning-rate schedule, measured: rerun the Section 1 training with (a) constant LR = 50, (b) constant LR = 0.01, (c) warmup-then-decay (linear warmup over 20 epochs to 5, then cosine decay to 0.5). Plot all three loss curves. Diagnose what (a) does (divergence/oscillation) and what (b) does (slow convergence), and state why the schedule matters more at real scale.
@@ -318,7 +318,7 @@ for step in range(1000):
 
 ## 5. Advanced Questions
 
-**Q1.** Pretraining as maximum likelihood, formally: write the pretraining objective for a corpus of sequences, show it decomposes into a sum of next-token cross-entropies, and state the two ways it differs from the [A.2](appendix-a-derivations/a-2-least-squares-is-mle.qmd) Gaussian story (the noise model, and what "least squares" becomes). Then explain why the *same* objective, at trillion-token scale, produces emergent capabilities — and what the theoretical objection is.
+**Q1.** Pretraining as maximum likelihood, formally: write the pretraining objective for a corpus of sequences, show it decomposes into a sum of next-token cross-entropies, and state the two ways it differs from the [A.2](../appendix-a-derivations/a-2-least-squares-is-mle.qmd) Gaussian story (the noise model, and what "least squares" becomes). Then explain why the *same* objective, at trillion-token scale, produces emergent capabilities — and what the theoretical objection is.
 
 <details>
 <summary>Hint</summary>
@@ -348,7 +348,7 @@ Sketch: web 50% (the long tail — the model must handle *all* language, and onl
 
 ## 6. Complex Questions
 
-**C1 (training × [10.4 backprop](../part-10-deep-learning/10-4-gradient-descent-backprop.qmd) × [A.2 MLE](appendix-a-derivations/a-2-least-squares-is-mle.qmd)).** The Section 1 toy model's gradient (`g = p; g[...] -= 1`) is the softmax-cross-entropy gradient — derive it from scratch (softmax Jacobian, one-hot target) and verify it against finite differences on a 3×3 $W$. Then state the general pattern: for any GLM with a canonical link, the gradient of the negative log-likelihood is (prediction − target) × features — the same form as [A.3](appendix-a-derivations/a-3-logistic-gradient.qmd)'s logistic gradient. This is why LLM training "just works" with generic autodiff: the loss surface is as well-behaved as logistic regression's.
+**C1 (training × [10.4 backprop](../part-10-deep-learning/10-4-gradient-descent-backprop.qmd) × [A.2 MLE](../appendix-a-derivations/a-2-least-squares-is-mle.qmd)).** The Section 1 toy model's gradient (`g = p; g[...] -= 1`) is the softmax-cross-entropy gradient — derive it from scratch (softmax Jacobian, one-hot target) and verify it against finite differences on a 3×3 $W$. Then state the general pattern: for any GLM with a canonical link, the gradient of the negative log-likelihood is (prediction − target) × features — the same form as [A.3](../appendix-a-derivations/a-3-logistic-gradient.qmd)'s logistic gradient. This is why LLM training "just works" with generic autodiff: the loss surface is as well-behaved as logistic regression's.
 
 **C2 (training × [12.2 multiple testing](../part-12-multiple-testing-bioinformatics/12-2-why-multiple-testing-is-dangerous.qmd) × [13.7](13-7-evaluation-limitations.qmd)).** The field's evaluation problem is [12.2](../part-12-multiple-testing-bioinformatics/12-2-why-multiple-testing-is-dangerous.qmd) at industrial scale: every lab evaluates on overlapping benchmarks, selects the best checkpoint/prompt/mix, and reports the winner. Write the critique in the language of Part 12 — selection-as-inference, the winner's curse, and the pre-registration fix — and state why the *training-data* version of the problem (contamination, Exercise 3) is the harder one to fix, because the training corpus is a moving target.
 
@@ -356,7 +356,7 @@ Sketch: web 50% (the long tail — the model must handle *all* language, and onl
 
 - Pretraining = next-token maximum likelihood on a massive corpus; SFT teaches instruction format; RLHF/DPO aligns preferences — three stages, one objective family.
 - The training loop is [10.4](../part-10-deep-learning/10-4-gradient-descent-backprop.qmd)'s loop; scale adds distributed training, mixed precision, and the LR schedule (warmup + cosine).
-- A neural bigram trained by GD converges to the counting estimate — cross-entropy MLE on one-hot inputs is the empirical conditional distribution (the multinomial version of [A.2](appendix-a-derivations/a-2-least-squares-is-mle.qmd)).
+- A neural bigram trained by GD converges to the counting estimate — cross-entropy MLE on one-hot inputs is the empirical conditional distribution (the multinomial version of [A.2](../appendix-a-derivations/a-2-least-squares-is-mle.qmd)).
 - The loss floor is the data's own entropy; zero loss means deterministic data, not a perfect model.
 - Data curation (dedup, quality, contamination control) matters more than architecture at the margin; the model learns the corpus's biases as fluently as its facts.
 - Alignment shapes behavior but can't create capability; reward hacking is the alignment-stage failure mode.
