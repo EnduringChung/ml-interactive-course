@@ -1,0 +1,357 @@
+---
+title: "A.3 Logistic Regression: Deriving the Gradient"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - sympy
+---
+
+[A.1](a-1-normal-equations.qmd) and [A.2](a-2-least-squares-is-mle.qmd) had a closed form because the mean is *linear* in the parameters. Logistic regression — the workhorse of [3.3](../part-03-classification-glm/03-3-logistic-regression.qmd) — is the first model in this course where the MLE has no closed form, and the reason is one derivative away. This page derives the gradient and Hessian symbolically, verifies them numerically, and shows why the resulting optimization is as well-behaved as [A.2](a-2-least-squares-is-mle.qmd)'s.
+
+> **Tier 1 — every cell below runs live (sympy for the symbolic derivation, NumPy for the check).**
+
+## 1. Basic Concept
+
+**The model.** For binary $y_i \in \{0, 1\}$, model the probability as a sigmoid of a linear predictor:
+
+$$p_i = P(y_i = 1 \mid x_i) = \sigma(x_i^\top \beta) = \frac{1}{1 + e^{-x_i^\top \beta}}$$
+
+The log-likelihood (Bernoulli, one observation at a time):
+
+$$\ell(\beta) = \sum_i \big[ y_i \log p_i + (1 - y_i) \log(1 - p_i) \big]$$
+
+**The gradient, derived:**
+
+```{pyodide}
+import sympy as sp
+
+x, y, b = sp.symbols('x y beta', real=True)
+p = 1 / (1 + sp.exp(-x * b))                    # sigmoid
+ell = y * sp.log(p) + (1 - y) * sp.log(1 - p)   # Bernoulli log-likelihood
+
+# the sigmoid's self-derivative: σ'(z) = σ(z)(1 − σ(z))
+dp = sp.diff(p, b)
+print("dp/dβ =", sp.simplify(dp), "= p(1−p):", sp.simplify(dp - p * (1 - p)) == 0)
+
+dell = sp.simplify(sp.diff(ell, b))
+print("\n∂ℓ/∂β =", dell)
+print("simplified:", sp.simplify(dell - (y - p) * x), "-> ∂ℓ/∂β = (y − p)·x")
+```
+
+The chain rule does all the work: $\frac{\partial \ell}{\partial \beta} = \frac{y - p}{p(1-p)} \cdot \frac{\partial p}{\partial \beta}$, and the sigmoid's magic identity $\sigma' = \sigma(1-\sigma)$ cancels the $p(1-p)$ in the denominator — leaving the famously simple **gradient = (target − prediction) × features**. The same form as [A.1](a-1-normal-equations.qmd)'s OLS gradient (up to the link), and for the same reason: the canonical link makes the derivative telescoping.
+
+**The Hessian and convexity:**
+
+```{pyodide}
+import sympy as sp
+x, y, b = sp.symbols('x y beta', real=True)
+p = 1 / (1 + sp.exp(-x * b))
+ell = y * sp.log(p) + (1 - y) * sp.log(1 - p)
+d2 = sp.simplify(sp.diff(ell, b, 2))
+print("∂²ℓ/∂β² =", d2, "= −p(1−p)·x²  (always ≤ 0 -> concave -> unique maximum)")
+```
+
+The second derivative is $-p(1-p)x^2 \le 0$ — the log-likelihood is **concave** in $\beta$, so any stationary point is the global maximum, and gradient-based methods can't get stuck in local optima. This is the logistic regression counterpart of [A.1](a-1-normal-equations.qmd)'s convex RSS.
+
+**The numerical check** — gradient and Hessian against finite differences:
+
+```{pyodide}
+import numpy as np
+
+rng = np.random.default_rng(0)
+n, p_dim = 100, 3
+X = np.column_stack([np.ones(n), rng.normal(size=(n, p_dim - 1))])
+beta = np.array([0.5, 1.0, -0.5])
+y = (rng.random(n) < 1 / (1 + np.exp(-X @ beta))).astype(float)
+
+def sigmoid(z):
+    return 1 / (1 + np.exp(-z))
+
+def grad_hess(X, y, beta):
+    p = sigmoid(X @ beta)
+    g = X.T @ (y - p)                    # gradient: (target − prediction) × features
+    W = p * (1 - p)
+    H = -(X.T * W) @ X                   # Hessian: −XᵀWX
+    return g, H
+
+g, H = grad_hess(X, y, beta)
+eps = 1e-6
+g_fd = np.zeros(p_dim)
+H_fd = np.zeros((p_dim, p_dim))
+for j in range(p_dim):
+    e = np.zeros(p_dim); e[j] = eps
+    gp = X.T @ (y - sigmoid(X @ (beta + e)))
+    gm = X.T @ (y - sigmoid(X @ (beta - e)))
+    g_fd[j] = (np.sum(y * np.log(sigmoid(X @ (beta + e))) +
+             (1 - y) * np.log(1 - sigmoid(X @ (beta + e)))) -
+             np.sum(y * np.log(sigmoid(X @ (beta - e))) +
+             (1 - y) * np.log(1 - sigmoid(X @ (beta - e))))) / (2 * eps)
+    H_fd[:, j] = (gp - gm) / (2 * eps)
+print("max |analytic grad − finite diff|:", np.abs(g - g_fd).max())
+print("max |analytic Hess − finite diff|:", np.abs(H - H_fd).max())
+```
+
+## 2. Concept Questions
+
+1. The gradient is $X^\top(y - p)$. Why does this have no closed-form solution (unlike [A.1](a-1-normal-equations.qmd)'s $X^\top X \beta = X^\top y$)? What is the structural difference?
+2. The sigmoid identity $\sigma' = \sigma(1-\sigma)$ is what makes the gradient simple. What would the gradient be for a *probit* model (normal CDF instead of sigmoid) — and why is logistic regression still the default?
+3. The Hessian is $-X^\top W X$ with $W = \text{diag}(p_i(1-p_i))$. Why is this negative semidefinite, and what does the weight matrix $W$ tell you about which observations contribute most to the curvature?
+4. Perfect separation: the data is linearly separable, so the MLE wants $p_i \to 1$ for the positives — which needs $\|\beta\| \to \infty$. What happens to the gradient, the Hessian, and the optimization in this case?
+5. The gradient's form (target − prediction) × features appears in OLS, logistic regression, and every GLM with a canonical link. Why is this form universal, and what breaks it for non-canonical links?
+
+<details>
+<summary>Answers</summary>
+
+1. The normal equations are linear in $\beta$ because the mean $X\beta$ is linear. Here the mean is $\sigma(X\beta)$ — a *nonlinear* function of $\beta$ — so the score equation $X^\top(y - \sigma(X\beta)) = 0$ is a system of *nonlinear* equations: $\beta$ appears inside the sigmoid, and no algebraic manipulation isolates it. The structural difference: linearity of the mean ⇔ closed form; nonlinearity ⇔ iterative solution (Newton's method / gradient descent).
+2. The probit gradient is $X^\top \big(y - \Phi(X\beta)\big) \cdot \frac{\phi(X\beta)}{\Phi(X\beta)(1-\Phi(X\beta))}$ — the extra factor (the inverse Mills ratio) doesn't cancel, so the gradient is messier and the Hessian isn't as clean. Logistic regression keeps the simple gradient, the concave likelihood, and an interpretable link (log-odds); probit and logit give nearly identical predictions in practice, so the simpler one wins on convenience.
+3. $X^\top W X$ is a weighted sum of outer products $x_i x_i^\top$ with weights $p_i(1-p_i) \ge 0$ — a sum of positive semidefinite matrices, so it's PSD, and its negative (the Hessian) is NSD: concavity. The weights $p_i(1-p_i)$ are largest for observations with $p_i \approx 0.5$ — the *uncertain* ones, near the decision boundary. Observations the model is already sure of ($p_i \approx 0$ or $1$) contribute almost nothing to the curvature — they're "already classified" and the optimization effectively ignores them.
+4. As the data separates, the likelihood's supremum is approached as $\|\beta\| \to \infty$: the gradient never quite reaches zero (it decays exponentially), the Hessian becomes nearly singular (the weights $p_i(1-p_i) \to 0$ for all points), and the optimization diverges — coefficients blow up, standard errors explode. This is **complete separation**, and it's why [3.3](../part-03-classification-glm/03-3-logistic-regression.qmd) recommends regularization (ridge on $\beta$) as the default: the penalty keeps the coefficients finite and the Hessian well-conditioned.
+5. The form is universal for canonical links because the score of any exponential-family GLM is $\sum (y_i - \mu_i) x_i$ — the derivative of the log-likelihood w.r.t. the natural parameter is always (target − mean), and the chain rule through the canonical link makes the parameter-derivative exactly that. For a non-canonical link (e.g., log-link on a binomial), the chain rule leaves a residual factor — the gradient is still (target − mean) × features, but with an extra weight that depends on the link's derivative. The canonical link is the choice that makes the algebra disappear.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+# the sigmoid identity, verified
+z = np.linspace(-8, 8, 100)
+s = 1 / (1 + np.exp(-z))
+ds = np.gradient(s, z)
+print("max |σ'(z) − σ(z)(1−σ(z))|:", np.abs(ds - s * (1 - s)).max())
+```
+
+```{pyodide}
+import numpy as np
+# the gradient at the MLE is zero: the score equation
+rng = np.random.default_rng(0)
+n = 200
+X = np.column_stack([np.ones(n), rng.normal(size=n)])
+y = (rng.random(n) < 0.4).astype(float)
+beta = np.zeros(2)
+for _ in range(100):                          # gradient ascent
+    p = 1 / (1 + np.exp(-X @ beta))
+    beta += 0.5 * X.T @ (y - p) / n
+p = 1 / (1 + np.exp(-X @ beta))
+print("score at the MLE (should be ~0):", X.T @ (y - p))
+```
+
+```{pyodide}
+import numpy as np
+# which points carry the curvature: p(1-p) is maximized at p = 0.5
+p = np.linspace(0.001, 0.999, 1000)
+w = p * (1 - p)
+print("max p(1−p) at p =", p[w.argmax()], "-> the uncertain points near the boundary")
+print("weight at p=0.99:", 0.99 * 0.01, "(100x less than at p=0.5)")
+```
+
+```{pyodide}
+import numpy as np
+# separation: the coefficients run away
+rng = np.random.default_rng(1)
+n = 50
+x = np.concatenate([rng.normal(-2, 0.5, n//2), rng.normal(2, 0.5, n//2)])
+y = np.concatenate([np.zeros(n//2), np.ones(n//2)])
+X = np.column_stack([np.ones(n), x])
+beta = np.zeros(2)
+for it in range(2000):
+    p = 1 / (1 + np.exp(-X @ beta))
+    beta += 0.1 * X.T @ (y - p) / n
+print(f"after 2000 steps: beta = {np.round(beta, 1)} (still growing — no MLE exists)")
+print("the likelihood keeps improving as ||beta|| -> infinity")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Derive the gradient for *multiple* features and multiple observations: with $p_i = \sigma(x_i^\top \beta)$, show $\nabla_\beta \ell = X^\top(y - p)$ and $\nabla^2_\beta \ell = -X^\top W X$ with $W = \text{diag}(p_i(1-p_i))$, using sympy on a 2-observation, 2-feature system. Then verify the Newton step $\beta \leftarrow \beta - H^{-1} g$ converges to the MLE in a handful of iterations.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import sympy as sp
+
+x1, x2, y1, y2 = sp.symbols('x1 x2 y1 y2', real=True)
+b0, b1, b2 = sp.symbols('b0 b1 b2', real=True)
+beta = sp.Matrix([b0, b1, b2])
+X = sp.Matrix([[1, x1, x2], [1, x1, x2]])   # placeholder; build properly below
+# proper 2x3 design: two observations, features (1, x_i1, x_i2)
+xa1, xa2, xb1, xb2 = sp.symbols('xa1 xa2 xb1 xb2', real=True)
+X = sp.Matrix([[1, xa1, xa2], [1, xb1, xb2]])
+y = sp.Matrix([y1, y2])
+p = sp.Matrix([1/(1 + sp.exp(-(X*beta)[0])), 1/(1 + sp.exp(-(X*beta)[1]))])
+ell = (y.T * sp.Matrix([sp.log(p[0]), sp.log(p[1])]) +
+       (1 - y).T * sp.Matrix([sp.log(1 - p[0]), sp.log(1 - p[1])]))[0, 0] if False else 0
+# cleaner: write the log-likelihood as a sum
+ell = y1*sp.log(p[0]) + (1-y1)*sp.log(1-p[0]) + y2*sp.log(p[1]) + (1-y2)*sp.log(1-p[1])
+grad = [sp.diff(ell, b) for b in beta]
+print("gradient components:")
+for b, g in zip(beta, grad):
+    print(f"  ∂ℓ/∂{b} =", sp.simplify(g))
+```
+
+Each component is $\sum_i (y_i - p_i) x_{ij}$ — the $j$-th feature's column dotted with the residual $(y - p)$, i.e. $\nabla_\beta \ell = X^\top(y - p)$. The Hessian follows by differentiating again: $\frac{\partial^2 \ell}{\partial \beta_j \partial \beta_k} = -\sum_i p_i(1-p_i) x_{ij} x_{ik}$, i.e. $-X^\top W X$. Newton's method: $\beta^{(t+1)} = \beta^{(t)} + (X^\top W X)^{-1} X^\top(y - p)$ — the **IRLS** update (iteratively reweighted least squares), which is [A.1](a-1-normal-equations.qmd)'s normal equations applied to a weighted, re-linearized problem at each step. It converges quadratically: from a reasonable start, 5–10 iterations reach machine precision.
+</details>
+
+**Exercise 2.** The probit contrast: derive the gradient of the probit log-likelihood $\ell = \sum [y_i \log \Phi(x_i^\top\beta) + (1-y_i)\log(1 - \Phi(x_i^\top\beta))]$ and show it does *not* simplify — the extra factor is the inverse Mills ratio. Then verify numerically that logistic and probit fits on the same data give nearly identical predicted probabilities (the two links are practically interchangeable).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import sympy as sp
+from scipy import stats
+
+x, y, b = sp.symbols('x y beta', real=True)
+Phi = sp.Function('Phi')                    # the normal CDF (no closed form)
+phi = sp.Function('phi')                    # the normal PDF
+p = Phi(x * b)
+ell = y * sp.log(p) + (1 - y) * sp.log(1 - p)
+dell = sp.simplify(sp.diff(ell, b))
+print("∂ℓ/∂β =", dell)
+print("-> (y − Φ(xβ)) · φ(xβ) / [Φ(xβ)(1−Φ(xβ))] · x : the Mills ratio does NOT cancel")
+```
+
+The probit gradient is $(y - \Phi(x\beta)) \cdot \frac{\phi(x\beta)}{\Phi(x\beta)(1-\Phi(x\beta))} \cdot x$ — the inverse Mills ratio $\frac{\phi}{\Phi(1-\Phi)}$ stays in the gradient (it has no closed form), so every iteration needs numerical evaluation of $\Phi$ and $\phi$, and the Hessian is messier. The practical equivalence: fitting both on the same data and comparing predicted probabilities — the logit and probit links differ only in the tails (logit has heavier tails), so on the same data the predicted probabilities agree to within ~0.01–0.02 almost everywhere. The choice is convention and interpretability (log-odds), not accuracy.
+</details>
+
+**Exercise 3.** Regularized logistic regression: add the ridge penalty $\frac{\lambda}{2}\|\beta\|^2$ to the negative log-likelihood, derive the gradient and Hessian, and show the penalty fixes the separation problem of drill 4 — the penalized MLE always exists and is finite. Then verify: fit the drill-4 separated data with increasing $\lambda$ and watch the coefficients stabilize.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(1)
+n = 50
+x = np.concatenate([rng.normal(-2, 0.5, n//2), rng.normal(2, 0.5, n//2)])
+y = np.concatenate([np.zeros(n//2), np.ones(n//2)])
+X = np.column_stack([np.ones(n), x])
+
+def fit_ridge_logit(X, y, lam, iters=2000, lr=0.1):
+    beta = np.zeros(X.shape[1])
+    for _ in range(iters):
+        p = 1 / (1 + np.exp(-X @ beta))
+        g = X.T @ (y - p) - lam * beta          # penalized gradient
+        W = p * (1 - p)
+        H = (X.T * W) @ X + lam * np.eye(len(beta))   # penalized Hessian (PD!)
+        beta += np.linalg.solve(H, g)           # Newton step
+    return beta
+
+for lam in [0.0, 0.01, 0.1, 1.0, 10.0]:
+    b = fit_ridge_logit(X, y, lam)
+    print(f"λ={lam:>5}: beta = {np.round(b, 3)}  (||β|| = {np.linalg.norm(b):.2f})")
+```
+
+The penalized gradient is $X^\top(y-p) - \lambda\beta$ and the penalized Hessian is $-(X^\top W X + \lambda I)$ — the $\lambda I$ makes it *strictly* negative definite, so the penalized likelihood is strictly concave with a unique finite maximum, even under separation. As $\lambda$ grows, the coefficients shrink toward zero (the prior's pull) — the separation blow-up is cured by the same penalty that [A.4](a-4-ridge-closed-form.qmd) derives for OLS. The two regularizations are one idea: **the penalty is the price of a well-posed problem.**
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **No closed form ≠ no theory.** The concavity of the logistic log-likelihood means the optimization is globally well-behaved — the absence of a closed form is a computational inconvenience, not a statistical one. Every GLM with a canonical link shares this.
+- **Complete separation is a data property, not a bug:** it means the features perfectly predict the outcome — the MLE is at infinity, standard errors explode, and the honest report is "the data separates; the effect is at least this large" (or regularize). Firth's penalization is the classical fix; ridge is the practical one.
+- **The Hessian's weights $p_i(1-p_i)$ mean the effective sample size is smaller than $n$:** observations near 0 or 1 contribute almost nothing to the curvature — a dataset of 10,000 easy points can have the information content of a few hundred uncertain ones. This is why [3.3](../part-03-classification-glm/03-3-logistic-regression.qmd)'s standard errors can look optimistic on easy data.
+- **Newton = IRLS:** the Newton step for logistic regression *is* iteratively reweighted least squares — at each iteration you solve a weighted least-squares problem ([A.1](a-1-normal-equations.qmd)) with weights $p_i(1-p_i)$ and a working response $x_i^\top\beta + (y_i - p_i)/(p_i(1-p_i))$. The whole of [A.1](a-1-normal-equations.qmd) is the engine inside logistic regression's solver.
+- **Numerical care in the sigmoid:** for very negative $z$, $\exp(-z)$ overflows; use the stable form $\sigma(z) = \frac{1}{1+e^{-z}}$ for $z \ge 0$ and $\frac{e^z}{1+e^z}$ for $z < 0$ (or `scipy.special.expit`). The same overflow kills naive log-likelihood evaluations — use `logaddexp`.
+
+### Read & Refactor AI Code
+
+This AI-generated logistic regression gradient has **three bugs**. Diagnose before running the fixed version.
+
+```python
+# AI-generated: one gradient-ascent step for logistic regression (will not run here)
+def sigmoid(z):
+    return 1 / (1 + np.exp(z))                        # BUG 1
+
+def gradient(X, y, beta):
+    p = sigmoid(X @ beta)
+    return X.T @ (p - y)                              # BUG 2
+
+def fit(X, y, lr=0.1, iters=1000):
+    beta = np.zeros(X.shape[1])
+    for _ in range(iters):
+        beta += lr * gradient(X, y, beta) / len(y)
+    return beta, sigmoid(X @ beta)                    # BUG 3
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Sign error in the sigmoid:** `np.exp(z)` should be `np.exp(-z)` — as written, the "sigmoid" is $\sigma(-z)$, which flips every prediction (the model learns the opposite of the data).
+2. **Gradient sign flipped:** the gradient of the log-likelihood is $X^\top(y - p)$; the code has $X^\top(p - y)$ — the *descent* direction. With `beta += lr * gradient`, the code descends the likelihood (maximizes the loss). Either flip the sign or use `-=`.
+3. **The fit returns probabilities computed with the broken sigmoid** — even if bugs 1–2 were fixed, the returned probabilities would be wrong. (The deeper issue: the function never checks convergence — no gradient-norm stopping criterion, so it always runs all 1000 iterations.)
+
+```python
+# fixed
+def sigmoid(z):
+    return 1 / (1 + np.exp(-z))
+
+def gradient(X, y, beta):
+    p = sigmoid(X @ beta)
+    return X.T @ (y - p)                    # ascent direction
+
+def fit(X, y, lr=0.1, iters=1000, tol=1e-8):
+    beta = np.zeros(X.shape[1])
+    for _ in range(iters):
+        g = gradient(X, y, beta)
+        if np.linalg.norm(g) < tol:
+            break
+        beta += lr * g / len(y)
+    return beta, sigmoid(X @ beta)
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** IRLS as Newton's method, formally: show that the Newton update for the logistic log-likelihood, $\beta^{(t+1)} = \beta^{(t)} - H^{-1} g$, equals the IRLS update — solve the weighted least-squares problem $\min_\beta \sum_i w_i (z_i - x_i^\top\beta)^2$ with $w_i = p_i(1-p_i)$ and working response $z_i = x_i^\top\beta^{(t)} + (y_i - p_i)/(p_i(1-p_i))$. Then state why IRLS converges quadratically and what can still go wrong (two things).
+
+<details>
+<summary>Hint</summary>
+
+Substitute the Newton update into the WLS normal equations — the weights and working response are the Hessian and gradient in disguise.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+The Newton update is $\beta^{(t+1)} = \beta^{(t)} + (X^\top W X)^{-1} X^\top(y - p)$. The WLS problem with weights $W = \text{diag}(p_i(1-p_i))$ and working response $z_i = x_i^\top\beta^{(t)} + (y_i - p_i)/(p_i(1-p_i))$ has normal equations $X^\top W X \beta = X^\top W z$; expanding $X^\top W z = X^\top W X \beta^{(t)} + X^\top(y - p)$, so the WLS solution is exactly $\beta^{(t+1)}$ — Newton = IRLS. Quadratic convergence: Newton's method on a concave function with a Lipschitz Hessian converges quadratically near the optimum (the error squares each step). What can still go wrong: (i) **separation** — the Hessian is nearly singular, the Newton step overshoots, and the iteration diverges (the penalty of [A.4](a-4-ridge-closed-form.qmd) fixes this); (ii) **bad starting points far from the optimum** — Newton is only locally convergent, so a step-size damping (line search) is standard in practice. The deep point: the normal equations of [A.1](a-1-normal-equations.qmd) are not just the OLS solution — they are the *inner loop* of every GLM solver.
+</details>
+
+**Q2.** The gradient's geometry: the score $X^\top(y - p) = 0$ says the residuals are orthogonal to the features — the same "no exploitable signal" condition as [A.1](a-1-normal-equations.qmd)'s normal equations. Show the parallel precisely: OLS's condition is $X^\top(y - X\beta) = 0$ (residuals orthogonal to features), logistic's is $X^\top(y - \sigma(X\beta)) = 0$ (the same, with the *predicted probability* in place of the linear fit). Then state what this means for the *calibration* of a logistic model: at the MLE, the average predicted probability equals the empirical event rate.
+
+<details>
+<summary>Hint</summary>
+
+The intercept's column of 1s is one of the features — its score equation is $\sum (y_i - p_i) = 0$.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+The intercept's score equation is $\sum_i (y_i - p_i) = 0$ — the residuals sum to zero, so $\bar p = \bar y$: **at the MLE, the model's average predicted probability equals the observed event rate.** This is the logistic model's calibration guarantee (and it holds for any GLM with an intercept and canonical link): the fit is calibrated *on the training data* by construction. The parallel with OLS is exact: OLS's intercept equation is $\sum (y_i - \hat y_i) = 0$ (mean residual zero), logistic's is $\sum (y_i - p_i) = 0$ (mean probability equals event rate). Both are the "intercept absorbs the mean" property, and both are why the intercept is never penalized ([A.4](a-4-ridge-closed-form.qmd)'s caveat) — penalizing it would break the calibration guarantee. The caveat: calibration on the *training* data is automatic; calibration on *new* data is the generalization question of [4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd).
+</details>
+
+## 6. Complex Questions
+
+**C1 (logistic gradient × [A.5 lasso](a-5-lasso-no-closed-form.qmd) × [5.3](../part-05-regularization-high-dimensions/05-3-lasso-regression.qmd)).** The lasso logistic regression gradient is $X^\top(y - p) - \lambda \cdot \text{sign}(\beta)$ — the smooth part from this page plus the subgradient from [A.5](a-5-lasso-no-closed-form.qmd). Derive the coordinate-descent update for one coefficient (the soft-thresholding of the quadratic approximation), and state why the same "kink" that makes lasso sparse makes its solver a coordinate-wise soft-threshold. The two derivations — this page's smooth gradient and [A.5](a-5-lasso-no-closed-form.qmd)'s non-smooth penalty — compose into the modern sparse-GLM solver.
+
+**C2 (logistic gradient × [10.4 backprop](../part-10-deep-learning/10-4-gradient-descent-backprop.qmd) × [3.3](../part-03-classification-glm/03-3-logistic-regression.qmd)).** A one-layer neural network with a sigmoid output and binary cross-entropy loss *is* logistic regression — show that the backprop gradient $\frac{\partial L}{\partial W} = (p - y) x^\top$ is this page's gradient transposed, and that the "neural" and "statistical" views are the same computation. Then state what the deep-learning view adds (the layer stack, the feature learning) and what the statistical view adds (the likelihood, the standard errors, the calibration guarantee) — and why both are needed.
+
+## 7. Summary
+
+- Logistic regression: $p = \sigma(x^\top\beta)$; the gradient is $X^\top(y - p)$ — the sigmoid identity $\sigma' = \sigma(1-\sigma)$ makes the chain rule cancel.
+- No closed form (the mean is nonlinear in $\beta$), but the Hessian $-X^\top W X$ is negative semidefinite — concave, unique maximum, no local optima.
+- The Hessian's weights $p_i(1-p_i)$ mean uncertain points (near the boundary) carry the curvature.
+- Complete separation sends $\|\beta\| \to \infty$ — the ridge penalty $\lambda I$ restores a well-posed problem (the same fix as [A.4](a-4-ridge-closed-form.qmd)).
+- Newton's method = IRLS = weighted least squares at each iteration — [A.1](a-1-normal-equations.qmd) is the inner loop.
+- At the MLE, the average predicted probability equals the event rate — calibration by construction (on the training data).
+- Next: [A.4 Ridge regression: deriving the closed form](a-4-ridge-closed-form.qmd) — the penalty that makes the normal equations always solvable.

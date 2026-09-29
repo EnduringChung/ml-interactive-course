@@ -1,0 +1,378 @@
+---
+title: "A.2 Why Least Squares Is Maximum Likelihood"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - sympy
+---
+
+[A.1](a-1-normal-equations.qmd) derived $\hat\beta = (X^\top X)^{-1}X^\top y$ as the minimizer of RSS. This page derives the *same formula* as the maximum-likelihood estimate under Gaussian noise — the reason least squares is not just a geometric convenience but a statistical model, and the reason its failures (outliers, heteroscedasticity) are exactly the failures of the Gaussian assumption.
+
+> **Tier 1 — every cell below runs live (sympy for the symbolic derivation, NumPy for the check).**
+
+## 1. Basic Concept
+
+**The model.** Assume the data-generating process is
+
+$$y = X\beta + \varepsilon, \qquad \varepsilon \sim N(0, \sigma^2 I)$$
+
+— the mean is linear in the features, and the noise is Gaussian, independent, and identically distributed. Then $y \sim N(X\beta, \sigma^2 I)$, and the likelihood of the parameters given the data is the product of $n$ Gaussian densities. The log-likelihood:
+
+$$\ell(\beta, \sigma^2) = -\frac{n}{2}\log(2\pi) - \frac{n}{2}\log\sigma^2 - \frac{1}{2\sigma^2}(y - X\beta)^\top(y - X\beta)$$
+
+**The key observation:** the only term involving $\beta$ is the last one, and it is *negative* RSS. So maximizing the likelihood over $\beta$ is exactly minimizing RSS — for any $\sigma^2$:
+
+```{pyodide}
+import sympy as sp
+
+n = sp.symbols('n', integer=True, positive=True)
+sigma2 = sp.symbols('sigma2', positive=True)
+i = sp.symbols('i', integer=True)
+beta_i, eps_i = sp.symbols('beta_i epsilon_i')
+
+# the log-likelihood of one Gaussian observation y_i ~ N(x_i^T beta, sigma^2)
+y_i, x_i = sp.symbols('y_i x_i')
+mu = x_i * beta_i
+ell_i = -sp.log(sp.sqrt(2 * sp.pi * sigma2)) - (y_i - mu)**2 / (2 * sigma2)
+print("per-observation log-likelihood:")
+print(sp.simplify(ell_i))
+
+# the beta-dependent part
+beta_part = sp.simplify(ell_i - (-sp.log(sp.sqrt(2 * sp.pi * sigma2))))
+print("\nbeta-dependent part:", beta_part, "= −(residual²)/(2σ²)")
+print("=> maximizing over β  <=>  minimizing Σ residual²  (RSS)")
+```
+
+**The full MLE, including $\sigma^2$:**
+
+```{pyodide}
+import sympy as sp
+
+# MLE of sigma^2: differentiate the log-likelihood w.r.t. sigma^2 and set to 0
+n_val = sp.symbols('n', integer=True, positive=True)
+s2 = sp.symbols('sigma2', positive=True)
+rss = sp.symbols('RSS', positive=True)
+ell = -n_val/2 * sp.log(2*sp.pi) - n_val/2 * sp.log(s2) - rss/(2*s2)
+d_ell = sp.diff(ell, s2)
+sol = sp.solve(sp.Eq(d_ell, 0), s2)
+print("∂ℓ/∂σ² =", sp.simplify(d_ell))
+print("MLE of σ²:", sol, " = RSS/n  (the mean squared residual)")
+```
+
+The MLE of the noise variance is $\hat\sigma^2 = \text{RSS}/n$ — the average squared residual. Note the divisor: $n$, not $n - p$. The MLE is *biased* (it ignores the $p$ degrees of freedom spent fitting $\beta$); the unbiased estimator divides by $n - p$ — the [2.4](../part-02-linear-regression/02-4-accuracy-of-model.qmd) correction, now derived rather than asserted.
+
+**The numerical check:**
+
+```{pyodide}
+import numpy as np
+
+rng = np.random.default_rng(0)
+n, p = 500, 3
+X = np.column_stack([np.ones(n), rng.normal(size=(n, p - 1))])
+beta_true = np.array([1.0, 2.0, -1.0])
+sigma_true = 0.7
+y = X @ beta_true + rng.normal(0, sigma_true, n)
+
+beta_mle = np.linalg.solve(X.T @ X, X.T @ y)
+resid = y - X @ beta_mle
+sigma2_mle = resid @ resid / n
+sigma2_unbiased = resid @ resid / (n - p)
+print(f"β MLE: {np.round(beta_mle, 4)} (true {beta_true})")
+print(f"σ² MLE (÷n):       {sigma2_mle:.4f}")
+print(f"σ² unbiased (÷n−p): {sigma2_unbiased:.4f} (true {sigma_true**2})")
+```
+
+## 2. Concept Questions
+
+1. The log-likelihood's $\beta$-dependent term is $-\text{RSS}/(2\sigma^2)$. Why does this mean the MLE of $\beta$ doesn't depend on $\sigma^2$ — and what breaks if the noise is *not* i.i.d. (heteroscedastic)?
+2. The MLE of $\sigma^2$ divides by $n$; the unbiased estimator divides by $n-p$. Derive the bias: show $\mathbb{E}[\text{RSS}] = (n-p)\sigma^2$ (hint: the residual is the projection of the noise onto the orthogonal complement of the column space, which has dimension $n-p$).
+3. Least squares is the MLE under Gaussian noise. What is the MLE under *Laplace* (double-exponential) noise, and what does that imply about which estimator is robust to outliers?
+4. The Gaussian assumption gives least squares; the *sampling distribution* of $\hat\beta$ (its standard errors, [2.3](../part-02-linear-regression/02-3-accuracy-of-coefficients.qmd)) also comes from it. What exactly does the Gaussian assumption buy beyond the point estimate?
+5. Why is "least squares = MLE" not a justification of least squares for *causal* questions — what does the likelihood say about the data-generating process, and what doesn't it say?
+
+<details>
+<summary>Answers</summary>
+
+1. Because $\sigma^2$ enters only as a positive constant multiplier of RSS in the $\beta$-dependent term — the argmax over $\beta$ is unchanged by any fixed $\sigma^2$. With heteroscedastic noise ($\text{Var}(\varepsilon_i) = \sigma_i^2$), the likelihood weights each observation by $1/\sigma_i^2$ — the MLE becomes *weighted* least squares ([A.1](a-1-normal-equations.qmd) Q1), and unweighted OLS is no longer the MLE (still unbiased, but inefficient — not minimum-variance).
+2. The residual $r = (I - H)\varepsilon$ where $H$ is the hat matrix; $(I-H)$ is a projection onto an $(n-p)$-dimensional space, so $\|r\|^2 = \varepsilon^\top(I-H)\varepsilon$ has expectation $\sigma^2 \text{tr}(I-H) = \sigma^2(n-p)$. The fit "absorbs" $p$ dimensions of the noise — the residuals are smaller than the noise by exactly the degrees of freedom spent.
+3. Under Laplace noise the log-likelihood is $-\sum |y_i - x_i^\top\beta|/\text{scale}$ — the MLE is **least absolute deviations** (LAD), which is robust to outliers (the absolute loss doesn't square the big residuals). The correspondence is exact: Gaussian noise → squared loss → OLS; Laplace noise → absolute loss → LAD. The loss function *is* the noise model, read backwards.
+4. The sampling distribution: under the Gaussian model, $\hat\beta \sim N(\beta, \sigma^2(X^\top X)^{-1})$ — which is where the standard errors, $t$-tests, and confidence intervals of [2.3](../part-02-linear-regression/02-3-accuracy-of-coefficients.qmd) come from. The point estimate needs only the mean structure; every *uncertainty statement* needs the distributional assumption. (And by the CLT, $\hat\beta$ is approximately normal even under non-Gaussian noise — the intervals are more robust than the exact theory.)
+5. The likelihood describes $p(y \mid x, \beta)$ — the distribution of the data *given* the parameters. It says nothing about whether $\beta$ represents a causal effect: that requires the exogeneity assumption $\mathbb{E}[\varepsilon \mid x] = 0$ ([2.10](../part-02-linear-regression/02-10-regression-assumptions.qmd)), which is a property of the *data-generating process*, not of the likelihood. The MLE is the best fit to the conditional distribution; "best fit" and "true effect" coincide only under assumptions the likelihood can't verify.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+# the loss-is-the-noise-model correspondence, in one line
+# Gaussian: p(eps) ∝ exp(-eps²/2σ²)  ->  -log p = eps²/2σ²  ->  squared loss
+# Laplace:  p(eps) ∝ exp(-|eps|/b)   ->  -log p = |eps|/b    ->  absolute loss
+for name, noise in [("Gaussian", np.random.default_rng(0).normal(0, 1, 10000)),
+                    ("Laplace", np.random.default_rng(0).laplace(0, 1, 10000))]:
+    print(f"{name:>9}: mean|ε|={np.abs(noise).mean():.3f} "
+          f"median|ε|={np.median(np.abs(noise)):.3f} "
+          f"max|ε|={np.abs(noise).max():.2f}  <- outliers punish the squared loss")
+```
+
+```{pyodide}
+import numpy as np
+# the bias of the MLE sigma^2, by simulation
+rng = np.random.default_rng(0)
+n, p, sigma2 = 50, 5, 2.0
+X = np.column_stack([np.ones(n), rng.normal(size=(n, p - 1))])
+beta = np.zeros(p)
+mle, unb = [], []
+for _ in range(2000):
+    y = X @ beta + rng.normal(0, np.sqrt(sigma2), n)
+    r = y - X @ np.linalg.solve(X.T @ X, X.T @ y)
+    mle.append(r @ r / n)
+    unb.append(r @ r / (n - p))
+print(f"true σ²: {sigma2}")
+print(f"E[RSS/n] (MLE):   {np.mean(mle):.4f}  (biased low by factor (n-p)/n = {(n-p)/n:.2f})")
+print(f"E[RSS/(n−p)]:     {np.mean(unb):.4f}  (unbiased)")
+```
+
+```{pyodide}
+import numpy as np
+# the sampling distribution of beta_hat: normal with the claimed variance
+rng = np.random.default_rng(1)
+n, p = 100, 3
+X = np.column_stack([np.ones(n), rng.normal(size=(n, p - 1))])
+beta_true = np.array([1., 2., -1.])
+sigma = 0.5
+estimates = []
+for _ in range(3000):
+    y = X @ beta_true + rng.normal(0, sigma, n)
+    estimates.append(np.linalg.solve(X.T @ X, X.T @ y))
+estimates = np.array(estimates)
+print("empirical SD of β̂:", estimates.std(0).round(4))
+print("theory σ²(X^TX)^-1 diag:", np.sqrt(sigma**2 * np.diag(np.linalg.inv(X.T @ X))).round(4))
+```
+
+```{pyodide}
+import numpy as np
+# CLT robustness: beta_hat is ~normal even with non-Gaussian noise
+rng = np.random.default_rng(2)
+n, p = 200, 2
+X = np.column_stack([np.ones(n), rng.normal(size=n)])
+beta_true = np.array([0., 1.])
+ests = []
+for _ in range(3000):
+    y = X @ beta_true + rng.standard_t(3, n)   # heavy-tailed t3 noise
+    ests.append(np.linalg.solve(X.T @ X, X.T @ y))
+ests = np.array(ests)
+z = (ests[:, 1] - 1) / ests[:, 1].std()
+print("t3 noise: skew of β̂₁:", round(float(((z - z.mean())**3).mean()), 3),
+      "(~0 = still symmetric; CLT at work)")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Derive the MLE of $\sigma^2$ *jointly* with $\beta$: show that plugging $\hat\beta$ into the likelihood and maximizing over $\sigma^2$ gives $\hat\sigma^2 = \text{RSS}(\hat\beta)/n$, and verify the second derivative is negative (a maximum, not a minimum). Then compute the bias factor $(n-p)/n$ for the course's typical regimes and state when the bias matters.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import sympy as sp
+
+n, s2 = sp.symbols('n sigma2', positive=True)
+RSS = sp.symbols('RSS', positive=True)
+ell = -n/2*sp.log(2*sp.pi) - n/2*sp.log(s2) - RSS/(2*s2)
+d1 = sp.diff(ell, s2)
+d2 = sp.diff(d1, s2)
+print("first derivative:", sp.simplify(d1))
+print("second derivative at the solution:", sp.simplify(d2.subs(s2, RSS/n)),
+      "(negative -> maximum)")
+```
+
+The first derivative is $-\frac{n}{2\sigma^2} + \frac{\text{RSS}}{2\sigma^4}$; setting it to zero gives $\hat\sigma^2 = \text{RSS}/n$, and the second derivative at that point is $-\frac{n^3}{2\text{RSS}^2} < 0$ — a maximum. The bias factor: $\mathbb{E}[\hat\sigma^2_{\text{MLE}}] = \frac{n-p}{n}\sigma^2$. For $n$ = 10,000 and $p$ = 10 the bias is 0.1% — irrelevant; for $n$ = 50 and $p$ = 10 it's 20% — the difference between a calibrated and a badly miscalibrated uncertainty estimate. The rule: the MLE's bias matters exactly when $p/n$ is non-negligible — the small-sample, many-feature regime ([5.6](../part-05-regularization-high-dimensions/05-6-high-dimensional.qmd)), which is also where the unbiased correction is most needed for honest standard errors.
+</details>
+
+**Exercise 2.** The loss-is-the-noise-model dictionary: for each noise distribution below, write the log-likelihood and name the resulting estimator — (a) Gaussian, (b) Laplace, (c) the *contaminated* Gaussian $\varepsilon \sim 0.95 N(0,1) + 0.05 N(0, 100)$ (a few large outliers). Then simulate: fit OLS and LAD (via iteratively reweighted least squares or a simple subgradient descent) on data with 5% outliers, and compare the slope estimates.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+# (a) Gaussian -> squared loss -> OLS; (b) Laplace -> absolute loss -> LAD
+# (c) contaminated Gaussian -> no closed form; the robust answer is a loss
+#     with redescending influence (Huber as the practical compromise)
+print("(a) ε ~ N(0,σ²):  ℓ = −Σ(y−xβ)²/2σ²        -> OLS")
+print("(b) ε ~ Laplace:   ℓ = −Σ|y−xβ|/b           -> LAD (median regression)")
+print("(c) 95% N(0,1) + 5% N(0,100): no closed form -> Huber loss (quadratic near 0,")
+print("     linear in the tails) is the standard robust compromise")
+```
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(0)
+n = 200
+x = rng.normal(size=n)
+X = np.column_stack([np.ones(n), x])
+y = 1 + 2 * x + rng.normal(0, 0.5, n)
+outlier_idx = rng.choice(n, 10, replace=False)
+y[outlier_idx] += rng.normal(0, 15, 10)          # 5% huge outliers
+
+beta_ols = np.linalg.solve(X.T @ X, X.T @ y)
+
+# LAD via IRLS (a few iterations of weighted least squares)
+beta_lad = beta_ols.copy()
+for _ in range(50):
+    r = y - X @ beta_lad
+    w = 1 / np.maximum(np.abs(r), 1e-3)
+    beta_lad = np.linalg.solve(X.T @ (X * w[:, None]), X.T @ (w * y))
+
+print(f"true slope: 2.0")
+print(f"OLS slope:  {beta_ols[1]:.3f}  (dragged by outliers)")
+print(f"LAD slope:  {beta_lad[1]:.3f}  (robust: the absolute loss ignores the tail)")
+```
+
+OLS's slope is dragged toward the outliers (the squared loss makes a 15-unit residual cost 225 units of gradient); LAD's is nearly unaffected (the absolute loss gives the same gradient magnitude to a 15-unit residual as to a 1-unit one). The dictionary in action: **choose the loss by choosing the noise model you believe** — and when you don't believe any of them, Huber (quadratic near zero, linear in the tails) is the standard compromise that keeps the best of both.
+</details>
+
+**Exercise 3.** The Gauss–Markov theorem, verified by simulation: under the assumptions of [2.10](../part-02-linear-regression/02-10-regression-assumptions.qmd) (linearity, exogeneity, homoscedasticity, no collinearity), OLS is the *best linear unbiased estimator* (BLUE) — minimum variance among all linear unbiased estimators, not just among OLS-type ones. Simulate: compare the variance of $\hat\beta_{\text{OLS}}$ against an alternative linear unbiased estimator (e.g., a weighted average of the per-observation slopes with non-optimal weights) over 10,000 datasets, and verify OLS has the smaller variance.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(3)
+n, p = 100, 2
+X = np.column_stack([np.ones(n), rng.normal(size=n)])
+beta_true = np.array([1., 2.])
+sigma = 1.0
+
+# alternative linear unbiased estimator: slope = weighted mean of pairwise slopes
+# (unbiased for the slope under i.i.d. x, but not minimum-variance)
+def alt_slope(x, y):
+    i, j = np.triu_indices(n, 1)
+    slopes = (y[j] - y[i]) / (x[j] - x[i])
+    return slopes.mean()
+
+ols_vars, alt_vars = [], []
+for _ in range(2000):
+    y = X @ beta_true + rng.normal(0, sigma, n)
+    b_ols = np.linalg.solve(X.T @ X, X.T @ y)[1]
+    b_alt = alt_slope(X[:, 1], y)
+    ols_vars.append(b_ols); alt_vars.append(b_alt)
+print(f"Var(OLS slope):    {np.var(ols_vars):.5f}")
+print(f"Var(alt slope):    {np.var(alt_vars):.5f}")
+print(f"OLS is {np.var(alt_vars)/np.var(ols_vars):.1f}x more efficient — Gauss-Markov")
+```
+
+The alternative estimator is linear and unbiased (its expectation is the true slope) but has several times the variance — Gauss–Markov verified empirically. The theorem's content: *among linear unbiased estimators*, OLS's variance $\sigma^2(X^\top X)^{-1}$ is the minimum — no reweighting, no clever alternative beats it. The caveat the theorem doesn't tell you: "best" is within the linear-unbiased class — a *biased* estimator (ridge, [A.4](a-4-ridge-closed-form.qmd)) can have lower mean squared error by trading variance for bias, which is the entire bias–variance trade-off of [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd) in one sentence.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **The Gaussian assumption buys the intervals, not the point estimate.** $\hat\beta$ is unbiased under mere exogeneity ($\mathbb{E}[\varepsilon|x]=0$); the standard errors and $t$-tests need the distribution — but the CLT makes them approximately valid under much weaker conditions. The exact finite-sample theory needs Gaussianity; the asymptotic theory needs far less.
+- **MLEs are not automatically unbiased** — $\hat\sigma^2$ divides by $n$ and is biased low; the MLE of a nonlinear function is generally biased (Jensen's inequality). "Maximum likelihood" is a consistency and efficiency claim, not an unbiasedness claim.
+- **The loss function is a modeling assumption, not a default.** Squared loss = Gaussian noise = outlier-sensitive. Before reaching for OLS, ask what the noise *is*: heavy tails (financial returns, biological measurements) argue for Huber or LAD; count data for Poisson GLMs ([3.6](../part-03-classification-glm/03-6-generalized-linear-models.qmd)); binary outcomes for logistic ([A.3](a-3-logistic-gradient.qmd)).
+- **Least absolute deviations has no closed form** — the absolute value isn't differentiable at zero, so LAD needs iterative methods (IRLS, linear programming). The same non-differentiability that makes lasso sparse ([A.5](a-5-lasso-no-closed-form.qmd)) makes LAD robust — the kink is doing statistical work in both.
+- **The likelihood is a function of the model, not the truth.** Maximizing it finds the parameters that make the data most probable *under the model* — if the model is wrong (wrong noise, wrong mean structure), the MLE is the best answer to the wrong question. Model checking ([2.10](../part-02-linear-regression/02-10-regression-assumptions.qmd)'s residual diagnostics) is how you find out.
+
+### Read & Refactor AI Code
+
+This AI-generated likelihood function has **three bugs**. Diagnose before running the fixed version.
+
+```python
+# AI-generated: Gaussian log-likelihood for regression (will not run here — spot the bugs)
+def log_likelihood(X, y, beta, sigma):
+    resid = y - X @ beta
+    n = len(y)
+    ll = -n/2 * np.log(2 * np.pi) - n/2 * np.log(sigma) - np.sum(resid**2) / (2 * sigma)  # BUG 1
+    return ll
+
+def fit(X, y):
+    beta = np.linalg.lstsq(X, y)[0]
+    sigma = np.sqrt(np.mean((y - X @ beta)**2))
+    return beta, sigma, log_likelihood(X, y, beta, sigma)   # BUG 2
+
+def aic(X, y, beta, sigma):
+    ll = log_likelihood(X, y, beta, sigma)
+    return 2 * len(beta) - 2 * ll                            # BUG 3
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **$\sigma$ vs $\sigma^2$:** the Gaussian density has $\log\sigma^2$ and divides by $\sigma^2$ — the code uses $\sigma$ in both places (missing the square). The likelihood is wrong by a factor that depends on $\sigma$, so any comparison across models is corrupted.
+2. **The MLE of $\sigma^2$ is RSS/$n$, not the mean of the squared residuals with the wrong divisor** — actually `np.mean(resid**2)` *is* RSS/$n$, so this line is right; the bug is that `fit` returns the likelihood computed with the *unsquared* $\sigma$ from bug 1 — the two functions are inconsistent. (The deeper issue: the code never checks that the returned likelihood is the *maximum* — it just evaluates at the OLS $\beta$, which is correct for $\beta$ but the $\sigma$ handling is broken.)
+3. **AIC's parameter count:** AIC counts *all* estimated parameters — $\beta$ **and** $\sigma^2$ — so the penalty is $2(p+1)$, not $2p$. The missing $+2$ is small but it's the difference between the correct criterion and a slightly-too-generous one.
+
+```python
+# fixed
+def log_likelihood(X, y, beta, sigma2):
+    resid = y - X @ beta
+    n = len(y)
+    return -n/2 * np.log(2 * np.pi) - n/2 * np.log(sigma2) - np.sum(resid**2) / (2 * sigma2)
+
+def fit(X, y):
+    beta = np.linalg.lstsq(X, y, rcond=None)[0]
+    sigma2 = np.sum((y - X @ beta)**2) / len(y)      # MLE: RSS/n
+    return beta, sigma2, log_likelihood(X, y, beta, sigma2)
+
+def aic(X, y, beta, sigma2):
+    return 2 * (len(beta) + 1) - 2 * log_likelihood(X, y, beta, sigma2)
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** The MLE under a *misspecified* noise model: suppose the truth is Laplace noise but you fit OLS (the Gaussian MLE). Show that OLS is still consistent for the *conditional mean* (if the mean structure is right) but is no longer the minimum-variance estimator — and compute the asymptotic relative efficiency of OLS vs LAD under Laplace noise (the answer is a famous number). Then state the general principle.
+
+<details>
+<summary>Hint</summary>
+
+Under Laplace noise, the asymptotic variance of the LAD estimator is $b^2 / n$ (scale squared), while OLS's is $\sigma^2 (X^\top X)^{-1}$ with $\sigma^2 = 2b^2$ — compare.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Under Laplace noise with scale $b$: $\sigma^2 = \text{Var} = 2b^2$, so OLS's asymptotic variance is $2b^2(X^\top X)^{-1}$ per unit; the LAD (MLE) asymptotic variance is $b^2(X^\top X)^{-1}$ — the ratio is 2, so OLS uses **half** the data efficiency (asymptotic relative efficiency $1/2$; the famous result is that under Laplace noise, LAD is twice as efficient as OLS — and under Gaussian noise, OLS is infinitely more efficient than LAD in the tail sense). The general principle: **the MLE is efficient under the true model; under misspecification, the pseudo-MLE (OLS here) remains consistent for the mean but loses efficiency** — the loss is bounded and computable, and the robust choice depends on how wrong you think the model is. This is the [2.10](../part-02-linear-regression/02-10-regression-assumptions.qmd) diagnostic program turned into a theorem: check the residuals, and if they're heavy-tailed, the Gaussian MLE is leaving efficiency on the table.
+</details>
+
+**Q2.** From likelihood to Bayes: place a prior $\beta \sim N(0, \tau^2 I)$ on the coefficients and derive the posterior mode. Show it equals the ridge solution $(X^\top X + \lambda I)^{-1}X^\top y$ with $\lambda = \sigma^2/\tau^2$ — the Bayesian reading of [A.4](a-4-ridge-closed-form.qmd). Then state what the prior *means* (in words a reviewer would accept) and why this makes ridge's $\lambda$ interpretable rather than arbitrary.
+
+<details>
+<summary>Hint</summary>
+
+The posterior is proportional to likelihood × prior; the log-prior is $-\|\beta\|^2/(2\tau^2)$ — a quadratic penalty.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+$\log p(\beta \mid y) \propto \ell(\beta) - \frac{1}{2\tau^2}\|\beta\|^2 = -\frac{1}{2\sigma^2}\text{RSS} - \frac{1}{2\tau^2}\|\beta\|^2 + \text{const}$. Maximizing over $\beta$ is minimizing $\text{RSS} + \frac{\sigma^2}{\tau^2}\|\beta\|^2$ — ridge with $\lambda = \sigma^2/\tau^2$. The prior means: "before seeing the data, I believe the coefficients are centered at zero with spread $\tau$" — a statement about effect sizes, not a fudge factor. The interpretability: $\lambda$ is the *ratio of noise to signal* — large $\lambda$ means the data is noisy relative to your prior belief in the coefficients, so shrink hard; small $\lambda$ means trust the data. This is why ridge's $\lambda$ isn't arbitrary to choose: it's the noise-to-prior ratio, and cross-validation ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)) is just estimating that ratio from the data. The Bayesian view also explains ridge's one weakness: the prior is centered at zero, which is right for "no effect" but wrong when effects are known to be large — the empirical-Bayes fix (estimate $\tau$ from the data) is the next step.
+</details>
+
+## 6. Complex Questions
+
+**C1 (MLE × [A.3 logistic](a-3-logistic-gradient.qmd) × [3.3](../part-03-classification-glm/03-3-logistic-regression.qmd)).** Logistic regression is the MLE under a *Bernoulli* model — derive its log-likelihood and gradient the same way this page derives OLS's, and note the structural parallel: both are GLMs with a canonical link, both have gradients of the form (prediction − target) × features, and both need iterative solvers because the mean is a *nonlinear* function of the parameters. The Gaussian case is the special one where the linearity makes the MLE closed-form.
+
+**C2 (MLE × [12.5 resampling](../part-12-multiple-testing-bioinformatics/12-5-resampling-for-p-values.qmd) × [2.3](../part-02-linear-regression/02-3-accuracy-of-coefficients.qmd)).** The bootstrap is a *likelihood-free* way to get the sampling distribution of $\hat\beta$ — resample the rows, refit, repeat. Contrast with the Gaussian theory: the bootstrap needs no distributional assumption but costs $B$ refits; the theory is exact under Gaussianity but approximate otherwise. Run both on the same dataset (the drill-3 simulation) and state when each is preferable — the [12.5](../part-12-multiple-testing-bioinformatics/12-5-resampling-for-p-values.qmd) answer, now with the Gaussian benchmark to compare against.
+
+## 7. Summary
+
+- Under Gaussian noise, the log-likelihood's $\beta$-term is $-\text{RSS}/2\sigma^2$ — so the MLE of $\beta$ is the least-squares solution, for any $\sigma^2$.
+- The MLE of $\sigma^2$ is RSS/$n$ — biased low by $(n-p)/n$; the unbiased estimator divides by $n-p$ (the degrees of freedom the fit spends).
+- The loss function is the noise model read backwards: Gaussian → squared, Laplace → absolute (robust), contaminated → Huber.
+- Gauss–Markov: OLS is minimum-variance among linear unbiased estimators — but biased estimators (ridge) can win on MSE ([4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd)).
+- The Gaussian assumption buys the *intervals*; the point estimate needs only exogeneity, and the CLT covers the rest approximately.
+- Ridge is the posterior mode under a Gaussian prior — $\lambda = \sigma^2/\tau^2$, the noise-to-prior ratio ([A.4](a-4-ridge-closed-form.qmd)).
+- Next: [A.3 Logistic regression: deriving the gradient](a-3-logistic-gradient.qmd) — the same MLE logic for a nonlinear mean.
