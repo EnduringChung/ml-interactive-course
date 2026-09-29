@@ -1,5 +1,9 @@
 project:
   type: website
+  render:
+    - index.qmd
+    - part-*/
+    - "!notebooks/*"
 
 # All pages are pure client-side documents: no local Python/R execution
 # happens at render time. {pyodide} / {webr} cells run in the reader's
@@ -117,6 +121,52 @@ website:
             - part-09-unsupervised-learning/09-4-k-means.qmd
             - part-09-unsupervised-learning/09-5-hierarchical-clustering.qmd
             - part-09-unsupervised-learning/09-6-practical-clustering.qmd
+        - section: "Part 10 — Deep Learning with PyTorch"
+          contents:
+            - part-10-deep-learning/10-1-pytorch-foundations.qmd
+            - part-10-deep-learning/10-2-single-layer-networks.qmd
+            - part-10-deep-learning/10-3-multilayer-networks.qmd
+            - part-10-deep-learning/10-4-gradient-descent-backprop.qmd
+            - part-10-deep-learning/10-5-regularization-for-nns.qmd
+            - part-10-deep-learning/10-6-convolutional-nets.qmd
+            - part-10-deep-learning/10-7-recurrent-networks.qmd
+            - part-10-deep-learning/10-8-lstm-gru.qmd
+            - part-10-deep-learning/10-9-attention-transformers.qmd
+            - part-10-deep-learning/10-10-when-deep-learning-is-appropriate.qmd
+        - section: "Part 11 — Survival Analysis & Censored Data"
+          contents:
+            - part-11-survival-analysis/11-1-why-survival-is-special.qmd
+            - part-11-survival-analysis/11-2-kaplan-meier.qmd
+            - part-11-survival-analysis/11-3-log-rank-test.qmd
+            - part-11-survival-analysis/11-4-hazard-functions.qmd
+            - part-11-survival-analysis/11-5-cox-model.qmd
+        - section: "Part 12 — Multiple Testing & Bioinformatics Statistics"
+          contents:
+            - part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.qmd
+            - part-12-multiple-testing-bioinformatics/12-2-why-multiple-testing-is-dangerous.qmd
+            - part-12-multiple-testing-bioinformatics/12-3-family-wise-error-rate.qmd
+            - part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.qmd
+            - part-12-multiple-testing-bioinformatics/12-5-resampling-for-p-values.qmd
+            - part-12-multiple-testing-bioinformatics/12-6-differential-expression.qmd
+        - section: "Part 13 — Large Language Models"
+          contents:
+            - part-13-large-language-models/13-1-foundations.qmd
+            - part-13-large-language-models/13-2-transformer-architecture.qmd
+            - part-13-large-language-models/13-3-training-pipeline.qmd
+            - part-13-large-language-models/13-4-model-families.qmd
+            - part-13-large-language-models/13-5-local-deployment.qmd
+            - part-13-large-language-models/13-6-customization.qmd
+            - part-13-large-language-models/13-7-evaluation-limitations.qmd
+            - part-13-large-language-models/13-8-applications-next-steps.qmd
+        - section: "Appendix A — Deriving the Formulas"
+          contents:
+            - appendix-a-derivations/a-1-normal-equations.qmd
+            - appendix-a-derivations/a-2-least-squares-is-mle.qmd
+            - appendix-a-derivations/a-3-logistic-gradient.qmd
+            - appendix-a-derivations/a-4-ridge-closed-form.qmd
+            - appendix-a-derivations/a-5-lasso-no-closed-form.qmd
+            - appendix-a-derivations/a-6-pca-first-component.qmd
+            - appendix-a-derivations/a-7-auprc-trapezoidal.qmd
 
 format:
   live-html:

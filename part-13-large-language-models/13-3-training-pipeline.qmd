@@ -1,0 +1,363 @@
+---
+title: "13.3 Training Pipeline"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - matplotlib
+---
+
+[13.2](13-2-transformer-architecture.qmd) built the architecture; [13.1](13-1-foundations.qmd) the objective. This page is the *process* that turns both into a capable model: pretraining on a massive corpus by next-token prediction, then alignment (SFT → RLHF/DPO). The concepts are the same training loop you already know from [10.4](../part-10-deep-learning/10-4-gradient-descent-backprop.qmd) — what changes is scale, data, and the alignment stage. We run the whole loop live at toy scale, including the beautiful fact that a neural bigram trained by gradient descent converges to the *counting* estimate of [13.1](13-1-foundations.qmd).
+
+> **Tier 1 — concept page with light compute; every cell below runs live (NumPy only).**
+
+## 1. Basic Concept
+
+**Stage 1 — Pretraining.** The model (randomly initialized transformer, [13.2](13-2-transformer-architecture.qmd)) is trained on next-token prediction over a huge, lightly filtered corpus — trillions of tokens from web pages, books, code. The loss is cross-entropy, which by [A.2](appendix-a-derivations/a-2-least-squares-is-mle.qmd)'s logic is exactly maximum likelihood: the model learns the conditional distribution of text. Everything the model "knows" is statistical structure extracted from this corpus — facts, style, reasoning patterns, and the corpus's biases.
+
+**Stage 2 — Supervised fine-tuning (SFT).** Pretrained models are bad at *following instructions* — they continue text, they don't answer questions. SFT trains on hundreds of thousands of human-written (instruction, response) pairs, same next-token loss, now on the response tokens only. This teaches the *format* of helpful behavior.
+
+**Stage 3 — Alignment (RLHF / DPO).** SFT alone produces a model that imitates response *style*; alignment shapes *preferences*. RLHF: collect human comparisons of responses, train a reward model, then optimize the policy against it with PPO. DPO: a simpler, stable reformulation that skips the explicit reward model — directly optimizing the policy on preference pairs. Both answer "helpful, honest, harmless" at a level SFT can't reach from demonstrations alone.
+
+**What's new relative to [10.4](../part-10-deep-learning/10-4-gradient-descent-backprop.qmd)'s loop:** the loop itself (forward → loss → backward → update) is identical. The engineering that scale demands:
+
+- **Distributed training** — data parallelism (each GPU a batch shard), tensor parallelism (split each matmul across GPUs), pipeline parallelism (split layers); a 70B model doesn't fit on one GPU.
+- **Mixed precision** — float16/bfloat16 compute with float32 master weights ([10.1](../part-10-deep-learning/10-1-pytorch-foundations.qmd)'s dtype lesson, now load-bearing at scale).
+- **Learning-rate schedule** — warmup then cosine decay; the single most sensitive hyperparameter.
+- **Data curation** — deduplication, quality filtering, domain mixing, and *contamination control* (removing benchmark data from training — [13.7](13-7-evaluation-limitations.qmd)).
+
+**Worked example** — the entire training loop at toy scale: a neural bigram (one linear layer + softmax) trained by full-batch gradient descent:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+import re
+from collections import Counter
+
+text = ("the cat sat on the mat the cat ate the rat the rat ran "
+        "the dog chased the cat the cat sat again the dog barked")
+tokens = re.findall(r"\w+|[^\w\s]", text.lower())
+vocab = sorted(set(tokens))
+V = len(vocab)
+tok2id = {t: i for i, t in enumerate(vocab)}
+ids = [tok2id[t] for t in tokens]
+
+W = np.zeros((V, V))                     # logits = one-hot @ W  (a neural bigram)
+lr = 5.0
+losses = []
+for epoch in range(200):
+    logits = W[ids[:-1]]                 # (T-1, V): predict next from current
+    z = logits - logits.max(-1, keepdims=True)
+    p = np.exp(z); p /= p.sum(-1, keepdims=True)
+    loss = -np.log(p[np.arange(len(ids) - 1), ids[1:]]).mean()
+    losses.append(loss)
+    # gradient of cross-entropy w.r.t. logits: (p - onehot), averaged
+    g = p
+    g[np.arange(len(ids) - 1), ids[1:]] -= 1
+    g /= len(ids) - 1
+    # scatter-add into W rows (each row only sees its own context)
+    dW = np.zeros_like(W)
+    np.add.at(dW, ids[:-1], g)
+    W -= lr * dW
+
+fig, ax = plt.subplots(figsize=(7, 3.2))
+ax.plot(losses, lw=1.5)
+ax.set(xlabel="epoch", ylabel="cross-entropy loss",
+       title="a neural bigram trains: the LLM loop at V = 11 scale")
+plt.show()
+print("final loss:", round(losses[-1], 4))
+```
+
+The loop is [10.4](../part-10-deep-learning/10-4-gradient-descent-backprop.qmd)'s loop: forward, loss, analytic gradient, update. The only LLM-specific piece is the *embedding lookup* — `W[ids[:-1]]` gathers rows, so each token's "embedding" is just its row of $W$, and the gradient scatters back with `np.add.at`. A transformer replaces this lookup with the full attention stack; the training mathematics is unchanged.
+
+## 2. Concept Questions
+
+1. Why is pretraining loss (next-token cross-entropy) a reasonable proxy for "knowledge," and where does the proxy break down? Connect to [13.1](13-1-foundations.qmd)'s compression argument.
+2. SFT teaches format, RLHF/DPO teaches preferences. Why can't SFT alone produce alignment — what does a preference signal contain that a demonstration doesn't?
+3. The toy model's loss decreased from ~2.4 to ~1.9. What is the *floor* for this loss, and why can't gradient descent reach zero? (Hint: what does the data itself determine?)
+4. Why does the learning-rate schedule need warmup? What happens to a randomly initialized transformer's gradients in the first steps with a large constant LR?
+5. Data deduplication: why does training on the same text 10 times hurt, and why is near-duplicate detection (not exact matching) the hard version of the problem?
+
+<details>
+<summary>Answers</summary>
+
+1. Next-token prediction forces the model to compress the corpus's regularities — facts and reasoning patterns are regularities, so a good predictor must encode them (Shannon: optimal codelength = −log P). The proxy breaks where prediction is easy without understanding (surface statistics, memorized benchmark answers) or where the corpus is wrong/biased — the model learns the data's errors as faithfully as its facts.
+2. A demonstration shows *one* acceptable response; a preference pair shows *which of two responses is better* — a relative signal about quality, tone, safety, and honesty that demonstrations can't express (the demonstrator only shows their best attempt, never the trade-offs). Preference data is also cheaper at the margin: comparing is easier than composing.
+3. The floor is the *entropy of the data itself* — the irreducible uncertainty of the next token given the context. The bigram data has genuine ambiguity (after "the", many words are plausible), so the conditional entropy is positive; zero loss would require the data to be deterministic. This is [1.4](../part-01-statistics-bridge/01-4-statistical-inference.qmd)'s irreducible error, in language-model form.
+4. At initialization, gradients are large and poorly conditioned — the first steps with a big LR can blow up the activations (loss spikes to NaN). Warmup ramps the LR from ~0 over the first few thousand steps so the model settles into a good region before full-speed training; the cosine decay then anneals it for the final polish.
+5. Repeated text is overweighted — the model spends capacity memorizing duplicates and the effective dataset shrinks (the same data point isn't new information; it's [4.3](../part-04-validation-model-selection/04-3-cross-validation.qmd)'s leakage in training-set form). Exact dedup is a hash lookup; near-duplicates (a paragraph shared across 10,000 web pages with different boilerplate) need fuzzy matching — MinHash/similarity embeddings — which is why dedup is a research problem, not a one-liner.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+# the loss floor: entropy of the empirical bigram distribution
+import re
+from collections import Counter
+text = ("the cat sat on the mat the cat ate the rat the rat ran "
+        "the dog chased the cat the cat sat again the dog barked")
+tokens = re.findall(r"\w+|[^\w\s]", text.lower())
+counts = Counter(zip(tokens, tokens[1:]))
+ctx = Counter(tokens)
+H = -sum((c / ctx[w0]) * np.log(c / ctx[w0])
+         for (w0, w1), c in counts.items() for _ in range(c))
+H /= sum(counts.values())
+print("empirical conditional entropy (the loss floor):", round(H, 4), "nats")
+```
+
+```{pyodide}
+import numpy as np
+# mixed precision reflex: bf16 has float32's range, float16's... no: float16's mantissa
+for dt in [np.float16, np.float32]:
+    x = np.array([1.0, 1e-4, 1e-8], dtype=dt)
+    print(dt.__name__, "sum:", x.sum(), "<- small terms vanish in low precision")
+```
+
+```{pyodide}
+# token counting reflex: how big is a trillion-token corpus, really?
+tokens = 1e12
+print(f"{tokens:.0e} tokens / ~4 tokens per word = {tokens/4:.1e} words")
+print(f"  = {tokens/4/250:.0e} books of 250 words... x 1000 = a million-book library, over and over")
+print(f"  at 100B tokens/day training: {1e12/1e11:.0f} days of one model's diet")
+```
+
+```{pyodide}
+# dedup reflex: exact vs near duplicate
+import hashlib
+docs = ["the cat sat on the mat", "the cat sat on the mat",
+        "the cat sat on the mat!", "the dog sat on the mat"]
+print("exact hashes unique:", len({hashlib.md5(d.encode()).hexdigest() for d in docs}), "of 4")
+print("near-dup pairs need fuzzy matching (n-gram overlap, MinHash):")
+def ngrams(s, n=3): return set(s[i:i+n] for i in range(len(s)-n+1))
+for i in range(len(docs)):
+    for j in range(i+1, len(docs)):
+        a, b = ngrams(docs[i]), ngrams(docs[j])
+        print(f"  ({i},{j}) jaccard {len(a&b)/len(a|b):.2f}")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** The neural bigram converges to the counting estimate: after training the Section 1 model, extract the model's implied conditional probabilities $P_\theta(\text{next} \mid \text{cur}) = \text{softmax}(W)$ and compare them to the [13.1](13-1-foundations.qmd) counting estimate $\text{count}(w_t, w_{t+1}) / \text{count}(w_t)$ for every (context, next) pair. Report the maximum absolute difference. Then explain *why* they must agree — connect to [A.2](appendix-a-derivations/a-2-least-squares-is-mle.qmd): cross-entropy MLE on one-hot inputs is the empirical conditional distribution.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import re
+from collections import Counter
+
+text = ("the cat sat on the mat the cat ate the rat the rat ran "
+        "the dog chased the cat the cat sat again the dog barked")
+tokens = re.findall(r"\w+|[^\w\s]", text.lower())
+vocab = sorted(set(tokens)); V = len(vocab)
+tok2id = {t: i for i, t in enumerate(vocab)}
+ids = [tok2id[t] for t in tokens]
+
+W = np.zeros((V, V)); lr = 5.0
+for epoch in range(200):
+    logits = W[ids[:-1]]
+    z = logits - logits.max(-1, keepdims=True)
+    p = np.exp(z); p /= p.sum(-1, keepdims=True)
+    g = p; g[np.arange(len(ids)-1), ids[1:]] -= 1; g /= len(ids) - 1
+    dW = np.zeros_like(W); np.add.at(dW, ids[:-1], g)
+    W -= lr * dW
+
+model_p = np.exp(W - W.max(-1, keepdims=True))
+model_p /= model_p.sum(-1, keepdims=True)
+counts = Counter(zip(tokens, tokens[1:])); ctx = Counter(tokens)
+max_diff = 0.0
+for (a, b), c in counts.items():
+    max_diff = max(max_diff, abs(model_p[tok2id[a], tok2id[b]] - c / ctx[a]))
+print("max |neural MLE - counting estimate|:", round(max_diff, 5))
+```
+
+They agree to optimization error. Why: with one-hot inputs, the model's conditional is $\text{softmax}(W_{w_t})$, and cross-entropy MLE for a linear model on one-hot features has the closed form "the empirical conditional distribution" — exactly the counting estimate (this is the multinomial-logit version of [A.2](appendix-a-derivations/a-2-least-squares-is-mle.qmd): MLE of a linear-Gaussian is the least-squares solution; MLE of a linear-multinomial is the empirical frequencies). Gradient descent finds it because the loss is convex in $W$. The deep-LLM takeaway: pretraining is the same MLE, just with a nonlinear feature extractor (the transformer) in front of the softmax — the counting model is the degenerate zero-layer case.
+</details>
+
+**Exercise 2.** Learning-rate schedule, measured: rerun the Section 1 training with (a) constant LR = 50, (b) constant LR = 0.01, (c) warmup-then-decay (linear warmup over 20 epochs to 5, then cosine decay to 0.5). Plot all three loss curves. Diagnose what (a) does (divergence/oscillation) and what (b) does (slow convergence), and state why the schedule matters more at real scale.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+import re
+
+text = ("the cat sat on the mat the cat ate the rat the rat ran "
+        "the dog chased the cat the cat sat again the dog barked")
+tokens = re.findall(r"\w+|[^\w\s]", text.lower())
+vocab = sorted(set(tokens)); V = len(vocab)
+tok2id = {t: i for i, t in enumerate(vocab)}
+ids = [tok2id[t] for t in tokens]
+
+def train(lr_fn, epochs=200):
+    W = np.zeros((V, V)); losses = []
+    for epoch in range(epochs):
+        lr = lr_fn(epoch)
+        logits = W[ids[:-1]]
+        z = logits - logits.max(-1, keepdims=True)
+        p = np.exp(z); p /= p.sum(-1, keepdims=True)
+        losses.append(-np.log(p[np.arange(len(ids)-1), ids[1:]]).mean())
+        g = p; g[np.arange(len(ids)-1), ids[1:]] -= 1; g /= len(ids) - 1
+        dW = np.zeros_like(W); np.add.at(dW, ids[:-1], g)
+        W -= lr * dW
+    return losses
+
+schedules = {
+    "constant 50 (too big)": lambda e: 50.0,
+    "constant 0.01 (too small)": lambda e: 0.01,
+    "warmup+cosine": lambda e: min(5.0 * (e + 1) / 20,
+                                   0.5 + 4.5 * (1 + np.cos(np.pi * e / 200)) / 2),
+}
+fig, ax = plt.subplots(figsize=(7, 3.2))
+for name, fn in schedules.items():
+    ax.plot(train(fn), lw=1.5, label=name)
+ax.set(xlabel="epoch", ylabel="loss", ylim=(1.5, 6),
+       title="the learning-rate schedule is a hyperparameter with teeth")
+ax.legend(fontsize=8); plt.show()
+```
+
+(a) LR = 50 oscillates and can diverge — steps overshoot the minimum, the loss bounces (at real scale: loss spikes that kill the run, requiring rollback to an earlier checkpoint). (b) LR = 0.01 crawls — 200 epochs isn't enough; at real scale this is a wasted training run (compute is the budget). (c) Warmup+cosine converges fast and settles lowest. The schedule matters more at real scale because the loss surface is far more ill-conditioned (billions of parameters, sharp minima) and a single bad step costs hours of GPU time — the toy model's quadratic bowl is forgiving, the real one is not.
+</details>
+
+**Exercise 3.** Contamination control, quantified: simulate a training set of 10,000 documents where 200 are exact copies of a test document. Train the Section 1 bigram model on (a) the contaminated set, (b) the deduplicated set, and compare the test document's perplexity under both. Then state why exact-dedup checking is necessary but not sufficient, and what the standard mitigation is.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+import re
+from collections import Counter
+
+rng = np.random.default_rng(0)
+base = ("the cat sat on the mat the cat ate the rat the rat ran "
+        "the dog chased the cat the cat sat again")
+test_doc = "the cat sat on the mat"
+other = " ".join(rng.choice(["alpha", "beta", "gamma", "delta", "omega"], 400))
+
+def train_ppl(docs, test):
+    tokens = re.findall(r"\w+|[^\w\s]", (" ".join(docs) + " " + test).lower())
+    # train on docs only, evaluate on test
+    train_tokens = re.findall(r"\w+|[^\w\s]", " ".join(docs).lower())
+    counts = Counter(zip(train_tokens, train_tokens[1:]))
+    ctx = Counter(train_tokens)
+    test_tokens = re.findall(r"\w+|[^\w\s]", test.lower())
+    probs = [counts[(a, b)] / ctx[a] for a, b in zip(test_tokens, test_tokens[1:])]
+    return np.exp(-np.mean(np.log(probs)))
+
+contaminated = [base] * 200 + [other]
+deduped = [base] + [other]
+print("ppl with contamination:", round(train_ppl(contaminated, test_doc), 3))
+print("ppl after dedup:       ", round(train_ppl(deduped, test_doc), 3))
+```
+
+The contaminated model has seen the test document 200 times — its perplexity on it is artificially low (near the document's own entropy), while the deduped model pays the true price of generalization. Exact-hash dedup catches this case; the insufficient part is *near*-duplicates (paraphrases, benchmark questions embedded in web pages) and *membership* leakage (the model regurgitating training text). Standard mitigation: (i) exact + fuzzy dedup at ingestion, (ii) contamination scanning of benchmarks (n-gram overlap with training data), (iii) holding out a clean test set and reporting both contaminated and decontaminated scores — the discipline of [13.7](13-7-evaluation-limitations.qmd).
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Pretraining is 99%+ of the compute; alignment is where behavior comes from.** A common misconception is that RLHF "adds intelligence" — it shapes a capability the pretrained model already has. No amount of alignment fixes a capability the pretraining data didn't support.
+- **Catastrophic forgetting is real:** fine-tuning on a narrow domain can degrade general ability — the model overwrites pretrained knowledge. Mitigations: mix pretraining data into fine-tuning, lower LR, LoRA ([13.6](13-6-customization.qmd)) to freeze most weights.
+- **Reward hacking:** RLHF optimizes the reward *model*, not human preference — the policy learns to exploit the reward model's errors (verbose, sycophantic, weirdly formatted outputs that score high). DPO reduces but doesn't eliminate this.
+- **The data is the model.** Architecture differences between GPT-4-class models are second-order compared to data quality and curation. "Garbage in, gospel out" — the model reproduces the corpus's biases with fluency.
+- **Scaling laws are empirical power laws:** loss ≈ f(parameters, data, compute) with predictable exponents — which is why the field can *plan* training runs, and why "just scale it" was a strategy, not a slogan. The flip side: the laws are fit to observed regimes and can break (the "scaling law debate" of 2023–2024).
+- **Checkpoints are the unit of recovery:** long runs save state every N steps; a divergence means rolling back, not restarting. The schedule, the seed, and the data order are all part of the "model" — reproducibility requires all three.
+
+### Read & Refactor AI Code
+
+This AI-generated training step has **three bugs**. Diagnose before running the fixed version.
+
+```python
+# AI-generated: one pretraining step (will not run here — spot the bugs by reading)
+for step in range(1000):
+    x, y = next_batch()
+    logits = model(x)                      # (B, T, V)
+    loss = cross_entropy(logits, y)        # BUG 1
+    loss.backward()
+    optimizer.step()                       # BUG 2
+    scheduler.step()
+    running_loss = running_loss + loss     # BUG 3
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Wrong loss reduction:** `cross_entropy(logits, y)` on `(B, T, V)` logits must flatten to `(B*T, V)` and average over *response tokens only* in SFT — averaging over prompt tokens too teaches the model to predict the user's question, wasting capacity and corrupting the objective. (In pretraining all tokens count; in SFT the mask is the point.)
+2. **No gradient zeroing:** `optimizer.step()` without `optimizer.zero_grad()` first — gradients accumulate across steps ([10.1](../part-10-deep-learning/10-1-pytorch-foundations.qmd)'s accumulation-is-the-default trap), so step 1000 applies the sum of 1000 gradients. The loss curve looks like a random walk.
+3. **Graph-carrying accumulator:** `running_loss + loss` keeps the autograd graph alive every step — memory grows until OOM. Use `running_loss += loss.item()`.
+
+```python
+# fixed
+for step in range(1000):
+    x, y, mask = next_batch()
+    optimizer.zero_grad()                          # fix 2
+    logits = model(x)
+    loss = cross_entropy(logits[mask], y[mask])    # fix 1: response tokens only
+    loss.backward()
+    optimizer.step()
+    scheduler.step()
+    running_loss += loss.item()                    # fix 3
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Pretraining as maximum likelihood, formally: write the pretraining objective for a corpus of sequences, show it decomposes into a sum of next-token cross-entropies, and state the two ways it differs from the [A.2](appendix-a-derivations/a-2-least-squares-is-mle.qmd) Gaussian story (the noise model, and what "least squares" becomes). Then explain why the *same* objective, at trillion-token scale, produces emergent capabilities — and what the theoretical objection is.
+
+<details>
+<summary>Hint</summary>
+
+A.2: Gaussian noise → squared loss. Here: categorical noise → cross-entropy. The objective's form is unchanged; the output distribution is not.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Objective: $\mathcal{L}(\theta) = -\sum_{(w_{1:T}) \in \text{corpus}} \sum_{t=1}^{T} \log P_\theta(w_t \mid w_{<t})$ — a sum of categorical cross-entropies, one per token. Differences from A.2: (i) the noise model is categorical (multinomial), not Gaussian — the "least squares" analog is cross-entropy, and the MLE is the empirical conditional distribution (Exercise 1's result, at scale); (ii) the features are learned (the transformer's hidden states), not fixed — so the model class is a universal approximator conditioned on context, not a linear map. Emergence: the objective is fixed, but the *functions* the model can represent grow with parameters and data — capabilities like multi-step reasoning are not separate objectives, they're what a sufficiently good next-token predictor computes internally. Theoretical objection: next-token prediction is a *surrogate* — nothing in the objective requires truth, only predictability — so the correlation between low loss and genuine reasoning is empirical (scaling laws), not guaranteed; a model can be a perfect predictor of human text and still fail at tasks whose answers humans don't write down.
+</details>
+
+**Q2.** Design the data mix: you are pretraining a 7B model with a 1.4T-token budget. Given the domains below with rough "quality per token" scores (web 1×, books 3×, code 2×, academic 2.5×, Wikipedia 2×), and the constraint that no domain can exceed 60% of the mix, propose a mix and defend it with (a) the quality-weighted objective, (b) the risk of domain collapse (over-weighting high-quality domains starves the model of the long tail of language it must handle), and (c) the repeat strategy (high-quality domains are exhausted — how many epochs is too many?).
+
+<details>
+<summary>Hint</summary>
+
+This is an optimization with a constraint and a judgment call — there is no closed form, and the answer should cite the objective, the collapse risk, and the epoch budget.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Sketch: web 50% (the long tail — the model must handle *all* language, and only web has the volume), books 15%, code 10%, academic 10%, Wikipedia 5%, other 10%. (a) Quality-weighted: the mix's average quality-per-token is ≈ 0.5·1 + 0.15·3 + 0.1·2 + 0.1·2.5 + 0.05·2 + 0.1·1 ≈ 1.45 — a pure-quality play (all books) would score 3.0 but collapse on the long tail. (b) Collapse risk: language is heavy-tailed — rare domains (medical, legal, non-English, dialect) are individually small but collectively most of what the model will be *asked*; starving them produces a model that's fluent on average and broken at the edges, which is exactly where users notice. (c) Epochs: books+academic+Wikipedia ≈ 30% of the mix but are high-quality — repeat them 2–3× (they're exhausted, so repeats buy quality exposure at the Exercise-3 memorization cost); web gets ~1 epoch (it's big enough to be nearly single-pass). The real field's answer (Llama, Mistral mixes) looks like this: web-dominated, quality-upsampled, total 1–2 epochs of the *effective* mix. The general principle: optimize quality-weighted tokens subject to coverage constraints — the same bias–variance logic as [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd), with domains as the axes.
+</details>
+
+## 6. Complex Questions
+
+**C1 (training × [10.4 backprop](../part-10-deep-learning/10-4-gradient-descent-backprop.qmd) × [A.2 MLE](appendix-a-derivations/a-2-least-squares-is-mle.qmd)).** The Section 1 toy model's gradient (`g = p; g[...] -= 1`) is the softmax-cross-entropy gradient — derive it from scratch (softmax Jacobian, one-hot target) and verify it against finite differences on a 3×3 $W$. Then state the general pattern: for any GLM with a canonical link, the gradient of the negative log-likelihood is (prediction − target) × features — the same form as [A.3](appendix-a-derivations/a-3-logistic-gradient.qmd)'s logistic gradient. This is why LLM training "just works" with generic autodiff: the loss surface is as well-behaved as logistic regression's.
+
+**C2 (training × [12.2 multiple testing](../part-12-multiple-testing-bioinformatics/12-2-why-multiple-testing-is-dangerous.qmd) × [13.7](13-7-evaluation-limitations.qmd)).** The field's evaluation problem is [12.2](../part-12-multiple-testing-bioinformatics/12-2-why-multiple-testing-is-dangerous.qmd) at industrial scale: every lab evaluates on overlapping benchmarks, selects the best checkpoint/prompt/mix, and reports the winner. Write the critique in the language of Part 12 — selection-as-inference, the winner's curse, and the pre-registration fix — and state why the *training-data* version of the problem (contamination, Exercise 3) is the harder one to fix, because the training corpus is a moving target.
+
+## 7. Summary
+
+- Pretraining = next-token maximum likelihood on a massive corpus; SFT teaches instruction format; RLHF/DPO aligns preferences — three stages, one objective family.
+- The training loop is [10.4](../part-10-deep-learning/10-4-gradient-descent-backprop.qmd)'s loop; scale adds distributed training, mixed precision, and the LR schedule (warmup + cosine).
+- A neural bigram trained by GD converges to the counting estimate — cross-entropy MLE on one-hot inputs is the empirical conditional distribution (the multinomial version of [A.2](appendix-a-derivations/a-2-least-squares-is-mle.qmd)).
+- The loss floor is the data's own entropy; zero loss means deterministic data, not a perfect model.
+- Data curation (dedup, quality, contamination control) matters more than architecture at the margin; the model learns the corpus's biases as fluently as its facts.
+- Alignment shapes behavior but can't create capability; reward hacking is the alignment-stage failure mode.
+- Next: [13.4 Model families and variants](13-4-model-families.qmd) — the zoo of architectures these stages produce.

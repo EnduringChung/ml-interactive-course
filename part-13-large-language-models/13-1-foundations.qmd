@@ -1,0 +1,405 @@
+---
+title: "13.1 LLM Foundations"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - matplotlib
+---
+
+A large language model is, at its core, a very simple machine: **given the tokens so far, predict the next token**. Everything else — the billion-parameter matrices, the trillion-token training runs, the eerie fluency — is scale and engineering wrapped around that one probabilistic loop. This page builds the loop by hand: tokenize text, train the simplest possible language model (a bigram counter), generate from it, and measure it with perplexity. [13.2](13-2-transformer-architecture.qmd) replaces the counter with attention.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+The autoregressive factorization. A sequence of tokens $w_1, \dots, w_T$ has joint probability, by the chain rule:
+
+$$P(w_1, \dots, w_T) = \prod_{t=1}^{T} P(w_t \mid w_1, \dots, w_{t-1})$$
+
+An LLM is a parametric model of each conditional $P(w_t \mid \text{context})$ — a distribution over the whole vocabulary, every step. Training = maximum likelihood over a massive corpus (next-token prediction); generation = sample one token, append it, repeat. Three ingredients make it work:
+
+1. **Tokenization** — text → integer IDs from a fixed vocabulary (subword units, e.g. BPE, so any string is encodable).
+2. **Embeddings + transformer** — IDs → vectors → context-mixing layers → logits over the vocabulary ([13.2](13-2-transformer-architecture.qmd)).
+3. **The sampling loop** — softmax → temperature → sample → append → repeat, until an end-of-text token.
+
+**Worked example** — the whole loop in 40 lines: a regex tokenizer, a bigram model (next token depends only on the current one), trained by counting:
+
+```{pyodide}
+import re
+from collections import Counter
+
+text = ("the cat sat on the mat the cat ate the rat the rat ran "
+        "the dog chased the cat the cat sat again")
+
+# a toy tokenizer: words + punctuation, lowercased
+def tokenize(s):
+    return re.findall(r"\w+|[^\w\s]", s.lower())
+
+tokens = tokenize(text)
+vocab = sorted(set(tokens))
+print("tokens:", tokens)
+print("vocab size:", len(vocab))
+
+# bigram counts: P(next | current) estimated by counting
+counts = Counter(zip(tokens, tokens[1:]))
+context_counts = Counter(tokens)
+
+def bigram_prob(cur, nxt):
+    return counts[(cur, nxt)] / context_counts[cur]
+
+print("P('the' | 'cat') =", round(bigram_prob("cat", "the"), 3))
+print("P('sat' | 'cat') =", round(bigram_prob("cat", "sat"), 3))
+```
+
+Generation — sample from the conditional, append, continue:
+
+```{pyodide}
+import numpy as np
+
+def generate(seed, n_steps, temperature=1.0):
+    out = [seed]
+    for _ in range(n_steps):
+        cur = out[-1]
+        nxt_vocab = [w for w in vocab if (cur, w) in counts]
+        if not nxt_vocab:                    # a token with no followers (e.g. the last)
+            break
+        probs = np.array([bigram_prob(cur, w) ** (1 / temperature)
+                          for w in nxt_vocab])
+        probs /= probs.sum()
+        out.append(nxt_vocab[np.random.choice(len(nxt_vocab), p=probs)])
+    return " ".join(out)
+
+np.random.seed(0)
+print("greedy-ish (T=0.3):", generate("the", 12, temperature=0.3))
+print("wild (T=2.0):     ", generate("the", 12, temperature=2.0))
+```
+
+The bigram model produces locally plausible, globally meaningless text — it has no memory beyond one token. That is exactly the gap the transformer's attention mechanism fills ([13.2](13-2-transformer-architecture.qmd)): a context window of thousands of tokens instead of one.
+
+## 2. Concept Questions
+
+1. Why is next-token prediction — an objective with no semantics in it — enough to produce models that translate, summarize, and reason? What must be true of language for this to work?
+2. In the generation loop, why do we *sample* from the softmax instead of always taking the argmax? What does temperature control, and what breaks at T → 0 and T → ∞?
+3. The bigram model assigns probability zero to any word it has never seen follow the current token. Why is this a fatal flaw for real text, and what do real models do instead (two mechanisms)?
+4. Why does the chain-rule factorization force *left-to-right* generation for decoder-only models — and what would break if you tried to sample the middle token first?
+5. "Compression is understanding" — state the argument connecting next-token prediction to world knowledge, and state the strongest counterargument.
+
+<details>
+<summary>Answers</summary>
+
+1. Language is highly predictable from context: grammar, facts, and style all constrain the next token. To predict well, the model must internalize the regularities that generate text — which is most of what we call knowledge and reasoning. The objective is simple; the *data* carries the semantics. (This is the "stochastic parrot" debate's empirical side: the parrots got very good at predicting.)
+2. Argmax gives deterministic, degenerate text — the model loops or collapses to safe high-frequency phrases. Sampling injects the variability of real language. Temperature sharpens (T→0: approaches argmax, repetitive) or flattens (T→∞: uniform noise, word salad) the distribution; T controls the creativity/fluency trade-off.
+3. Real text is open-domain: any word can follow any context eventually. Zero probability = infinite perplexity on unseen continuations. Real models fix this with (i) subword tokenization (any string decomposes into known pieces) and (ii) smoothing/softmax over the full vocabulary — every token gets nonzero probability every step.
+4. The model was trained on $P(w_t \mid w_{<t})$ — conditionals only ever see *left* context. A middle token's distribution under the model is defined by its left context alone; sampling it first would require a conditional the model never learned (that's what masked/bidirectional models like BERT are for — [13.4](13-4-model-families.qmd)). Autoregression is a consequence of the factorization, not a choice.
+5. Argument: predicting the next token of arbitrary text requires modeling facts, style, and inference patterns — a good predictor must compress the training distribution, and compression requires capturing its structure (cf. Shannon). Counterargument: prediction can be gamed by surface statistics and memorization; a model can score well on next-token loss while failing at tasks requiring genuine causal or compositional reasoning — benchmark scores and capability are correlated, not identical.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import re
+from collections import Counter
+# tokenization reflexes: what does the tokenizer do to numbers, contractions, case?
+def tokenize(s):
+    return re.findall(r"\w+|[^\w\s]", s.lower())
+print(tokenize("GPT-4 costs $19.99/mo — it's fast!"))
+print("vocab growth: 10k words ->", len(set(tokenize(
+    " ".join(["the cat sat"] * 500 + ["a rare zebra"] * 3)))), "unique tokens")
+```
+
+```{pyodide}
+import numpy as np
+# temperature reflexes: same logits, different T
+logits = np.array([2.0, 1.0, 0.5, -1.0])
+for T in [0.25, 1.0, 4.0]:
+    p = np.exp(logits / T); p /= p.sum()
+    print(f"T={T:>4}: probs {np.round(p, 3)} entropy {-(p * np.log(p)).sum():.3f}")
+```
+
+```{pyodide}
+# perplexity reflex: P(w_1..w_T)^(1/T) — geometric mean of per-token probabilities
+import math
+token_probs = [0.5, 0.25, 0.1, 0.5, 0.25]
+ppl = math.exp(-sum(math.log(p) for p in token_probs) / len(token_probs))
+print("perplexity:", round(ppl, 2), "(effective vocabulary size per step)")
+print("uniform over 1000 tokens would give ppl =", 1000)
+```
+
+```{pyodide}
+# the sampling loop reflex: why append-then-predict can't be vectorized across steps
+import numpy as np
+vocab = ["the", "cat", "sat"]
+probs = np.array([0.6, 0.3, 0.1])
+seq = []
+for _ in range(6):
+    seq.append(vocab[np.random.choice(3, p=probs)])
+print(" ".join(seq), "<- each step's input depends on the previous step's OUTPUT")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Build a character-level bigram generator: tokenize the corpus into *characters* (keep spaces), train the same counting model, and generate 200 characters from seed "the ". Then compute its perplexity per character on a held-out string. Compare with the word-level model's behavior — which produces more fluent output, which is more surprised by held-out text, and why?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from collections import Counter
+
+text = ("the cat sat on the mat the cat ate the rat the rat ran "
+        "the dog chased the cat the cat sat again")
+chars = list(text)
+counts = Counter(zip(chars, chars[1:]))
+ctx = Counter(chars)
+
+def char_generate(seed, n, temperature=1.0):
+    out = list(seed)
+    for _ in range(n):
+        cur = out[-1]
+        nxt = [c for c in set(chars) if (cur, c) in counts]
+        if not nxt:                          # a character with no followers
+            break
+        p = np.array([counts[(cur, c)] / ctx[cur] for c in nxt]) ** (1 / temperature)
+        p /= p.sum()
+        out.append(nxt[np.random.choice(len(nxt), p=p)])
+    return "".join(out)
+
+np.random.seed(1)
+print(char_generate("the ", 120))
+print()
+held = "the cat sat on the rug"
+alpha = 0.1
+probs = [(counts[(a, b)] + alpha) / (ctx[a] + alpha * len(set(chars)))
+         for a, b in zip(held, held[1:])]
+ppl = np.exp(-np.mean(np.log(probs)))
+print("held-out char perplexity:", round(ppl, 2))
+```
+
+The character model generates pronounceable nonsense ("the cat sat on the mat..."-ish fragments) — more *locally* fluent because character transitions are easy, but it invents words and its held-out perplexity is worse per unit of meaning: word-level units carry more probability mass per prediction. Word-level bigrams produce real words but incoherent discourse; char-level produces word-like strings but no semantics. Both fail at the same place: neither has *memory* beyond one unit. That failure is what motivates [13.2](13-2-transformer-architecture.qmd).
+</details>
+
+**Exercise 2.** Temperature as a calibration knob: using the word-level bigram from Section 1, generate 200 tokens at T ∈ {0.25, 0.5, 1.0, 2.0} and measure (a) the fraction of generated tokens that are "the", (b) the number of distinct bigrams produced. Explain the trend and state when you'd want low vs high temperature in a real application.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from collections import Counter
+
+text = ("the cat sat on the mat the cat ate the rat the rat ran "
+        "the dog chased the cat the cat sat again")
+import re
+tokens = re.findall(r"\w+|[^\w\s]", text.lower())
+vocab = sorted(set(tokens))
+counts = Counter(zip(tokens, tokens[1:]))
+ctx = Counter(tokens)
+
+def gen(seed, n, T):
+    out = [seed]
+    for _ in range(n):
+        cur = out[-1]
+        nxt = [w for w in vocab if (cur, w) in counts]
+        if not nxt:                          # a token with no followers
+            break
+        p = np.array([counts[(cur, w)] / ctx[cur] for w in nxt]) ** (1 / T)
+        p /= p.sum()
+        out.append(nxt[np.random.choice(len(nxt), p=p)])
+    return out[1:]
+
+np.random.seed(2)
+for T in [0.25, 0.5, 1.0, 2.0]:
+    s = gen("the", 200, T)
+    bigrams = set(zip(s, s[1:]))
+    print(f"T={T:>4}: frac 'the' {s.count('the')/200:.2f}, "
+          f"distinct bigrams {len(bigrams)}")
+```
+
+Low T collapses onto the highest-probability path ("the cat sat..." loops, few distinct bigrams, "the" dominates); high T flattens toward uniform, producing rare and incoherent continuations. Practical rule: low T for factual/extractive tasks (QA, code, translation — you want the mode), high T for brainstorming/creative tasks — and note that even T=0.25 here is *not* deterministic, because the bigram distribution itself is flat; real models at T=0 are exactly deterministic.
+</details>
+
+**Exercise 3.** Smoothing fixes the zero-count flaw: add-α smoothing turns $P(w_t \mid w_{t-1}) = \frac{\text{count} + \alpha}{\text{context count} + \alpha V}$. Implement it for the word bigram, then evaluate: with α ∈ {0, 0.1, 1, 10}, compute the probability of a held-out continuation "the zebra" (never seen) and the total probability mass the model now wastes on impossible continuations. State the bias–variance trade-off smoothing is making ([4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd)).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import re
+from collections import Counter
+
+text = ("the cat sat on the mat the cat ate the rat the rat ran "
+        "the dog chased the cat the cat sat again")
+tokens = re.findall(r"\w+|[^\w\s]", text.lower())
+vocab = sorted(set(tokens))
+V = len(vocab)
+counts = Counter(zip(tokens, tokens[1:]))
+ctx = Counter(tokens)
+
+def smoothed(cur, nxt, alpha):
+    return (counts[(cur, nxt)] + alpha) / (ctx[cur] + alpha * V)
+
+for alpha in [0, 0.1, 1, 10]:
+    p = smoothed("the", "zebra", alpha)
+    mass_wasted = sum(smoothed("the", w, alpha) for w in vocab
+                      if counts[("the", w)] == 0)
+    print(f"alpha={alpha:>4}: P(zebra|the)={p:.6f}, "
+          f"mass on unseen continuations={mass_wasted:.3f}")
+```
+
+α=0: zero probability for "the zebra" — infinite perplexity on any novel text. Small α rescues unseen continuations at negligible cost; large α flattens everything toward uniform 1/V, destroying the signal (mass_wasted → 1). Smoothing trades a little bias (every context's distribution pulled toward uniform) for a lot of variance reduction (no infinite losses) — the same trade-off as ridge ([5.2](../part-05-regularization-high-dimensions/05-2-ridge-regression.qmd)), with α playing the role of λ. Real transformers don't need explicit smoothing — the softmax over the full vocabulary with trained logits is already smooth — but the *principle* (never assign exactly zero) is identical.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Tokenization is a modeling choice with consequences**: whitespace tokenization explodes vocabulary and breaks on morphology; BPE/WordPiece subword units compress vocabulary ~3× and make any string encodable — at the cost of language-dependent artifacts (tokenizing numbers, non-English text, or code differently than expected). Never assume "one word = one token."
+- **The context window is a hard wall**: the model cannot attend to tokens outside its window (typically 4k–128k). Long documents must be chunked, summarized, or retrieved — the engineering problem [13.6](13-6-customization.qmd)'s RAG solves.
+- **Perplexity is corpus-dependent**: it measures fit to a *specific* test distribution. Cross-model comparisons are only meaningful on identical tokenizers and test sets — a classic benchmarking trap ([13.7](13-7-evaluation-limitations.qmd)).
+- **Greedy decoding is not "the model's answer"**: it's the mode of a distribution. For evaluation you usually want sampling or beam search; for reproducibility you fix the seed — and even then, hardware/library versions can shift outputs.
+- **"The model knows X" is shorthand**: the model assigns high probability to continuations that resemble its training data. Memorization, reasoning, and confabulation are not cleanly separable from the outside — the evaluation problem of [13.7](13-7-evaluation-limitations.qmd).
+- **Emergence cuts both ways**: capabilities that scale smoothly (translation quality) coexist with capabilities that appear abruptly (multi-step reasoning) — so "it can't do X" is always a statement about a specific model size and prompt, never about the approach.
+
+### Read & Refactor AI Code
+
+This AI-generated "language model" has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+from collections import Counter
+
+text = "the cat sat on the mat the cat ate the rat"
+tokens = text.split()
+counts = Counter(zip(tokens, tokens[1:]))
+ctx = Counter(tokens)
+
+def sample_next(cur, temperature=1.0):
+    nxt = [w for w in set(tokens) if (cur, w) in counts]
+    p = np.array([counts[(cur, w)] for w in nxt], dtype=float)
+    p = p ** (1 / temperature)
+    return nxt[np.argmax(p)]          # BUG 1
+
+def generate(seed, n):
+    out = [seed]
+    for _ in range(n):
+        nxt = sample_next(out[-1])
+        out.append(nxt)
+        counts[(out[-2], nxt)] += 1   # BUG 2
+    return " ".join(out)
+
+print(generate("the", 10))
+print("P(next|'the') after generation:", counts[("the", "cat")] / ctx["the"])  # BUG 3
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Argmax instead of sampling**: `p` is computed (and temperature applied!) but then ignored — `np.argmax(p)` on *unnormalized counts* takes the mode always, making temperature dead code and generation deterministic. Sample with `np.random.choice(len(nxt), p=p / p.sum())`.
+2. **Training on its own output**: incrementing `counts` during generation mutates the model as it generates — a feedback loop that drifts toward whatever it just said (self-reinforcement, the degeneration behind "model collapse" in synthetic-data training).
+3. **Reporting a moving probability**: after bug 2, the printed "probability" reflects the corrupted counts, not the trained model — and it's computed without normalizing by the context total anyway.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+from collections import Counter
+
+text = "the cat sat on the mat the cat ate the rat"
+tokens = text.split()
+counts = Counter(zip(tokens, tokens[1:]))
+ctx = Counter(tokens)
+
+def sample_next(cur, temperature=1.0):
+    nxt = [w for w in set(tokens) if (cur, w) in counts]
+    if not nxt:
+        return cur
+    p = np.array([counts[(cur, w)] for w in nxt], dtype=float) ** (1 / temperature)
+    p /= p.sum()
+    return nxt[np.random.choice(len(nxt), p=p)]
+
+def generate(seed, n):
+    out = [seed]
+    for _ in range(n):
+        nxt = sample_next(out[-1])
+        if nxt == out[-1]:                    # no followers — stop
+            break
+        out.append(nxt)
+    return " ".join(out)
+
+np.random.seed(0)
+print(generate("the", 10))
+print("P(cat|the) =", counts[("the", "cat")] / ctx["the"], "(stable across calls)")
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Perplexity and bits-per-byte: show that perplexity $= \exp(-\frac{1}{T}\sum \log_2 P) $ ... precisely, define perplexity with natural log as $\exp(-\frac{1}{T}\sum_t \ln P(w_t \mid w_{<t}))$ and show it equals the *geometric mean of the reciprocal probabilities* — the "effective branching factor." Then convert: a model with 256k vocabulary has uniform perplexity 256,000; a byte-level model with the same predictive quality has perplexity 256. Why is comparing their raw perplexities meaningless, and what normalized quantity fixes it?
+
+<details>
+<summary>Hint</summary>
+
+Perplexity is exponentiated average loss; the base of the log sets the units. Normalize by the number of *bits* each prediction carries.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+# perplexity = exp(mean negative log-likelihood), natural log
+token_probs = np.array([0.5, 0.25, 0.1, 0.5])
+ppl = np.exp(-np.mean(np.log(token_probs)))
+print("perplexity:", round(ppl, 2), "= geometric mean of 1/p:",
+      round((1 / token_probs).prod() ** (1 / len(token_probs)), 2))
+
+# same predictive quality, different units: 8 tokens ~ 3 bytes vs 256 bytes
+# a word model at ppl 1000 vs a byte model at ppl 200:
+# bits per BYTE is the unit-invariant measure
+def bits_per_byte(ppl, bytes_per_token):
+    return np.log2(ppl) / bytes_per_token
+print("word model:  ", round(bits_per_byte(1000, 3), 3), "bits/byte")
+print("byte model:  ", round(bits_per_byte(200, 1), 3), "bits/byte")
+```
+
+Perplexity's value depends on the log base and the token unit: the same underlying model quality gives wildly different perplexities depending on whether you predict words, subwords, or bytes. Bits-per-byte (or bits-per-character) divides out the unit: $\log_2(\text{ppl}) / \text{bytes per token}$. That's why compression benchmarks (enwik8/enwik9) report bpb, and why "model A has lower perplexity than model B" is meaningless unless tokenizers and test sets match — the unit-dependence is exactly the benchmarking trap of [13.7](13-7-evaluation-limitations.qmd).
+</details>
+
+**Q2.** Why left-to-right? The chain rule permits any factorization order, yet decoder-only models (GPT) use left-to-right and encoder-only models (BERT) use masked bidirectional prediction. Derive what each factorization can and cannot express: show that $P(w_t \mid w_{<t})$ can represent any distribution over sequences (universal approximation given enough capacity), while a masked model's $P(w_t \mid w_{\ne t})$ factorizations compose into a valid joint only under extra assumptions. Then state why left-to-right won for *generation*.
+
+<details>
+<summary>Hint</summary>
+
+Any joint can be factored in any order — the question is which conditionals are *useful* to learn and *usable* at inference.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Left-to-right: $P(w_{1:T}) = \prod_t P(w_t \mid w_{<t})$ — each conditional is a proper distribution over the vocabulary given a *causal* prefix, and generation is just repeated sampling: every conditional you need at inference time was a training target. Masked (BERT-style): $P(w_t \mid w_{\ne t})$ — each target sees the whole sequence, which is perfect for *representation* (encoding) but useless for generation: to sample token $t$ you need the other tokens, which you don't have yet. You could sample all positions in parallel from the conditionals, but the conditionals assume the *other* positions are already filled — the model never learned a consistent joint this way (the "train/test mismatch" of masked LM: the [MASK] token never appears at inference). Encoder–decoder (T5) splits the difference: bidirectional encoding of the prefix, autoregressive decoding of the suffix. Left-to-right won for generation because its training objective *is* the inference procedure — no mismatch, no extra assumptions — and its weakness (no bidirectional context during training) was fixed by scale and by the bidirectional encoders inside the transformer ([13.2](13-2-transformer-architecture.qmd), [13.4](13-4-model-families.qmd)).
+</details>
+
+## 6. Complex Questions
+
+**C1 (foundations × [10.9 attention](../part-10-deep-learning/10-9-attention-transformers.qmd) × [13.2](13-2-transformer-architecture.qmd)).** The bigram model's conditional $P(w_t \mid w_{t-1})$ is a lookup table with $V$ parameters per context. The transformer computes $P(w_t \mid w_{<t})$ with a softmax over $V$ logits produced by attention. Write the bigram model in the same notation — logits = one-hot lookup, softmax over vocabulary — and identify exactly which component the transformer replaces (the context representation) and which it keeps (the softmax head). This is the conceptual bridge from classical n-gram language models (the [1.3](../part-01-statistics-bridge/01-3-probability-essentials.qmd) conditional-probability tradition) to LLMs.
+
+**C2 (foundations × [12.2 multiple testing](../part-12-multiple-testing-bioinformatics/12-2-why-multiple-testing-is-dangerous.qmd) × [13.7](13-7-evaluation-limitations.qmd)).** A lab evaluates its model on 40 benchmark tasks and reports the 3 where it "beats the baseline." Run the selection-as-inference simulation: 40 tasks, true null everywhere, per-task test at α = 0.05 — how often does at least one task "win"? Then state why leaderboard science needs the same family-wise discipline as genomics, and what pre-registration would look like for an LLM eval.
+
+## 7. Summary
+
+- An LLM is next-token prediction: the chain rule turns text into a product of conditionals; training is maximum likelihood, generation is sample-and-append.
+- Tokenization (subword BPE) makes any string encodable and controls the vocabulary/perplexity units — never compare perplexities across tokenizers.
+- Temperature shapes the softmax: low = mode-seeking (facts, code), high = diversity (ideation); argmax is degenerate, uniform is noise.
+- Smoothing (or a full-vocabulary softmax) keeps every continuation possible — zero probability is infinite perplexity.
+- Perplexity = exponentiated average NLL = effective branching factor; bits-per-byte is the unit-invariant version.
+- Left-to-right factorization won because training and inference use the *same* conditional — no train/test mismatch.
+- The bigram's one-token memory is the gap attention fills — up next: [13.2 Transformer architecture](13-2-transformer-architecture.qmd).

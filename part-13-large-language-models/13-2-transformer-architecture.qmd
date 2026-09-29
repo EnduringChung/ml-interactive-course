@@ -1,0 +1,357 @@
+---
+title: "13.2 Transformer Architecture"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - matplotlib
+---
+
+[13.1](13-1-foundations.qmd) left off with a bigram model: one token of memory, a lookup table for a conditional. The transformer keeps the next-token-prediction objective but replaces the lookup with **attention** — a content-based routing mechanism that lets every token look at every previous token and decide, at each layer, what to pull forward. This page builds attention from scratch in NumPy: the Q/K/V computation, the scaling factor, the causal mask, multi-head splitting, and the full block. No PyTorch — the algebra is the point.
+
+> **Tier 1 — every cell below runs live.**
+
+## 1. Basic Concept
+
+**The problem.** A recurrent model (RNN/LSTM, [10.7](../part-10-deep-learning/10-7-recurrent-networks.qmd)) processes tokens one at a time, compressing the whole history into a fixed hidden state — information from token 1 is diluted by token 500, and the sequential dependency kills parallelization. The transformer's answer: *don't compress — address*. Let each token directly read from all previous tokens, with the reading weights computed from content.
+
+**Scaled dot-product attention.** Each token's embedding is projected three ways:
+
+$$Q = XW_Q, \quad K = XW_K, \quad V = XW_V$$
+
+then
+
+$$\text{Attention}(Q, K, V) = \text{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right) V$$
+
+Read it as a soft dictionary lookup: queries $Q$ (what am I looking for?) are matched against keys $K$ (what does each position offer?) via dot products; the softmax turns match scores into a probability distribution over positions; the output is the corresponding weighted sum of values $V$ (what I actually take). The $1/\sqrt{d_k}$ scaling keeps dot-product magnitudes — which grow with dimension — from saturating the softmax.
+
+**The full block** (decoder-only, GPT-style):
+
+```
+x → + Embedding + Positional encoding
+  → [ Multi-Head Attention → Add & Norm → Feed-Forward → Add & Norm ] × L
+  → Linear head → softmax over vocabulary → next-token distribution
+```
+
+- **Multi-head** — run $h$ attention operations in parallel with smaller $d_k = d/h$, concatenate: different heads can track different relations (syntax, position, coreference).
+- **Causal mask** — before the softmax, set scores for future positions to $-\infty$: token $t$ may only attend to positions $\le t$. This is what makes the block usable for next-token prediction ([13.1](13-1-foundations.qmd)'s left-to-right argument).
+- **Positional encoding** — attention is permutation-invariant; sinusoidal (or learned/rotary) encodings inject order.
+- **Add & Norm** — residual connections plus layer normalization keep gradients flowing through dozens of layers ([10.5](../part-10-deep-learning/10-5-regularization-for-nns.qmd)'s stabilization, at transformer scale).
+
+**Worked example** — one attention head, by hand, in NumPy:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+T, d = 4, 8                      # 4 tokens, embedding dim 8
+X = rng.normal(size=(T, d))     # token embeddings (stand-in for model output)
+
+Wq, Wk, Wv = (rng.normal(size=(d, d)) for _ in range(3))
+Q, K, V = X @ Wq, X @ Wk, X @ Wv
+
+scores = Q @ K.T / np.sqrt(d)    # (T, T): how much each query matches each key
+# causal mask: position i may only attend to j <= i
+scores_masked = np.where(np.tril(np.ones((T, T), bool)), scores, -np.inf)
+weights = np.exp(scores_masked - scores_masked.max(-1, keepdims=True))
+weights /= weights.sum(-1, keepdims=True)
+out = weights @ V
+
+fig, ax = plt.subplots(figsize=(7, 3.2))
+im = ax.imshow(weights, cmap="viridis", vmin=0, vmax=1)
+ax.set(xticks=range(T), yticks=range(T), xlabel="key position j",
+       ylabel="query position i", title="attention weights (causal, 1 head)")
+for i in range(T):
+    for j in range(T):
+        ax.text(j, i, f"{weights[i, j]:.2f}", ha="center", va="center",
+                color="white" if weights[i, j] < 0.6 else "black", fontsize=9)
+fig.colorbar(im, ax=ax, label="weight")
+plt.show()
+print("row sums (each query distributes exactly 1.0):", weights.sum(-1).round(6))
+print("future positions get exactly 0:", np.allclose(np.triu(weights, 1), 0))
+```
+
+Each row is a probability distribution over *previous* positions — token 3's output is a weighted blend of tokens 0–3's values. That blend, computed from content rather than position, is the entire mechanism.
+
+## 2. Concept Questions
+
+1. Why does the dot product $q \cdot k$ measure "compatibility," and what geometric relationship between a query and key vector produces a high score? What does the softmax then do to the *scale* of the scores?
+2. Why divide by $\sqrt{d_k}$? Compute what happens to the variance of $q \cdot k$ when $q, k$ have independent zero-mean unit-variance components, and state what large scores do to the softmax.
+3. The causal mask sets future scores to $-\infty$ *before* the softmax. Why before, and why $-\infty$ rather than a large negative finite number? What breaks if you mask after?
+4. Multi-head attention with $h$ heads and head dimension $d/h$ has the same total parameter count as one head of dimension $d$. So what do the extra heads actually buy?
+5. Attention is permutation-invariant over positions. Why does that make positional information an *add-on*, and name three ways transformers inject it?
+
+<details>
+<summary>Answers</summary>
+
+1. $q \cdot k = \|q\|\|k\|\cos\theta$ — large when the vectors point the same way (small angle). The softmax converts raw scores into a distribution: it *exponentially* amplifies differences, so the best-matching key dominates the blend. Compatibility is directional similarity, not magnitude.
+2. If $q_i, k_i$ are independent with mean 0, variance 1, then $q \cdot k = \sum_{i=1}^{d} q_i k_i$ has mean 0 and **variance $d$** — standard deviation $\sqrt{d}$. At $d_k = 64$, scores reach ±16, where softmax saturates: gradients vanish and the attention becomes a hard argmax. Dividing by $\sqrt{d_k}$ restores unit variance — the softmax stays in its sensitive regime.
+3. After the softmax, a masked position already has positive weight — you'd be *renormalizing away* probability mass the model assigned to the future, corrupting the distribution. $-\infty$ gives exactly zero weight (exp of −∞ is 0), and the remaining weights renormalize to a proper distribution over allowed positions. Masking after softmax both leaks the future and breaks normalization.
+4. Different *subspaces*: each head's $W_Q, W_K, W_V$ project into a different $d/h$-dimensional space, so heads can specialize — one tracks the previous token, another the subject of the clause, another a delimiter. One big head must use its single softmax for all relations at once; the multi-head softmax is $h$ separate, sharper distributions. Same parameters, more relational bandwidth.
+5. Because attention weights depend only on content, shuffling the input shuffles the output identically — order is invisible. Fixes: (i) sinusoidal positional encodings added to embeddings (original paper), (ii) learned absolute position embeddings, (iii) rotary position embeddings (RoPE, rotating Q/K by position-dependent angles — relative-position aware, used in Llama/PaLM). The choice affects length extrapolation ([13.7](13-7-evaluation-limitations.qmd)).
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+# scaling reflex: variance of q.k grows with d
+rng = np.random.default_rng(0)
+for d in [8, 64, 512]:
+    q, k = rng.normal(size=d), rng.normal(size=d)
+    print(f"d={d:>4}: q.k = {q @ k:7.2f}  (std should be ~sqrt(d) = {np.sqrt(d):.1f})")
+```
+
+```{pyodide}
+import numpy as np
+# softmax saturation: what large scores do to gradients
+def softmax(s):
+    e = np.exp(s - s.max())
+    return e / e.sum()
+s = np.array([1.0, 2.0, 3.0])
+print("scores [1,2,3] ->", softmax(s).round(4))
+print("scores [10,20,30] ->", softmax(s * 10).round(4), "<- one-hot, gradient ~0")
+```
+
+```{pyodide}
+import numpy as np
+# causal mask reflex: tril keeps j <= i
+T = 5
+mask = np.tril(np.ones((T, T), bool))
+print(mask.astype(int))
+print("position 4 attends to:", np.where(mask[4])[0], "(itself and all before)")
+```
+
+```{pyodide}
+import numpy as np
+# multi-head shape reflex: (T, d) -> h heads of (T, d/h) -> back to (T, d)
+T, d, h = 6, 12, 4
+X = rng.normal(size=(T, d)) if (rng := np.random.default_rng(0)) else None
+heads = X.reshape(T, h, d // h).transpose(1, 0, 2)   # (h, T, d/h)
+print("per-head shape:", heads.shape, "| concat back:",
+      heads.transpose(1, 0, 2).reshape(T, d).shape)
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Implement full multi-head attention in NumPy: given `X (T, d)`, weights `Wq, Wk, Wv (d, d)` and `Wo (d, d)`, split into `h` heads, apply causal-masked scaled dot-product attention per head, concatenate, output-project. Verify three invariants: (a) each head's weight matrix is lower-triangular with row sums 1; (b) permuting the *future* positions of the input does not change earlier outputs (causality); (c) with `Wq = Wk = Wv = Wo = I`, the output at position `i` equals the mean of `V[0..i]` rows.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+def multihead_attention(X, Wq, Wk, Wv, Wo, h):
+    T, d = X.shape
+    dk = d // h
+    Q, K, V = X @ Wq, X @ Wk, X @ Wv
+    def split(M):
+        return M.reshape(T, h, dk).transpose(1, 0, 2)      # (h, T, dk)
+    Qh, Kh, Vh = split(Q), split(K), split(V)
+    scores = Qh @ Kh.transpose(0, 2, 1) / np.sqrt(dk)    # (h, T, T)
+    mask = np.tril(np.ones((T, T), bool))
+    scores = np.where(mask, scores, -np.inf)
+    w = np.exp(scores - scores.max(-1, keepdims=True))
+    w /= w.sum(-1, keepdims=True)
+    ctx = w @ Vh                                          # (h, T, dk)
+    return ctx.transpose(1, 0, 2).reshape(T, d) @ Wo, w
+
+rng = np.random.default_rng(1)
+T, d, h = 5, 8, 2
+X = rng.normal(size=(T, d))
+W = [rng.normal(size=(d, d)) * 0.3 for _ in range(4)]
+out, w = multihead_attention(X, *W, h)
+
+print("(a) lower-triangular:", np.allclose(np.triu(w, 1), 0),
+      "| row sums 1:", np.allclose(w.sum(-1), 1))
+Xp = X.copy(); Xp[3:] = rng.normal(size=(T - 3, d))      # scramble the future
+out_p, _ = multihead_attention(Xp, *W, h)
+print("(b) causality — outputs at positions 0-2 unchanged:",
+      np.allclose(out[:3], out_p[:3]))
+I = np.eye(d)
+out_id, _ = multihead_attention(X, I, I, I, I, 1)   # h=1: identity survives the head split
+manual = np.array([X[:i + 1].mean(0) for i in range(T)])
+print("(c) identity weights -> running mean:", np.allclose(out_id, manual, atol=1e-6))
+```
+
+(a) The mask is exact: future weight is 0, each row a proper distribution. (b) Causality is a *structural* guarantee — no matter what the future contains, earlier outputs are bit-identical, which is why the whole sequence's next-token distributions can be computed in one parallel pass during training. (c) With identity projections, attention is a uniform average over the prefix — the running mean — confirming the softmax weights are doing the averaging.
+</details>
+
+**Exercise 2.** The scaling factor, measured: fix a query and key distribution (unit variance, $d_k$ varying), compute attention weights with and without the $1/\sqrt{d_k}$ factor, and measure the *entropy* of the resulting weight distribution. Plot entropy vs $d_k$ for both. State the training-dynamic consequence of the unsharp regime (vanishing softmax gradients) and connect it to why the original paper called the unscaled variant "incompatible with large dimensions."
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(2)
+T = 16
+ds = [4, 8, 16, 32, 64, 128, 256]
+ent_scaled, ent_unscaled = [], []
+for d in ds:
+    q = rng.normal(size=(T, d))
+    k = rng.normal(size=(T, d))
+    for scale, acc in [(True, ent_scaled), (False, ent_unscaled)]:
+        s = q @ k.T / (np.sqrt(d) if scale else 1.0)
+        w = np.exp(s - s.max(-1, keepdims=True))
+        w /= w.sum(-1, keepdims=True)
+        acc.append(-(w * np.log(w + 1e-12)).sum(-1).mean())
+
+fig, ax = plt.subplots(figsize=(7, 3.2))
+ax.plot(ds, ent_scaled, "o-", label="scaled 1/sqrt(d_k)")
+ax.plot(ds, ent_unscaled, "s-", label="unscaled")
+ax.set(xscale="log", xlabel="head dimension d_k", ylabel="mean attention entropy (nats)",
+       title="without scaling, attention collapses to one-hot as d_k grows")
+ax.legend(); plt.show()
+print("max possible entropy (uniform over 16):", round(np.log(T), 3))
+```
+
+Unscaled, entropy falls toward 0 — attention becomes a hard argmax on whichever key randomly has the largest dot product, and the softmax's gradient (which scales with $p(1-p)$) vanishes: the model can't learn *from* the attention weights, only through the values. Scaled, entropy stays high — the distribution remains soft, gradients flow, and the model can learn which relations to track. This is a pure optimization failure, not an expressiveness one: the unscaled model *could* represent the right attention, but gradient descent can't find it. Same family of problem as vanishing gradients in deep nets ([10.4](../part-10-deep-learning/10-4-gradient-descent-backprop.qmd)) — fixed by normalizing the score's variance.
+</details>
+
+**Exercise 3.** Complexity budget: count the FLOPs of one attention layer for sequence length $T$ and dimension $d$: $QK^\top$ costs $O(T^2 d)$, the softmax-weight×$V$ product $O(T^2 d)$, the projections $O(T d^2)$. Write the exact leading-term counts, then compute: at $T = 4096$, $d = 4096$, how many times more expensive is the attention score computation than the projections? State the consequence for long contexts (the "quadratic wall") and name the two engineering escapes (sparse/linear attention, KV-cache at inference).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+T, d = 4096, 4096
+flops_qk = 2 * T * T * d          # QK^T: T^2 dot products of length d
+flops_av = 2 * T * T * d          # weights @ V
+flops_proj = 4 * (2 * T * d * d)  # Wq, Wk, Wv, Wo: 4 matmuls (T,d)@(d,d)
+print(f"QK^T:        {flops_qk:.3e}")
+print(f"weights @ V: {flops_av:.3e}")
+print(f"projections: {flops_proj:.3e}")
+print(f"attention-score terms are {flops_qk / flops_proj:.1f}x the projections")
+print(f"memory for the (T,T) score matrix: {T * T * 4 / 2**20:.0f} MiB (float32)")
+```
+
+At $T = d = 4096$ the two $T^2 d$ terms already dominate the $Td^2$ projections 2:1, and the gap grows linearly in $T$ — doubling the context quadruples the attention cost while projections only double. The $(T, T)$ score matrix itself (16M entries, 64 MiB in float32) becomes the memory bottleneck. Consequences: (i) training on long contexts is quadratic in both time and memory — the "quadratic wall" behind context-window limits; (ii) at *inference*, generation is sequential but each step's K/V can be cached (the KV-cache) so the model never recomputes them — turning $O(T^2)$ total generation into $O(T^2)$ with a much smaller constant, at the cost of memory growing with context. Escapes from the wall itself: sparse attention (each token attends to a fixed pattern — local windows + global tokens, Longformer/BigBird), linear attention (kernel trick removes the explicit $T \times T$ matrix, Performer), and sliding-window attention (Mistral) — all trading a little attention fidelity for a lot of context.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Attention weights are not explanations.** The weight from token A to B says the model *used* B when producing A — not that B *caused* the output, and not that the model "understands" B. Ablation studies (zero the weight, watch the output) are the causal version; the weights themselves are correlational. The interpretability literature is blunt on this.
+- **The causal mask is a training/inference contract.** During training, all positions are computed in parallel with the mask hiding the future — every position's next-token distribution is learned simultaneously. At inference, the KV-cache reuses computed K/V so generation stays $O(1)$ per step in compute (but $O(T)$ in memory). Breaking this contract (e.g., forgetting the mask) silently trains a model that peeks at the future — great training loss, useless generation.
+- **Softmax saturation is a training killer** — the unscaled dot product's variance grows with $d_k$ (Exercise 2). Related: very long sequences with sharp distributions can produce attention entropy collapse, where one position dominates every query — a failure mode behind some degenerate outputs.
+- **Positional extrapolation fails.** Models trained at $T = 4096$ degrade when fed $T = 8192$ with sinusoidal/learned absolute encodings — positions never seen in training. RoPE and ALiBi extrapolate better; long-context fine-tuning is still required for reliability ([13.7](13-7-evaluation-limitations.qmd)).
+- **Residual + LayerNorm is load-bearing.** Remove the residual connections and deep transformers don't train at all — the gradient path through 48+ layers needs the identity highway ([10.5](../part-10-deep-learning/10-5-regularization-for-nns.qmd)'s stabilization argument, at 100× depth).
+- **The feed-forward network is where the parameters live.** In the original transformer the FFN (two matmuls, 4× expansion) holds ~2/3 of the parameters — attention is the *routing*, the FFN is the *memory*. "Attention is all you need" is the paper's title, not its parameter count.
+
+### Read & Refactor AI Code
+
+This AI-generated attention cell has **three bugs**. Run, diagnose, fix.
+
+```{pyodide}
+import numpy as np
+
+def attention(X, Wq, Wk, Wv):
+    T, d = X.shape
+    Q, K, V = X @ Wq, X @ Wk, X @ Wv
+    scores = Q @ K.T                       # BUG 1
+    scores = scores - np.triu(scores, 1)  # BUG 2
+    w = np.exp(scores)
+    w = w / w.sum(-1, keepdims=True)
+    return w @ V
+
+rng = np.random.default_rng(0)
+X = rng.normal(size=(4, 8))
+W = [rng.normal(size=(8, 8)) for _ in range(3)]
+out = attention(X, *W)
+print("output:\n", out.round(3))
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **No scaling**: `Q @ K.T` at $d = 8$ is tolerable, but the function is wrong for any realistic $d_k$ — scores scale with $\sqrt{d_k}$ and the softmax saturates (Exercise 2). Divide by `np.sqrt(d)`.
+2. **Masking by subtraction, after the fact**: `scores - np.triu(scores, 1)` *subtracts* the future scores instead of *removing* them — the future positions keep their (shifted) scores and still receive weight, and the row no longer sums to 1 over allowed positions. The mask must be applied *before* the softmax with `-np.inf` (or a large negative), so `exp` zeroes those positions exactly.
+3. **No numerical stability**: `np.exp(scores)` overflows for scores > ~700. Subtract the row max before exponentiating — mathematically identical, numerically safe.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+def attention(X, Wq, Wk, Wv):
+    T, d = X.shape
+    Q, K, V = X @ Wq, X @ Wk, X @ Wv
+    scores = Q @ K.T / np.sqrt(d)                    # fix 1: scale
+    scores = np.where(np.tril(np.ones((T, T), bool)), scores, -np.inf)  # fix 2
+    w = np.exp(scores - scores.max(-1, keepdims=True))                  # fix 3
+    w /= w.sum(-1, keepdims=True)
+    return w @ V
+
+rng = np.random.default_rng(0)
+X = rng.normal(size=(4, 8))
+W = [rng.normal(size=(8, 8)) for _ in range(3)]
+out = attention(X, *W)
+print("output:\n", out.round(3))
+w_check = np.exp(np.where(np.tril(np.ones((4, 4), bool)),
+                          (X @ W[0]) @ (X @ W[1]).T / np.sqrt(8), -np.inf))
+w_check /= w_check.sum(-1, keepdims=True)
+print("future weight exactly 0:", np.allclose(np.triu(w_check, 1), 0))
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Why *content-based* addressing beats position-based: prove that a single-head attention with learned $W_Q, W_K$ can express "attend to the previous token" and "attend to the token 3 back" as special cases, but cannot express "attend to the token with content X" without the content projections. Then argue why this compositional generality is what lets one mechanism serve syntax, coreference, and facts simultaneously — and state the cost (the $T^2$ score matrix, Exercise 3).
+
+<details>
+<summary>Hint</summary>
+
+Set $W_Q, W_K$ to select and compare specific embedding dimensions; positional addressing is a special case of content addressing only if position is encoded in the content.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+"Previous token" = a fixed offset — expressible by making $q_i \cdot k_j$ large exactly when $j = i - 1$: with sinusoidal position features in the embedding, $W_Q$ and $W_k$ can select the frequency components whose dot product peaks at offset 1 (this is essentially how ALiBi/RoPE work — relative position as a content comparison). "Token 3 back" is the same mechanism at a different frequency. But "the token whose content is X" requires the *query itself* to carry X and the keys to carry each position's content — only the full $QK^\top$ form does that. The generality is exactly the cost: content addressing computes all $T^2$ pairwise comparisons, while positional addressing would need only $T$. The transformer pays $O(T^2 d)$ so that *every* token can ask a different content question of *every* position — the same mechanism serving "find the subject" (coreference), "find the opening bracket" (syntax), and "find the fact I mentioned earlier" (memory) is why one architecture replaced the zoo of task-specific sequence models. The quadratic wall (Exercise 3) is the bill for that generality.
+</details>
+
+**Q2.** The transformer as a universal sequence-to-sequence computer: using the drill-4 reshape and Exercise 1's implementation, show that a 2-layer causal transformer with $d = 512$ can, in principle, implement any finite-state transducer — i.e., attention + FFN + residuals is Turing-complete-ish for bounded sequences. Then state the two properties that make this *practically* true (differentiability → gradient training; content-based addressing → length generalization) and the one that makes it *impractical* (the $T^2$ cost and the data required to find the program).
+
+<details>
+<summary>Hint</summary>
+
+A finite-state machine is a lookup from (state, input) → (state, output); the FFN is a universal lookup table over its input dimension, and attention routes the current state to the right position.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Construction sketch: layer 1's attention routes each position the embedding of the current running state (stored at a fixed "state register" position); the FFN — a 2-layer MLP with enough width — implements the transition function (state, symbol) → (state, symbol′) as a lookup, since MLPs are universal approximators of finite functions; the residual stream carries the state forward; layer 2 writes the output. Bounded $T$ → finite function → FFN can memorize the table. Practically true because: (i) the whole construction is differentiable, so gradient descent can *find* the transition table from examples rather than it being hand-programmed; (ii) content-based addressing means the mechanism is length-agnostic — the same weights process $T = 100$ or $T = 10{,}000$ (up to positional encoding limits). Impractical because the search space of "programs" is astronomically larger than the data: real transformers don't learn minimal FSMs, they learn statistical approximations whose generalization is empirical, not guaranteed — the gap between "can express" and "will learn from feasible data" is the entire field of interpretability and scaling laws.
+</details>
+
+## 6. Complex Questions
+
+**C1 (architecture × [10.9 attention](../part-10-deep-learning/10-9-attention-transformers.qmd) × [10.4 backprop](../part-10-deep-learning/10-4-gradient-descent-backprop.qmd)).** The attention softmax is differentiable end-to-end — derive $\partial \text{Attention}/\partial Q$ for the single-head case (softmax Jacobian × the $K V^\top$ structure) and verify it numerically against your Exercise 1 implementation with finite differences. Then explain why the causal mask makes the gradient flow *causal too*: the loss at position $t$ never backpropagates into positions $> t$ — the same structural guarantee as Exercise 1(b), now for gradients.
+
+**C2 (architecture × [9.2 PCA](../part-09-unsupervised-learning/09-2-principal-component-analysis.qmd) × [13.4](13-4-model-families.qmd)).** Multi-head attention with $h$ heads computes $h$ different $T \times T$ weight matrices from the same input — a set of $h$ related similarity structures. Frame PCA as "one global direction of maximum variance" and multi-head attention as "many local, content-dependent similarity directions," then state precisely what attention has that PCA lacks (input-dependent, per-position, nonlinear) and what PCA has that attention lacks (orthogonality, global optimality, closed form). This is the bridge from the course's classical dimensionality reduction to representation learning.
+
+## 7. Summary
+
+- Attention = soft dictionary lookup: queries match keys by dot product, softmax turns scores into weights, values are blended — $O(T^2 d)$ per layer.
+- Scale by $1/\sqrt{d_k}$: dot-product variance grows with dimension; unscaled softmax saturates and gradients vanish.
+- The causal mask (−∞ before softmax) makes next-token training parallel and generation consistent — the training/inference contract.
+- Multi-head = $h$ content-based relation trackers in parallel; same parameters, sharper distributions.
+- Positional information is an add-on (sinusoidal / learned / RoPE) because attention is permutation-invariant — and extrapolation beyond trained lengths fails.
+- Residuals + LayerNorm are what make 48+ layers trainable; the FFN holds most of the parameters.
+- Attention weights are usage, not explanation; the quadratic wall is the price of content-based generality.
+- Next: [13.3 Training pipeline](13-3-training-pipeline.qmd) — how these blocks become a capable model.

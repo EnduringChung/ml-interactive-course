@@ -41,11 +41,11 @@ Parts 0–1 below are **fully Tier 1**. Later parts layer in T2 (Bioconductor di
 | **7** | Tree-Based Models and Ensembles | **Published** |
 | **8** | Support Vector Machines | **Published** |
 | **9** | Unsupervised Learning | **Published (9.7 = T3, coming)** |
-| 10 | Deep Learning with PyTorch | Planned (T3) |
-| 11 | Survival Analysis and Censored Data | Planned |
-| 12 | Multiple Testing and Bioinformatics Statistics | Planned (12.6 is T2) |
-| 13 | Large Language Models | Planned (13.5–13.6 are T3) |
-| A | Deriving the Formulas | Planned |
+| **10** | Deep Learning with PyTorch | **Draft (T3 — Colab labs in /notebooks)** |
+| **11** | Survival Analysis and Censored Data | **Published** |
+| **12** | Multiple Testing and Bioinformatics Statistics | **Published (12.6 is T2)** |
+| **13** | Large Language Models | **Published (13.5–13.6 are T3 — Colab labs in /notebooks)** |
+| **A** | Deriving the Formulas | **Published** |
 
 ## What's inside each page
 

@@ -11,6 +11,7 @@ _quarto.yml                    site config (format: live-html, engine: markdown)
 index.qmd                      course home: how-to, tier legend, course map
 part-00-python-foundations/    00-1 … 00-5   (T1)
 part-01-statistics-bridge/     01-1 … 01-5   (T1)
+notebooks/                     Colab companion notebooks for T3 pages (Part 10 …)
 part-02…part-13, appendix-a/   placeholder stubs until built (build order in plan.md)
 _extensions/r-wasm/live/       quarto-live extension (vendored via `quarto add`)
 assets/                        styles
@@ -117,11 +118,42 @@ Status flow: **Draft → Drilled → Reviewed → Published**
 | 9.5 Hierarchical clustering | T1 | Published |
 | 9.6 Practical clustering issues | T1 | Published |
 | 9.7 UMAP / t-SNE / autoencoders | T3 | Not started (T3 pass) |
-| Part 10 — Deep learning (10.x) | T3 | Not started |
-| Part 11 — Survival analysis (11.x) | T1 | Not started |
-| Part 12 — Multiple testing (12.1–12.5 T1; 12.6 T2) | mixed | Not started (stubs) |
-| Part 13 — LLMs (13.1–13.4, 13.7–13.8 T1; 13.5–13.6 T3) | mixed | Not started |
-| Appendix A — Deriving the formulas | T1 | Not started |
+| 10.1 PyTorch foundations | T3 | Draft (verified cells) |
+| 10.2 Single-layer neural networks | T3 | Draft (verified cells) |
+| 10.3 Multilayer neural networks | T3 | Draft (verified cells) |
+| 10.4 Gradient descent & backpropagation | T1 (+T3 torch lab) | Draft (verified cells) |
+| 10.5 Regularization for neural networks | T3 | Draft (verified cells) |
+| 10.6 Convolutional neural networks | T3 | Draft (verified cells) |
+| 10.7 Recurrent neural networks | T3 | Draft (verified cells) |
+| 10.8 LSTM and GRU | T3 | Draft (verified cells) |
+| 10.9 Attention and transformers | T3 | Draft (verified cells) |
+| 10.10 When deep learning is appropriate | T1 | Draft (verified cells) |
+| 11.1 Why survival data is special | T1 | Published |
+| 11.2 Kaplan–Meier survival curves | T1 | Published |
+| 11.3 Log-rank test | T1 | Published |
+| 11.4 Hazard functions | T1 | Published |
+| 11.5 Cox proportional hazards | T1 | Published |
+| 12.1 Hypothesis-test review | T1 | Published |
+| 12.2 Why multiple testing is dangerous | T1 | Published |
+| 12.3 Family-wise error rate | T1 | Published |
+| 12.4 False discovery rate | T1 | Published |
+| 12.5 Resampling for p-values and FDR | T1 | Published |
+| 12.6 Differential-expression workflow | T2 | Published (stub — frozen output pass pending) |
+| 13.1 LLM foundations | T1 | Published (verified cells) |
+| 13.2 Transformer architecture | T1 | Published (verified cells) |
+| 13.3 Training pipeline | T1 | Published (verified cells) |
+| 13.4 Model families and variants | T1 | Published (verified cells) |
+| 13.5 Local deployment | T3 | Published (verified cells + Colab lab) |
+| 13.6 Customization (RAG, LoRA, agents) | T3 | Published (verified cells + Colab lab) |
+| 13.7 Evaluation and limitations | T1 | Published (verified cells) |
+| 13.8 Applications and next steps | T1 | Published (verified cells) |
+| A.1 Normal equations for linear regression | T1 | Published (verified cells) |
+| A.2 Why least squares is maximum likelihood | T1 | Published (verified cells) |
+| A.3 Logistic regression: deriving the gradient | T1 | Published (verified cells) |
+| A.4 Ridge regression: deriving the closed form | T1 | Published (verified cells) |
+| A.5 Why lasso has no closed form | T1 | Published (verified cells) |
+| A.6 PCA: deriving the first principal component | T1 | Published (verified cells) |
+| A.7 AUPRC trapezoidal estimator, worked example | T1 | Published (verified cells) |
 
 ## Tooling notes
 

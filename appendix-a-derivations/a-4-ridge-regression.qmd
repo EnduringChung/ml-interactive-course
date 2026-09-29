@@ -1,0 +1,341 @@
+---
+title: "A.4 Ridge Regression: Deriving the Closed Form"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - sympy
+---
+
+[A.1](a-1-normal-equations.qmd)'s normal equations break when $X^\top X$ is singular; [A.3](a-3-logistic-gradient.qmd)'s likelihood breaks under separation. Ridge regression is the one-line fix for both: add $\lambda\|\beta\|^2$ to the objective. This page derives the closed form, shows why $\lambda I$ is exactly the right repair, and reads the solution through the SVD — where ridge's behavior becomes visible.
+
+> **Tier 1 — every cell below runs live (sympy for the symbolic derivation, NumPy for the check).**
+
+## 1. Basic Concept
+
+**The objective.** Ridge minimizes the residual sum of squares plus a penalty proportional to the squared coefficient magnitude:
+
+$$\hat\beta_\lambda = \arg\min_\beta \; \underbrace{(y - X\beta)^\top(y - X\beta)}_{\text{RSS}} + \lambda \underbrace{\beta^\top\beta}_{\|\beta\|^2}$$
+
+**The derivation** — [A.1](a-1-normal-equations.qmd)'s calculus with one extra term:
+
+```{pyodide}
+import sympy as sp
+
+X = sp.Matrix(sp.symbols('x:4', real=True)).reshape(2, 2)
+beta = sp.Matrix(sp.symbols('b0 b1', real=True))
+y = sp.Matrix(sp.symbols('y0 y1', real=True))
+lam = sp.symbols('lambda', positive=True)
+
+resid = y - X * beta
+obj = (resid.T * resid)[0] + lam * (beta.T * beta)[0]
+grad = [sp.diff(obj, b) for b in beta]
+print("∂objective/∂β =", grad)
+
+XtX = X.T * X
+Xty = X.T * y
+# the gradient is -2(X^T X β - X^T y) + 2λβ = 0  ->  (X^T X + λI)β = X^T y
+print("\ngradient == −2·[(X^T X + λI)β − X^T y]:",
+      all(sp.simplify(grad[i] + 2 * ((XtX + lam * sp.eye(2)) * beta - Xty)[i]) == 0
+          for i in range(2)))
+print("\nsolution: β̂ = (X^T X + λI)⁻¹ X^T y  — [A.1]'s formula with λI added")
+```
+
+Setting the gradient to zero: $-2X^\top(X\beta - y) + 2\lambda\beta = 0$, i.e.
+
+$$(X^\top X + \lambda I)\,\beta = X^\top y \qquad\Longrightarrow\qquad \hat\beta_\lambda = (X^\top X + \lambda I)^{-1}X^\top y$$
+
+**Why $\lambda I$ is exactly the right repair:** $X^\top X$ is positive *semi*definite — its eigenvalues are $\ge 0$, and singularity means some are exactly zero (the collinear directions of [A.1](a-1-normal-equations.qmd)). Adding $\lambda I$ shifts *every* eigenvalue up by $\lambda$ — the zero eigenvalues become $\lambda > 0$, the matrix becomes positive *definite*, and the inverse exists for any $\lambda > 0$. The penalty doesn't just regularize — it *repairs the algebra*.
+
+**The numerical check:**
+
+```{pyodide}
+import numpy as np
+
+rng = np.random.default_rng(0)
+n, p = 100, 3
+X = np.column_stack([np.ones(n), rng.normal(size=(n, p - 1))])
+beta_true = np.array([1.0, 2.0, -1.0])
+y = X @ beta_true + rng.normal(0, 0.5, n)
+
+def ridge(X, y, lam):
+    pp = X.shape[1]
+    return np.linalg.solve(X.T @ X + lam * np.eye(pp), X.T @ y)
+
+for lam in [0.001, 0.1, 1, 10, 100]:
+    b = ridge(X, y, lam)
+    rss = np.sum((y - X @ b)**2)
+    print(f"λ={lam:>6}: β̂={np.round(b, 3)}  RSS={rss:.3f}  ||β||={np.linalg.norm(b):.3f}")
+```
+
+## 2. Concept Questions
+
+1. The ridge solution is $(X^\top X + \lambda I)^{-1}X^\top y$. What happens as $\lambda \to 0$ and as $\lambda \to \infty$, and why are both limits the "right" answers?
+2. The SVD view: with $X = UDV^\top$, show $\hat\beta_\lambda = \sum_j \frac{d_j}{d_j^2 + \lambda} (u_j^\top y) v_j$. Which singular directions does ridge shrink most, and why is that the *right* thing to shrink?
+3. Why is the intercept (and generally, any unpenalized coefficient) excluded from the penalty? What breaks if you penalize it?
+4. Ridge requires standardized features — why does the penalty's *scale-dependence* make standardization a mathematical requirement, not a convenience?
+5. The Bayesian reading ([A.2](a-2-least-squares-is-mle.qmd) Q2): ridge is the posterior mode under $\beta \sim N(0, \tau^2 I)$. What does $\lambda = \sigma^2/\tau^2$ mean in words, and how does it tell you when to use a large $\lambda$?
+
+<details>
+<summary>Answers</summary>
+
+1. $\lambda \to 0$: $\hat\beta_\lambda \to (X^\top X)^{-1}X^\top y$ — the OLS solution (recovered when $X^\top X$ is invertible). $\lambda \to \infty$: every coefficient $\to 0$ — the penalty dominates and the model predicts the mean. Both limits are the correct extremes: no regularization and total shrinkage.
+2. The shrinkage factor is $\frac{d_j^2}{d_j^2 + \lambda}$ (multiplying the OLS coefficient's component along $v_j$). Directions with large singular values $d_j$ (strong, well-identified signal) are barely shrunk; directions with small $d_j$ (weak, noisy — the collinear ones) are shrunk toward zero. Ridge spends its bias budget exactly where the data is weakest — the [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd) trade-off made visible in the spectrum.
+3. The intercept represents the mean of $y$ — penalizing it shrinks the *predictions* toward zero, which is wrong whenever the outcome's mean isn't zero (it forces the other coefficients to compensate, biasing them). The calibration guarantee ($\sum r_i = 0$, [A.2](a-2-least-squares-is-mle.qmd)) also breaks. Standard practice: center $y$ and $X$, fit without an intercept, add the mean back.
+4. The penalty $\lambda\|\beta\|^2$ is in *units of the coefficients* — and the units depend on the feature's scale. A feature measured in millimeters has coefficients 1000× smaller than the same feature in meters, so the penalty treats them 1000× differently. Standardizing (mean 0, variance 1) puts every feature in the same units, making $\lambda$ comparable across coefficients — without it, $\lambda$ is not one knob but a different knob per feature.
+5. $\lambda = \sigma^2/\tau^2$ is the noise-to-prior ratio: $\sigma^2$ is how noisy the data is, $\tau^2$ is how large you believe the coefficients are *a priori*. Large $\lambda$ = noisy data or small believed effects = shrink hard. This makes $\lambda$ interpretable: it's not a magic number but a statement about signal-to-noise, and cross-validation ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)) is just estimating that ratio from the data.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+# the eigenvalue repair: X^T X singular, X^T X + λI is not
+rng = np.random.default_rng(0)
+X = rng.normal(size=(50, 4))
+X[:, 3] = X[:, 1] + X[:, 2]                      # exact collinearity
+eig = np.linalg.eigvalsh(X.T @ X)
+print("eig(X^T X):", np.round(eig, 6), "-> smallest is 0 (singular)")
+print("eig(X^T X + I):", np.round(eig + 1, 6), "-> all positive (invertible)")
+```
+
+```{pyodide}
+import numpy as np
+# the SVD shrinkage factors d²/(d²+λ)
+d = np.array([10, 3, 1, 0.1])                    # singular values, strong to weak
+for lam in [0.1, 1, 10]:
+    f = d**2 / (d**2 + lam)
+    print(f"λ={lam:>4}: shrinkage {np.round(f, 3)}  (strong dirs kept, weak dirs shrunk)")
+```
+
+```{pyodide}
+import numpy as np
+# scale dependence: the same model, two units
+rng = np.random.default_rng(1)
+x = rng.normal(size=200)
+y = 1000 * x + rng.normal(0, 1, 200)             # slope is 1000 in these units
+X = np.column_stack([np.ones(200), x])
+for lam in [1.0]:
+    b_raw = np.linalg.solve(X.T @ X + lam * np.eye(2), X.T @ y)
+    xs = (x - x.mean()) / x.std()                # standardized
+    Xs = np.column_stack([np.ones(200), xs])
+    b_std = np.linalg.solve(Xs.T @ Xs + lam * np.eye(2), Xs.T @ y)
+    print(f"raw units:    slope {b_raw[1]:.2f}")
+    print(f"standardized: slope {b_std[1]:.2f} (same λ, very different effect)")
+```
+
+```{pyodide}
+import numpy as np
+# ridge vs OLS under collinearity: variance reduction in action
+rng = np.random.default_rng(2)
+n, p = 60, 5
+X = rng.normal(size=(n, p))
+X[:, 4] = X[:, 3] + rng.normal(0, 0.01, n)        # nearly collinear
+beta_true = np.array([1., 1., 1., 1., 1.])
+ols_vars, ridge_vars = [], []
+for _ in range(3000):
+    y = X @ beta_true + rng.normal(0, 1, n)
+    b_ols = np.linalg.lstsq(X, y, rcond=None)[0]
+    b_ridge = np.linalg.solve(X.T @ X + 10 * np.eye(p), X.T @ y)
+    ols_vars.append(b_ols); ridge_vars.append(b_ridge)
+ols_vars, ridge_vars = np.array(ols_vars), np.array(ridge_vars)
+print(f"Var of OLS estimates (mean):    {ols_vars.var(0).mean():.4f}")
+print(f"Var of ridge estimates (mean):  {ridge_vars.var(0).mean():.4f}  <- lower variance")
+print(f"MSE of OLS:    {((ols_vars - beta_true)**2).mean():.4f}")
+print(f"MSE of ridge:  {((ridge_vars - beta_true)**2).mean():.4f}  <- bias-variance, [4.4]")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Derive the SVD form of the ridge solution: with $X = UDV^\top$ ( $D$ diagonal with $d_j$ ), show $\hat\beta_\lambda = V \,\text{diag}\!\left(\frac{d_j}{d_j^2 + \lambda}\right) U^\top y$, and verify it against the direct solve on a random matrix. Then state what happens to the coefficients along each singular direction as $\lambda$ grows.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(0)
+n, p = 50, 5
+X = rng.normal(size=(n, p))
+y = rng.normal(size=n)
+lam = 2.0
+
+# direct solve
+b_direct = np.linalg.solve(X.T @ X + lam * np.eye(p), X.T @ y)
+
+# SVD form
+U, d, Vt = np.linalg.svd(X, full_matrices=False)
+b_svd = Vt.T @ ((d / (d**2 + lam)) * (U.T @ y))
+print("max |direct − SVD form|:", np.abs(b_direct - b_svd).max())
+print("\ncoefficient shrinkage per singular direction:")
+for j, dj in enumerate(d):
+    print(f"  d_{j} = {dj:5.2f}: factor d/(d²+λ) = {dj/(dj**2 + lam):.4f} "
+          f"(OLS would be 1/d = {1/dj:.4f})")
+```
+
+The SVD form: $X^\top X = VD^2V^\top$, so $(X^\top X + \lambda I)^{-1} = V\,\text{diag}\!\left(\frac{1}{d_j^2 + \lambda}\right)V^\top$, and $\hat\beta_\lambda = V\,\text{diag}\!\left(\frac{d_j}{d_j^2 + \lambda}\right)U^\top y$. The OLS solution has factor $1/d_j$ along direction $j$ — which *explodes* for small $d_j$ (the collinear directions). Ridge's factor $\frac{d_j}{d_j^2 + \lambda}$ is bounded by $\frac{1}{2\sqrt{\lambda}}$ — no explosion, ever. As $\lambda$ grows, every direction shrinks toward zero, but the small-$d_j$ directions shrink *first* (their factor hits half-max at $d_j = \sqrt{\lambda}$). Ridge is a *spectral filter*: it keeps the well-identified directions and damps the noisy ones.
+</details>
+
+**Exercise 2.** The Bayesian derivation: place the prior $\beta \sim N(0, \tau^2 I)$ on the coefficients of the [A.2](a-2-least-squares-is-mle.qmd) Gaussian model and derive the posterior mode. Show it equals the ridge solution with $\lambda = \sigma^2/\tau^2$, and verify numerically that the posterior mean (which equals the mode here) shrinks toward zero as the prior tightens.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import sympy as sp
+
+# log posterior ∝ log-likelihood + log-prior
+n, s2, t2 = sp.symbols('n sigma2 tau2', positive=True)
+RSS = sp.symbols('RSS', positive=True)
+beta_norm = sp.symbols('beta_norm', positive=True)   # βᵀβ
+log_post = -n/2*sp.log(2*sp.pi) - n/2*sp.log(s2) - RSS/(2*s2) - beta_norm/(2*t2)
+# the β-dependent part: -RSS/(2σ²) - βᵀβ/(2τ²)
+# maximizing over β: minimize RSS + (σ²/τ²)·βᵀβ  ->  ridge with λ = σ²/τ²
+lam = sp.symbols('lambda', positive=True)
+print("β-dependent part of log-posterior: -RSS/(2σ²) − βᵀβ/(2τ²)")
+print("=> posterior mode = ridge solution with λ = σ²/τ² =", sp.simplify(s2/t2))
+```
+
+The posterior is Gaussian (likelihood Gaussian × prior Gaussian = Gaussian), so the mode equals the mean, and it is exactly the ridge solution with $\lambda = \sigma^2/\tau^2$. The prior's meaning: "before the data, I believe the coefficients are zero-centered with spread $\tau$." The posterior is a precision-weighted compromise: data precision $1/\sigma^2$ pulls toward the OLS solution, prior precision $1/\tau^2$ pulls toward zero, and $\lambda$ is the exchange rate between them. Numerical check: as $\tau^2$ decreases (tighter prior), the posterior mean shrinks toward zero — the prior's pull strengthens.
+</details>
+
+**Exercise 3.** The $\lambda$ path: compute ridge solutions for $\lambda$ on a log grid from $10^{-4}$ to $10^4$ on a collinear dataset, and plot each coefficient against $\lambda$ (a *regularization path*). Verify three behaviors: (a) as $\lambda \to 0$, the coefficients approach the OLS solution (which may be wild under collinearity); (b) as $\lambda$ grows, all coefficients shrink smoothly to zero; (c) the collinear pair's coefficients *share* the signal as $\lambda$ grows (they move together) — ridge's "fairness" toward correlated features.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(3)
+n, p = 100, 4
+X = rng.normal(size=(n, p))
+X[:, 3] = X[:, 2] + rng.normal(0, 0.01, n)        # collinear pair: x3 ≈ x2
+beta_true = np.array([1., 2., 3., 0.])
+y = X @ beta_true + rng.normal(0, 0.5, n)
+
+lams = np.logspace(-4, 4, 200)
+path = np.array([np.linalg.solve(X.T @ X + lam * np.eye(p), X.T @ y) for lam in lams])
+
+fig, ax = plt.subplots(figsize=(7, 3.2))
+for j in range(p):
+    ax.plot(lams, path[:, j], lw=1.5, label=f"β{j}" + (" (collinear)" if j == 3 else ""))
+ax.set_xscale("log")
+ax.set(xlabel="λ (log scale)", ylabel="coefficient value",
+       title="the regularization path: smooth shrinkage, no wild swings")
+ax.legend(fontsize=8)
+plt.show()
+
+print("as λ→0: coefficients approach OLS (wild under collinearity):",
+      np.round(path[0], 2))
+print("as λ→∞: all coefficients → 0:", np.round(path[-1], 4))
+print("the collinear pair shares the signal: β2 and β3 move together")
+```
+
+The path is the bias–variance trade-off ([4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd)) made visible: at the left edge, OLS's variance is on full display (the collinear coefficients swing wildly); as $\lambda$ grows, the variance collapses and the bias grows smoothly. The collinear pair's "sharing" is ridge's answer to [5.1](../part-05-regularization-high-dimensions/05-1-feature-selection.qmd)'s selection problem: where lasso picks one of the correlated features, ridge keeps both and splits the effect — the coefficients move together, and the *sum* is stable even as the individual split wobbles.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **$\lambda$ is in units of the data.** The objective is $\text{RSS} + \lambda\|\beta\|^2$ — RSS is in units of $y^2$, so $\lambda$'s meaning depends on $n$ and the feature scales. This is why every implementation standardizes first and why $\lambda$ values aren't comparable across datasets. The path (Exercise 3) is the scale-free way to see it.
+- **Don't penalize the intercept** — and more generally, don't penalize coefficients you *want* at their natural value (e.g., a known confounder). Partial penalization (penalty factors) is the generalization.
+- **Ridge never zeroes a coefficient** — the L2 ball is round, so the solution is always interior (all coefficients nonzero). If you need *selection* (exact zeros), that's lasso's L1 diamond — [A.5](a-5-lasso-no-closed-form.qmd) derives why the shapes differ. Elastic net ([5.4](../part-05-regularization-high-dimensions/05-4-elastic-net.qmd)) mixes the two.
+- **The SVD view is the right mental model:** ridge = spectral filter. Small singular values = directions the data doesn't identify = noise amplification; ridge damps them. When you understand the solution as "OLS with the noisy directions filtered," the hyperparameter choice becomes intuitive.
+- **Generalized ridge:** any positive definite matrix $P$ can replace $I$ — $\text{RSS} + \lambda\beta^\top P\beta$ encodes *structured* priors (e.g., $P$ = a graph Laplacian for spatial smoothness). The derivation is identical; only the meaning of the penalty changes.
+
+### Read & Refactor AI Code
+
+This AI-generated ridge solver has **three bugs**. Diagnose before running the fixed version.
+
+```python
+# AI-generated: ridge regression (will not run here — spot the bugs)
+def ridge(X, y, lam):
+    n, p = X.shape
+    beta = np.linalg.solve(X.T @ X + lam * np.eye(p), X.T @ y)   # BUG 1 (below)
+    return beta
+
+def standardize(X):
+    return X / X.std(axis=0)                    # BUG 2
+
+X = np.array([[1, 2], [1, 4], [1, 6]], dtype=float)   # BUG 3
+y = np.array([1, 2, 3], dtype=float)
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **The intercept is penalized:** the `np.eye(p)` adds $\lambda$ to the intercept's diagonal too — shrinking the mean of $y$ toward zero and biasing every slope. Fix: penalize only the non-intercept coefficients — add $\lambda$ to the submatrix, or center $y$ and $X$ and fit without an intercept.
+2. **Standardization without centering:** `X / X.std()` scales but doesn't center — the features keep their means, so the intercept column (if present) isn't orthogonal to them, and the penalty still distorts the fit. Standardization is *both*: `(X - X.mean(0)) / X.std(0)`.
+3. **The design matrix is integer-typed:** `np.array([[1, 2], ...])` without `dtype=float` creates int64 — `X.T @ X` is integer arithmetic and the solve can silently truncate. Always cast.
+
+```python
+# fixed
+def standardize(X):
+    X = np.asarray(X, dtype=float)
+    return (X - X.mean(axis=0)) / X.std(axis=0)
+
+def ridge(X, y, lam):
+    X = np.asarray(X, dtype=float); y = np.asarray(y, dtype=float)
+    yc = y - y.mean()
+    Xc = standardize(X[:, 1:])                     # center + scale the features
+    beta = np.linalg.solve(Xc.T @ Xc + lam * np.eye(Xc.shape[1]), Xc.T @ yc)
+    return np.concatenate([[y.mean()], beta])     # intercept = mean (unpenalized)
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Ridge as a spectral filter, quantified: using the SVD form, compute the *effective degrees of freedom* of a ridge fit: $\text{df}(\lambda) = \sum_j \frac{d_j^2}{d_j^2 + \lambda}$. Show it decreases from $p$ (at $\lambda = 0$) to $0$ (as $\lambda \to \infty$), and verify it against the hat matrix trace $\text{tr}(H_\lambda)$ where $H_\lambda = X(X^\top X + \lambda I)^{-1}X^\top$. Then state why this is the right complexity measure for the bias–variance trade-off.
+
+<details>
+<summary>Hint</summary>
+
+The hat matrix's trace counts the "number of parameters the fit effectively uses" — for OLS it's exactly $p$; for ridge it's the sum of the shrinkage factors.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+$H_\lambda = X(X^\top X + \lambda I)^{-1}X^\top = U\,\text{diag}\!\left(\frac{d_j^2}{d_j^2 + \lambda}\right)U^\top$, so $\text{tr}(H_\lambda) = \sum_j \frac{d_j^2}{d_j^2 + \lambda}$. At $\lambda = 0$ the sum is $p$ (OLS uses all $p$ directions); as $\lambda \to \infty$ it decays to 0 (the fit uses nothing). Each direction contributes its shrinkage factor — the well-identified directions count almost fully, the noisy ones count not at all. This is the right complexity measure because the variance of the fit is $\sigma^2 \text{tr}(H_\lambda^2)$ and the effective number of parameters controls the variance–bias balance: $\text{df}(\lambda)$ is the dial of [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd), set by $\lambda$. It's also what makes generalized cross-validation ([5.2](../part-05-regularization-high-dimensions/05-2-ridge-regression.qmd)) cheap: GCV's formula only needs $\text{tr}(H_\lambda)$, not the full hat matrix.
+</details>
+
+**Q2.** The limit connection — ridge as OLS on augmented data: show that the ridge solution is the OLS solution on the augmented system $\tilde X = [X; \sqrt{\lambda}\,I]$, $\tilde y = [y; 0]$ — stack $\sqrt{\lambda}$ rows of "the coefficients should be zero" onto the data. Then state the two readings this gives: (a) the penalty as *data* (pseudo-observations pulling $\beta$ to zero), and (b) why this makes ridge's solution always exist even when $X^\top X$ is singular.
+
+<details>
+<summary>Hint</summary>
+
+The augmented RSS is $\|y - X\beta\|^2 + \lambda\|\beta\|^2$ — exactly the ridge objective. The normal equations of the augmented system are the ridge normal equations.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+The augmented OLS problem $\min_\beta \|\tilde y - \tilde X\beta\|^2$ has objective $\|y - X\beta\|^2 + \|\sqrt{\lambda}I\beta - 0\|^2 = \text{RSS} + \lambda\|\beta\|^2$ — the ridge objective, so the solutions coincide. Reading (a): the penalty is $p$ extra *observations* saying "the coefficient vector is zero," each with weight $\sqrt{\lambda}$ — the prior made literal. Reading (b): the augmented design $\tilde X = [X; \sqrt{\lambda}I]$ has full column rank for any $\lambda > 0$ (the appended $\sqrt{\lambda}I$ supplies the missing directions), so $\tilde X^\top \tilde X = X^\top X + \lambda I$ is always invertible — ridge is OLS on a system the data alone couldn't identify. This is the cleanest statement of what regularization *is*: **adding just enough information to make the problem well-posed**, whether that information is a prior, a penalty, or pseudo-data.
+</details>
+
+## 6. Complex Questions
+
+**C1 (ridge × [A.5 lasso](a-5-lasso-no-closed-form.qmd) × [5.3](../part-05-regularization-high-dimensions/05-3-lasso-regression.qmd)).** Ridge's L2 ball gives smooth shrinkage; lasso's L1 diamond gives exact zeros. Derive both from the same constrained form — $\min \text{RSS}$ s.t. $\|\beta\|_q \le t$ — and show the constraint's *shape* (round vs pointy) is the whole difference: the round ball's smooth boundary is never axis-aligned, so the constrained solution never lands exactly on an axis; the diamond's corners are on the axes, so the solution lands there and zeroes coefficients. The geometry of the constraint is the geometry of the solution.
+
+**C2 (ridge × [A.6 PCA](a-6-pca-first-component.qmd) × [5.5](../part-05-regularization-high-dimensions/05-5-pcr-pls.qmd)).** Ridge and PCR both damp the small singular directions of $X$ — ridge smoothly, PCR by truncation. Show that PCR (regress $y$ on the top-$k$ principal components) is the $\lambda \to \infty$ limit of ridge *per direction*: ridge with $\lambda$ between $d_{k+1}^2$ and $d_k^2$ keeps directions $1..k$ almost fully and damps the rest — a soft truncation. Then state when you'd prefer each (interpretability vs smoothness), and why partial least squares ([5.5](../part-05-regularization-high-dimensions/05-5-pcr-pls.qmd)) — which finds directions that matter for $y$, not just $X$ — is the $y$-aware version of the same idea.
+
+## 7. Summary
+
+- Ridge: $\hat\beta_\lambda = (X^\top X + \lambda I)^{-1}X^\top y$ — [A.1](a-1-normal-equations.qmd)'s normal equations with $\lambda I$ added.
+- $\lambda I$ shifts every eigenvalue up by $\lambda$: the singular directions become invertible — the penalty *repairs the algebra*.
+- The SVD view: ridge shrinks each singular direction by $\frac{d_j^2}{d_j^2 + \lambda}$ — strong directions kept, weak directions damped. OLS's $1/d_j$ explosion is bounded by $1/(2\sqrt{\lambda})$.
+- Standardize first (the penalty is scale-dependent); never penalize the intercept.
+- Ridge is the posterior mode under $\beta \sim N(0, \tau^2 I)$ — $\lambda = \sigma^2/\tau^2$, the noise-to-prior ratio.
+- Ridge = OLS on augmented data $[X; \sqrt{\lambda}I]$, $[y; 0]$ — regularization as information, not magic.
+- Next: [A.5 Why lasso has no closed form](a-5-lasso-no-closed-form.qmd) — the L1 penalty's kink, and why it buys sparsity at the price of closedness.

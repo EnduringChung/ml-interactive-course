@@ -1,0 +1,313 @@
+---
+title: "13.8 Applications and Next Steps"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - matplotlib
+---
+
+The course ends where the work begins: choosing where an LLM earns its keep. This page maps the application landscape — with the course's biological-data thread made explicit — and turns the last thirteen parts into a decision procedure you can reuse. The summary is the course itself: classical models for structure, deep learning for perception, LLMs for language, and statistics holding all of it honest.
+
+> **Tier 1 — concept page with light compute; every cell below runs live (NumPy only).**
+
+## 1. Basic Concept
+
+**The application patterns, by what the model is asked to do:**
+
+| Pattern | The model does | Course tools | Biological example |
+|---|---|---|---|
+| **Grounded Q&A** | answers from your documents | RAG ([13.6](13-6-customization.qmd)) | query a lab's protocol library |
+| **Structured extraction** | text → JSON/fields | prompting + schema | pull variants from clinical notes |
+| **Code & analysis** | writes and runs code | agents ([13.6](13-6-customization.qmd)) | a pandas pipeline from a plain-English spec |
+| **Literature triage** | summarizes, compares, cites | RAG + long context | 200 papers → a structured table |
+| **Specialist behavior** | domain style/format | LoRA ([13.6](13-6-customization.qmd)) | write in your lab's report format |
+| **Perceptual/scientific** | sequences → structure/function | protein LMs (ESM, AlphaFold-adjacent) | variant effect prediction |
+
+**The biological thread, made explicit.** The course's running theme — biological data — has a natural LLM layer: **protein language models** (ESM-2) treat amino-acid sequences as a language, pretrained on ~65M sequences, and learn the same way [13.3](13-3-training-pipeline.qmd) describes — next-token (next-residue) prediction. The applications mirror the text ones: variant effect prediction (does this mutation break the protein? — a classification head on the LM's embeddings, [3.4](../part-03-classification-glm/03-4-generative-classifiers.qmd)'s generative story), protein design (sampling from the LM), and function annotation (zero-shot classification from sequence alone). The statistics you now own — multiple testing for genomics ([12.x](../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.qmd)), survival for censored outcomes ([11.x](../part-11-survival-analysis/11-1-why-survival-is-special.qmd)), honest evaluation ([13.7](13-7-evaluation-limitations.qmd)) — is exactly what those applications need to be believed.
+
+**The decision procedure** (the course in one flow):
+
+1. **Is the structure in the data or in the language?** Tables → [7.x](../part-07-trees-ensembles/07-1-decision-trees.qmd) trees/boosting; images/sequences → [10.x](../part-10-deep-learning/10-1-pytorch-foundations.qmd) deep nets; text → LLMs.
+2. **Is the knowledge in the model or in your documents?** In the model → prompt it. In your documents → RAG. In your data's *style* → LoRA.
+3. **What does failure cost?** Low → use it directly. High → ground it (RAG), verify it (tools), route it (confidence), monitor it ([13.7](13-7-evaluation-limitations.qmd)).
+4. **What would change your mind?** Pre-register the eval before looking ([12.3](../part-12-multiple-testing-bioinformatics/12-3-family-wise-error-rate.qmd), [13.7](13-7-evaluation-limitations.qmd)).
+
+**Worked example** — the cost of a real workflow, computed: a literature-triage pipeline over 10,000 papers.
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+
+n_papers = 10_000
+# path A: human reading (20 min/paper) vs path B: LLM triage + human review of the top 20%
+human_min_per_paper = 20
+llm_cost_per_paper = 0.002          # API: ~2000 tokens @ $1/1M
+review_rate = 0.20                  # LLM flags 20% for human review
+human_min_flagged = 10              # review is faster than full read
+
+hours_A = n_papers * human_min_per_paper / 60
+hours_B = (n_papers * review_rate * human_min_flagged
+           + n_papers * (1 - review_rate) * 0) / 60
+cost_B = n_papers * llm_cost_per_paper
+
+fig, ax = plt.subplots(figsize=(7, 3.2))
+ax.bar(["human only", "LLM triage + review"], [hours_A, hours_B],
+       color=["gray", "steelblue"])
+ax.set(ylabel="hours", title=f"10k papers: {hours_A:.0f}h vs {hours_B:.0f}h "
+       f"(${cost_B:.0f} API cost)")
+for i, v in enumerate([hours_A, hours_B]):
+    ax.text(i, v + 5, f"{v:.0f}h", ha="center")
+plt.show()
+print(f"speedup: {hours_A/hours_B:.0f}x | the catch: the 80% auto-dropped papers "
+      f"are dropped on the LLM's judgment — [13.7](13-7-evaluation-limitations.qmd)'s tail risk")
+```
+
+The speedup is real and large; the catch is the [13.7](13-7-evaluation-limitations.qmd) lesson — the auto-dropped 80% are dropped on the model's judgment, and the errors are concentrated in the tail (the papers that *look* irrelevant but aren't). The honest deployment: sample the dropped papers for audit, and measure the triage's recall on a labeled subset before trusting it.
+
+## 2. Concept Questions
+
+1. The decision procedure's first question is "structure in the data or in the language?" For a clinical-notes dataset (free text + structured fields), which parts go to which tool, and what is the interface between them?
+2. Protein LMs and text LMs share the [13.3](13-3-training-pipeline.qmd) recipe. What is the "vocabulary" of a protein LM, why is it so much smaller than a text tokenizer's, and what does that imply for the model's context length in residues?
+3. The triage example's 20% review rate is a design choice. What does the optimal rate depend on, and how would you find it? (Frame it as the [4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd) tuning problem it is.)
+4. "The model is a junior colleague, not an oracle." Map each half of that metaphor to a specific practice from the course (two for "junior colleague," two for "not an oracle").
+5. What is the single most important habit from the first twelve parts that an LLM user must keep, and why is it most at risk exactly when the model is most fluent?
+
+<details>
+<summary>Answers</summary>
+
+1. The structured fields (labs, diagnoses, dates) go to the classical stack — a database, then [7.x](../part-07-trees-ensembles/07-1-decision-trees.qmd) models or [11.x](../part-11-survival-analysis/11-1-why-survival-is-special.qmd) survival models for prediction; the free text goes to the LLM for extraction (text → structured fields) and grounded Q&A (RAG over the corpus). The interface is the *schema*: the LLM's structured output becomes the database's input, and the classical models consume the database. Neither tool does the other's job well — the art is the seam.
+2. The vocabulary is the 20 amino acids (+ a few special tokens) — ~22 tokens vs a text tokenizer's 32k–128k. Sequences are short (hundreds to ~2000 residues), so the context window is a non-issue — a protein LM can see an entire protein in one pass. The small vocabulary also means the model spends its capacity on *structure* (which residues co-occur, which are conserved) rather than on a large lexical inventory — the same objective, a very different language.
+3. The optimal rate is a cost–risk trade-off: review more when the cost of a missed relevant paper is high (a systematic review for guidelines) and the review is cheap; review less when the volume is overwhelming and the cost of a miss is low (a first-pass scan). Find it like any [4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd) hyperparameter: sweep the rate on a labeled dev set, plot the recall–cost curve, pick the knee for your risk tolerance. The metric is *recall on the relevant class* — the [3.1.5](../part-03-classification-glm/03-1-5-auprc.qmd) lesson: for a rare-but-important class, accuracy is the wrong objective.
+4. Junior colleague: it can draft, summarize, and code — but you review its work (human-in-the-loop); it has broad but shallow knowledge — you supply the domain context (RAG, your data). Not an oracle: it hallucinates fluently ([13.7](13-7-evaluation-limitations.qmd)) — you verify its claims against sources; it has no persistent memory or accountability — you own the decision and the audit trail.
+5. **Verify against held-out data.** The model's fluency is the most dangerous property in the course: it makes unverified output *feel* correct, and the feeling scales with the model's quality. Every statistical habit — split before you look, stratify the eval, pre-register the primary metric, distrust the winner — exists because humans are bad at self-auditing, and the LLM is a fluent generator of things to self-audit. The habit is most at risk exactly when the model is most fluent, because fluency is the strongest possible "looks right" signal.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+# the vocabulary of a protein LM vs a text LM
+aa_vocab = 20 + 2                    # 20 amino acids + pad/unk
+text_vocab = 32000
+print(f"protein vocab: {aa_vocab} | text vocab: {text_vocab} "
+      f"({text_vocab/aa_vocab:.0f}x larger)")
+print(f"a 1000-residue protein = 1000 tokens; a 1000-word document = ~1300 tokens")
+print("-> a protein LM sees a whole protein in one pass; the context window is a non-issue")
+```
+
+```{pyodide}
+# the triage recall-cost curve: sweep the review rate
+import numpy as np
+rng = np.random.default_rng(0)
+n, n_rel = 10000, 500                # 10k papers, 500 truly relevant
+# the LLM ranks papers; relevant papers are uniformly distributed in the rank
+ranks = np.arange(n)
+recall = np.array([ (ranks < n * r).sum() / n_rel for r in
+                   [0.05, 0.1, 0.2, 0.3, 0.5, 1.0] ])
+cost = np.array([n * r * 10 / 60 for r in [0.05, 0.1, 0.2, 0.3, 0.5, 1.0]])
+for r, rec, c in zip([0.05, 0.1, 0.2, 0.3, 0.5, 1.0], recall, cost):
+    print(f"review {r:>4.0%}: recall {rec:.3f}, cost {c:.0f} human-hours")
+```
+
+```{pyodide}
+# the interface: LLM structured output -> classical model input
+import json
+note = "Patient has elevated creatinine (1.9) and reduced eGFR (45)."
+# the LLM's job: extract structured fields (this is the schema interface)
+extracted = {"creatinine": 1.9, "egfr": 45, "ckd_stage_hint": 3}
+# the classical model's job: consume the fields (a [11.5] Cox model, a [7.x] tree)
+print("LLM output (JSON):", json.dumps(extracted))
+print("-> feeds a survival model / risk calculator — the seam between the two stacks")
+```
+
+```{pyodide}
+# the audit: sample the auto-dropped papers
+import numpy as np
+rng = np.random.default_rng(0)
+dropped = 8000
+audit_n = 200
+audit = rng.choice(dropped, audit_n, replace=False)
+# if 3 of 200 audited drops were actually relevant, the triage missed ~1.5%
+print(f"audit {audit_n} of {dropped} dropped papers; "
+      f"each missed relevant paper = a silent error ([13.7](13-7-evaluation-limitations.qmd) tail)")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Build the triage eval: simulate 10,000 papers with 500 relevant, an LLM ranker with a known recall–rank curve, and compute (a) the recall at each review rate, (b) the *precision* of the review queue (what fraction of flagged papers are relevant — the number that determines whether reviewers trust the tool), (c) the [3.1.5](../part-03-classification-glm/03-1-5-auprc.qmd) AUPRC of the ranker. State which of the three numbers you'd report to a hospital's review board and why.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(1)
+n, n_rel = 10000, 500
+# ranker: relevant papers get scores ~ N(0.7, 0.2), irrelevant ~ N(0.3, 0.2)
+scores = np.concatenate([rng.normal(0.7, 0.2, n_rel),
+                         rng.normal(0.3, 0.2, n - n_rel)])
+labels = np.concatenate([np.ones(n_rel), np.zeros(n - n_rel)]).astype(int)
+order = np.argsort(-scores)
+labels_sorted = labels[order]
+
+print(f"{'review rate':>12} {'recall':>8} {'queue precision':>16}")
+for r in [0.05, 0.1, 0.2, 0.3, 0.5]:
+    k = int(n * r)
+    recall = labels_sorted[:k].sum() / n_rel
+    prec = labels_sorted[:k].mean()
+    print(f"{r:>12.0%} {recall:>8.3f} {prec:>16.3f}")
+
+# AUPRC: area under precision-recall (trapezoidal, [A.7](appendix-a-derivations/a-7-auprc-trapezoidal.qmd))
+tp = np.cumsum(labels_sorted)
+prec_curve = tp / np.arange(1, n + 1)
+rec_curve = tp / n_rel
+auprc = np.sum((rec_curve[1:] - rec_curve[:-1]) *
+                (prec_curve[1:] + prec_curve[:-1]) / 2)
+print(f"\nAUPRC: {auprc:.3f} (random ranker: {n_rel/n:.3f})")
+```
+
+(a) Recall rises with the review rate — more review, more catches. (b) Queue precision *falls* — the first 5% of the queue is nearly pure relevant papers; by 50% it's diluted. The precision is the number that determines whether reviewers trust the tool: a queue that's 90% relevant feels useful; one that's 30% feels like noise. (c) AUPRC summarizes the whole curve (0.5 = random here). Report to the review board: **recall at the chosen operating rate** (did we catch the relevant papers?) and **queue precision** (is the review queue worth a human's time?) — the two numbers that together determine the workflow's value, with AUPRC as the single summary for comparing rankers. The [3.1.5](../part-03-classification-glm/03-1-5-auprc.qmd) lesson: for a rare class, the precision–recall view is the honest one.
+</details>
+
+**Exercise 2.** The protein-LM connection: ESM-2's vocabulary is 22 tokens; a sequence of length $L$ is $L$ tokens. Compute: (a) the embedding matrix size for a 650M-param protein LM (most of the parameters are the FFN, [13.4](13-4-model-families.qmd)) — how does the tiny vocabulary change the parameter distribution vs a text LM? (b) The context window in residues: a 1024-token window covers how many average proteins (≈350 residues)? (c) Why does the small vocabulary mean the model's capacity goes to *structure* rather than *lexicon*?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+# (a) parameter distribution: embeddings are negligible at vocab 22
+V_prot, d, L = 22, 1280, 32
+emb = V_prot * d
+per_layer = 12 * d * d
+total = emb + L * per_layer
+print(f"protein LM: embeddings {emb/1e6:.1f}M of {total/1e6:.0f}M = {emb/total:.2%}")
+print(f"  (text LM at 13.4: embeddings were a real fraction — here they're nothing)")
+# (b) context in residues
+print(f"1024-token window / 350 residues per protein = {1024/350:.1f} proteins per pass")
+# (c) capacity: the model can't spend parameters on a lexicon — there is none
+print("with 22 tokens, every parameter learns residue *structure*: co-occurrence,")
+print("conservation, contact — the [13.3] compression argument, on a 20-letter alphabet")
+```
+
+(a) The embedding matrix is 22 × 1280 ≈ 28k parameters — 0.004% of the model. In a text LM the embeddings are a real fraction ([13.4](13-4-model-families.qmd) drill 4); here they're nothing, so essentially *all* the capacity is in the transformer layers. (b) A 1024-token window covers ~3 average proteins — the whole-structure-in-one-pass property. (c) The model can't spend parameters on a lexicon (there are only 22 words), so every parameter learns *structure*: which residues co-occur, which positions are conserved, which folds are possible. The [13.3](13-3-training-pipeline.qmd) compression argument applied to proteins: to predict the next residue well, the model must internalize the statistical structure of protein sequence space — which is why a protein LM's embeddings are good features for variant-effect prediction (the [3.4](../part-03-classification-glm/03-4-generative-classifiers.qmd) generative-classifier story: the LM *is* a model of the protein distribution).
+</details>
+
+**Exercise 3.** The course in one experiment: you have a clinical dataset — 2,000 patient notes (free text) + structured labs + a censored survival outcome. Design the full pipeline using at least four parts of the course, naming the specific technique from each part and the seam between them. Then state the single most likely failure point and the check that would catch it.
+
+<details>
+<summary>Solution</summary>
+
+Pipeline: (1) **LLM extraction** ([13.6](13-6-customization.qmd)): the notes → structured fields (diagnoses, medications) via a schema-constrained prompt — the text/database seam from drill 3. (2) **Classical prediction** ([11.5](../part-11-survival-analysis/11-5-cox-model.qmd)): the structured fields + labs → a Cox model for the censored outcome (or [7.5](../part-07-trees-ensembles/07-5-gradient-boosting.qmd) gradient boosting if the interactions matter more than the hazard ratios). (3) **Honest evaluation** ([4.3](../part-04-validation-model-selection/04-3-cross-validation.qmd), [13.7](13-7-evaluation-limitations.qmd)): patient-level splits (never note-level — the same patient's notes must not straddle train/test), time-based validation (train on earlier patients, test on later — deployment is always in the future), and a pre-registered primary metric. (4) **Multiple-testing discipline** ([12.4](../part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.qmd)): if the pipeline screens many biomarkers from the extracted fields, the FDR correction applies to the screening. The most likely failure point: **the extraction step's errors propagate silently** — a mis-extracted medication becomes a wrong feature, and the downstream model is confidently wrong on exactly the patients whose notes were ambiguous. The check: audit a random sample of extractions against the source notes (the [13.7](13-7-evaluation-limitations.qmd) habit — measure the *system's* error, not the model's), and report the end-to-end outcome *conditioned on extraction quality*. The general principle: a pipeline is only as good as its noisiest stage, and the noisiest stage is usually the one that "looks like" language.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **The hype cycle is a selection effect.** The applications you hear about are the ones that worked and got written up — the [12.2](../part-12-multiple-testing-bioinformatics/12-2-why-multiple-testing-is-dangerous.qmd) winner's curse at the level of the field's *anecdotes*. For every demo, ask: what's the eval, what's the tail, what's the cost of a miss?
+- **Automation bias is the human failure mode:** people over-trust fluent system output and under-trust their own correct instincts. The mitigation is structural (verification steps, audit sampling, keeping a human in the loop for high-stakes decisions), not willpower.
+- **The model is a component, not a product.** Every successful application is a *system*: model + data + verification + monitoring + human oversight. The model is the most visible and least sufficient part.
+- **Costs are lumpy and non-obvious:** API costs scale with tokens (the triage example), local costs scale with hardware and electricity ([13.5](13-5-local-deployment.qmd)), and the *human* cost of reviewing output is often the largest line item — and the one nobody budgets.
+- **The field moves; the principles don't.** The specific models, benchmarks, and leaderboards of 2026 will be obsolete; the decision procedure (structure → tool, knowledge → RAG/LoRA, failure cost → verification, pre-registration → honesty) is the durable part. Learn the principles deeply and the tools shallowly — the tools you can look up.
+- **Your data is the moat.** A model is a commodity (the field's models converge, [13.4](13-4-model-families.qmd)); your documents, your schemas, your domain knowledge, and your eval are the defensible assets. Invest accordingly.
+
+### Read & Refactor AI Code
+
+This AI-generated project plan has **three flaws**. Diagnose before running the fixed version.
+
+> *"We'll fine-tune GPT-4 on our 500 clinical notes to predict 30-day readmission, evaluate on a random 80/20 split, and deploy if accuracy is above 85%. The model's fluency will also let it summarize the notes for the doctors."*
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Random split on patient data:** notes from the same patient (or the same time period) straddle train/test — the [4.3](../part-04-validation-model-selection/04-3-cross-validation.qmd) leakage that inflates every metric. Split by patient, and by time (train on the past, test on the future).
+2. **Accuracy on an imbalanced outcome:** 30-day readmission is ~10–15% — an 85% accuracy bar is met by predicting "no readmission" for everyone. The metric must be recall/AUPRC on the positive class ([3.1.5](../part-03-classification-glm/03-1-5-auprc.qmd)) with a clinically meaningful operating threshold.
+3. **"Fluency" as a requirement for the summary task:** the summary is a *clinical* artifact — a fluent hallucination is worse than a terse correct one. The summary task needs its own eval (factuality against the source note) and is a separate workstream from the prediction task; bundling them means neither gets the verification it needs.
+
+**Refactor:** patient-level and time-based splits; AUPRC + recall at a pre-registered threshold as the primary metric; a baseline (logistic regression on the structured fields — [3.3](../part-03-classification-glm/03-3-logistic-regression.qmd)) that the LLM pipeline must beat to justify its cost; the summary task scoped separately with a factuality audit. The discipline: every claim in the plan gets an eval, a baseline, and a leakage check before a single GPU-hour is spent.
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** The endgame of the decision procedure: as models get cheaper and more capable, the optimal boundary between "classical model" and "LLM" shifts. Model it: let the classical model's cost be $C_c$ (fixed, cheap) with accuracy $A_c$, and the LLM's cost be $C_l$ (per-query, falling over time) with accuracy $A_l > A_c$. The LLM's accuracy advantage is *task-dependent* — it's large for language-shaped tasks and ~zero for tabular ones. Compute the break-even query volume where the LLM's total cost (including the [13.7](13-7-evaluation-limitations.qmd) verification overhead) beats the classical model's, and state how the boundary moves as $C_l$ falls.
+
+<details>
+<summary>Hint</summary>
+
+The break-even is where (cost per query) × (queries) + (verification cost) equal — with the accuracy advantage as the benefit side.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+# benefit: value of the accuracy advantage per query; cost: per-query + verification
+A_c, A_l = 0.80, 0.92
+value_per_query = 1.0           # normalized value of a correct prediction
+C_c, C_l = 0.001, 0.01         # cost per query (classical, LLM)
+verify = 0.02                  # LLM verification overhead per query (human review, spot checks)
+
+def net_value(model, n):
+    if model == "classical":
+        return n * (A_c * value_per_query - C_c)
+    return n * (A_l * value_per_query - C_l - verify)
+
+for n in [1e3, 1e4, 1e5, 1e6]:
+    print(f"n={n:.0e}: classical {net_value('classical', n):>9.0f} | "
+          f"LLM {net_value('llm', n):>9.0f} | "
+          f"winner: {'LLM' if net_value('llm', n) > net_value('classical', n) else 'classical'}")
+
+# break-even: A_l*v - C_l - verify = A_c*v - C_c  ->  independent of n!
+be = (A_l - A_c) * value_per_query - (C_l - C_c) - verify
+print(f"\nper-query net advantage of the LLM: {be:.4f} "
+      f"({'positive — LLM wins at any volume' if be > 0 else 'negative — classical wins at any volume'})")
+```
+
+The break-even is *per-query*, not a volume threshold: if the LLM's net value per query (accuracy advantage × value − cost − verification) is positive, it wins at any volume; if negative, at none. As $C_l$ falls (models get cheaper), the per-query advantage rises and the boundary moves toward the LLM — but the *verification* term is the floor: it's the [13.7](13-7-evaluation-limitations.qmd) cost of the model's structural hallucination, and it doesn't fall with the model's price. The durable boundary: tasks where the accuracy advantage is real (language-shaped) and the verification is cheap (low-stakes, high-volume) move to the LLM; tasks where the advantage is ~zero (tabular) or the verification is expensive (high-stakes) stay classical — regardless of how cheap the LLM gets.
+</details>
+
+**Q2.** The course's final synthesis: take the four most important ideas from the course — one from statistics, one from classical ML, one from deep learning, one from LLMs — and state how each one changes what you do *on Monday morning* in a data-driven biology lab. Then state the one idea that, if you remember nothing else, prevents the most errors.
+
+<details>
+<summary>Hint</summary>
+
+The ideas should be practices, not facts: things you *do*, not things you know.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+- **Statistics ([12.3](../part-12-multiple-testing-bioinformatics/12-3-family-wise-error-rate.qmd)):** pre-register the primary analysis and correct for the number of tests you run — the habit that separates a finding from a fishing expedition. On Monday: when the screen comes back with 20,000 p-values, the FDR correction is the difference between a paper and a retraction.
+- **Classical ML ([4.3](../part-04-validation-model-selection/04-3-cross-validation.qmd)):** every preprocessing step lives inside the CV fold, and the split respects the data's structure (patient, not sample; past, not future). On Monday: the pipeline is a `Pipeline` object, and the split is by patient — the two lines of code that prevent the most common irreproducible result.
+- **Deep learning ([10.4](../part-10-deep-learning/10-4-gradient-descent-backprop.qmd)):** you can derive and verify any gradient by hand and finite differences — no black boxes, no "the library said so." On Monday: when the model misbehaves, you check the gradient before you check the hyperparameters.
+- **LLMs ([13.7](13-7-evaluation-limitations.qmd)):** evaluate on *your* data, stratify the tail, and verify the output — the model is a fluent probability machine, not an oracle. On Monday: the LLM's answer is the *input* to your verification, never the conclusion.
+
+The one idea that prevents the most errors: **verify against held-out data you didn't touch.** It is the common root of every statistical habit in the course — the split, the fold, the pre-registration, the contamination check, the audit sample. Every way this course has found to be wrong (leakage, selection, contamination, the winner's curse, hallucination) is a version of the same failure: letting the answer influence the evaluation. The habit is one sentence — *decide how you'll judge before you see the result* — and it is the whole course.
+</details>
+
+## 6. Complex Questions
+
+**C1 (applications × [12.6 differential expression](../part-12-multiple-testing-bioinformatics/12-6-differential-expression.qmd) × [13.6](13-6-customization.qmd)).** A genomics core facility wants to add an LLM to its analysis pipeline: researchers will ask it to interpret DESeq2 results ("what do these 200 significant genes mean?"). Design the system: the LLM gets the results table + RAG over pathway databases + a schema for structured output. State the three places the pipeline can silently produce a wrong biological conclusion, and the check at each. This is the course's bioinformatics thread and its LLM thread, joined.
+
+**C2 (applications × [11.5 Cox](../part-11-survival-analysis/11-5-cox-model.qmd) × [13.7](13-7-evaluation-limitations.qmd) × [13.8](13-8-applications-next-steps.qmd)).** The final exam, in one question: a hospital's LLM-based triage tool has been running for a year. Its monthly eval (200 fresh questions) shows 94% accuracy, stable. Using [11.5](../part-11-survival-analysis/11-5-cox-model.qmd)'s framing, define the "failure event" and the covariates that predict it; using [13.7](13-7-evaluation-limitations.qmd), state why the stable 94% might be hiding a rising hazard; using this page's decision procedure, state the monitoring and update policy. The answer is a design, not a number.
+
+## 7. Summary
+
+- Choose the tool by where the structure lives: tables → classical, perception → deep nets, language → LLMs; the seam is the schema.
+- Knowledge in the model → prompt; in your documents → RAG; in your data's style → LoRA; failure cost high → ground, verify, route, monitor.
+- Protein LMs are the course's bioinformatics thread made explicit: next-residue prediction, tiny vocabulary, capacity spent on structure — and the same statistics applies.
+- The triage workflow: speedup is real, the tail is the risk — audit the auto-dropped, measure recall on a labeled subset.
+- The course in four habits: pre-register (statistics), split by structure (ML), verify gradients (DL), evaluate on your data (LLMs).
+- The one idea: decide how you'll judge before you see the result — every failure in this course is a version of its opposite.
+- The course is the toolbox; the decision procedure is the craft. Go build something — and evaluate it like you mean it.

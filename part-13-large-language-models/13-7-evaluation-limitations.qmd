@@ -1,0 +1,306 @@
+---
+title: "13.7 Evaluation and Limitations"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - matplotlib
+---
+
+Every previous page built capability; this page builds *honesty about capability*. LLM evaluation is where the course's statistical habits — calibration, multiple testing, contamination, the winner's curse — meet a field that moves faster than its benchmarks. The limitations are not footnotes: knowledge cutoff, hallucination, bias, and the gap between "passes the benchmark" and "works in your workflow" are the difference between a demo and a deployment.
+
+> **Tier 1 — concept page with light compute; every cell below runs live (NumPy only).**
+
+## 1. Basic Concept
+
+**The evaluation stack, from weak to strong:**
+
+| Level | What it measures | Failure mode |
+|---|---|---|
+| **Perplexity** ([13.1](13-1-foundations.qmd)) | fit to a text distribution | corpus-dependent; gameable by memorization |
+| **Benchmarks** (MMLU, GSM8K, HumanEval) | task accuracy vs a reference | contamination, saturation, narrow tasks |
+| **Chatbot Arena** (human preference) | real-user satisfaction | prompt-selection bias, non-representative voters |
+| **Your own eval set** | *your* task, *your* data | the only one that predicts your deployment |
+
+**The four limitations that no benchmark captures:**
+
+1. **Knowledge cutoff** — the model knows only its training corpus. Post-cutoff events, private data, and anything unwritten are invisible. RAG ([13.6](13-6-customization.qmd)) is the standard fix.
+2. **Hallucination** — the model generates fluent, confident, *false* text. It is not a bug in the sense of a broken component; it is the direct consequence of the objective ([13.1](13-1-foundations.qmd)): the model is a next-token predictor, and a plausible continuation is not a verified fact. Hallucination rate is task-dependent and *risks being highest exactly where the model sounds most confident*.
+3. **Bias and sycophancy** — the model reproduces the corpus's biases ([13.3](13-3-training-pipeline.qmd)) and, after RLHF, tends to agree with the user. Both are training-data facts, not alignment failures that more alignment fully fixes.
+4. **The reliability gap** — a model that is right 90% of the time on a benchmark is right 90% of the time *on the benchmark's distribution*. Real workflows have long tails (rare inputs, adversarial inputs, distribution shift) where the rate is lower — and the tail is where the cost lives.
+
+**Worked example** — the winner's curse, measured: a lab evaluates on 40 benchmarks and reports the best:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+n_bench, n_reps = 40, 2000
+true_acc = 0.5                       # the model is exactly at chance on every benchmark
+noise = rng.normal(0, 0.05, (n_reps, n_bench))   # benchmark noise: small n, prompt variance
+observed = true_acc + noise
+
+best_per_study = observed.max(axis=1)
+mean_per_study = observed.mean(axis=1)
+
+fig, ax = plt.subplots(figsize=(7, 3.2))
+ax.hist(best_per_study, bins=30, alpha=0.7, label="best of 40 (reported)")
+ax.hist(mean_per_study, bins=30, alpha=0.7, label="mean of 40 (honest)")
+ax.axvline(true_acc, color="red", ls="--", label="true accuracy = 0.50")
+ax.set(xlabel="accuracy", ylabel="studies", title="the winner's curse: reporting the best of 40")
+ax.legend(fontsize=8)
+plt.show()
+print(f"true accuracy: {true_acc}")
+print(f"mean of 40 (unbiased):  {mean_per_study.mean():.3f}")
+print(f"best of 40 (reported):  {best_per_study.mean():.3f}  <- inflated by "
+      f"{best_per_study.mean() - true_acc:.3f}")
+```
+
+With a true accuracy of 0.50 and benchmark noise of ±0.05, the *mean* of 40 benchmarks is an unbiased estimate — but the *best* of 40 reports 0.55–0.60. That gap is pure selection, and it is exactly [12.2](../part-12-multiple-testing-bioinformatics/12-2-why-multiple-testing-is-dangerous.qmd)'s family-wise problem: 40 chances to beat the truth by noise. The fix is the same: pre-register the benchmark, or correct for selection ([12.4](../part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.qmd)'s FDR logic).
+
+## 2. Concept Questions
+
+1. Why is perplexity a necessary but not sufficient evaluation? What can a model optimize to lower perplexity without becoming more useful?
+2. Benchmark contamination: a model scores 90% on a benchmark whose questions appear in its training data. Why is this not "the model knows the material," and what does the [13.3](13-3-training-pipeline.qmd) contamination exercise imply about the *size* of the effect?
+3. The reliability gap: a model is 95% accurate on your eval set of 200 examples. Why is that number still not the number you should quote for deployment? What would you compute instead?
+4. Hallucination vs lying: why is "the model lied" the wrong frame, and what does the correct frame imply about mitigation?
+5. Chatbot Arena ranks by human preference. What are the two selection biases in *who votes* and *what prompts get voted on*, and how do they distort the ranking?
+
+<details>
+<summary>Answers</summary>
+
+1. Perplexity measures fit to a text distribution — a model can lower it by memorizing the test corpus (contribution: zero generalization), by learning surface statistics (no understanding), or by genuinely improving prediction. It's necessary because a model that can't model text can't do anything else, but insufficient because the objective is a surrogate: the things that make a model *useful* (honesty, reasoning, instruction-following) are only correlated with next-token fit. The [13.3](13-3-training-pipeline.qmd) Q1 argument, as an evaluation criterion.
+2. Scoring 90% on seen questions measures *retrieval*, not *capability* — the model is recognizing training text, not answering questions. The [13.3](13-3-training-pipeline.qmd) Exercise 3 simulation showed the effect size: contamination can inflate scores by points with zero capability change, and at trillion-token scale the boundary between "seen" and "near-seen" (paraphrases, translations) is fuzzy — so the honest move is to treat any benchmark score as an *upper bound* and evaluate on held-out, post-cutoff, or adversarially-constructed data.
+3. 200 examples at 95% has a 95% CI of roughly ±3% — and that's the *statistical* uncertainty on the eval distribution. The deployment number must also cover the *tail*: rare input types, adversarial inputs, and distribution shift between the eval set and production. Quote instead: the accuracy on a *stratified* eval (by input type), the worst-slice accuracy, and a monitoring plan — the [4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd) generalization problem, where the deployment distribution is the test set you can't see.
+4. Lying requires intent to deceive; the model has no intent — it generates the most *probable* continuation, and falsehoods are probable continuations whenever the model's knowledge is incomplete or the training data was wrong. The correct frame is "the model is a calibrated-ish probability machine that can't tell you when it's guessing" — which implies mitigation by *design*: RAG (ground it in sources), tool use (verify with computation), confidence elicitation (ask it to flag uncertainty), and human review for high-stakes outputs. You can't prompt away a structural property; you can only route around it.
+5. *Who votes*: Arena voters are self-selected — technically inclined, English-speaking, heavy users — so the ranking optimizes for that population's preferences. *What prompts*: the prompts that get voted are the ones users thought to try — which over-represents the model's marketing strengths and under-represents the long tail of real use. The ranking is a real signal about *preferred* behavior on *tried* prompts by *willing* voters — a biased sample of "is this model good for your work."
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+# the winner's curse in one line: max of noisy estimates is biased up
+rng = np.random.default_rng(0)
+truth, noise_std, n = 0.5, 0.05, 40
+studies = rng.normal(truth, noise_std, (5000, n))
+print(f"true: {truth} | mean of {n}: {studies.mean(1).mean():.3f} | "
+      f"best of {n}: {studies.max(1).mean():.3f}")
+```
+
+```{pyodide}
+import numpy as np
+# calibration reflex: does the model's confidence match its accuracy?
+# 10 bins of confidence, accuracy per bin
+conf = np.array([.5, .6, .7, .8, .9, .55, .65, .75, .85, .95])
+correct = np.array([0, 1, 1, 0, 1, 1, 0, 1, 1, 1])
+for lo in np.arange(0.5, 1.0, 0.1):
+    m = (conf >= lo) & (conf < lo + 0.1)
+    if m.sum():
+        print(f"conf [{lo:.1f},{lo+0.1:.1f}): n={m.sum()}, acc={correct[m].mean():.2f}")
+```
+
+```{pyodide}
+# contamination reflex: n-gram overlap between train and test
+train_q = "what is the capital of France?"
+test_q = "what is the capital of France?"
+def ngrams(s, n=3): return set(s[i:i+n] for i in range(len(s)-n+1))
+print("overlap (identical):", len(ngrams(train_q) & ngrams(test_q)) / len(ngrams(test_q)))
+test_q2 = "which city is the capital of France?"
+print("overlap (paraphrase):", len(ngrams(train_q) & ngrams(test_q2)) / len(ngrams(test_q2)))
+```
+
+```{pyodide}
+# the tail matters: overall accuracy hides the slice that fails
+slices = {"common": (0.95, 0.90), "rare": (0.60, 0.08), "adversarial": (0.30, 0.02)}
+overall = sum(acc * frac for acc, frac in slices.values())
+worst = min(acc for acc, _ in slices.values())
+print(f"overall accuracy: {overall:.3f} | worst slice: {worst:.3f}")
+print("the deployment question is the worst slice, not the overall")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** The multiple-testing correction for leaderboards: a lab reports its model's score on 40 benchmarks, best = 0.72. Using the drill-1 simulation framework, estimate the *selection bias* (best − mean) as a function of the number of benchmarks and the per-benchmark noise. Then state the two honest reporting practices that remove the bias, and connect to [12.3](../part-12-multiple-testing-bioinformatics/12-3-family-wise-error-rate.qmd)/[12.4](../part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.qmd).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(1)
+truth, noise = 0.5, 0.05
+print(f"{'# benchmarks':>13} {'mean of best':>13} {'bias':>8}")
+for n_bench in [1, 5, 10, 40, 100]:
+    studies = rng.normal(truth, noise, (3000, n_bench))
+    best = studies.max(1).mean()
+    print(f"{n_bench:>13} {best:>13.3f} {best - truth:>8.3f}")
+```
+
+The bias grows with the number of benchmarks (more chances for a lucky draw) and with the per-benchmark noise (noisier benchmarks give more room for luck). At 40 benchmarks the bias is ~0.05–0.08 — enough to flip a leaderboard ranking. Honest practices: (i) **pre-register** the primary benchmark before seeing results (the [12.3](../part-12-multiple-testing-bioinformatics/12-3-family-wise-error-rate.qmd) fix — one test, no selection); (ii) if multiple benchmarks must be reported, report the *mean* (or a pre-specified aggregate) alongside the best, and treat the best as exploratory — the [12.4](../part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.qmd) distinction between confirmatory and exploratory findings. The deep point: a leaderboard position is a *selected* statistic, and selected statistics need selection-aware inference — the entire lesson of Part 12, applied to ML's own evaluation.
+</details>
+
+**Exercise 2.** Hallucination rate on a toy task: generate 100 answers from a "model" (a stochastic resampler with a known truth distribution), and measure (a) the hallucination rate (fraction of answers that are confident and wrong), (b) the calibration (does "I'm 90% sure" match 90% accuracy?), (c) the effect of RAG (grounding reduces hallucination to the retrieval error rate). State the general principle each measurement illustrates.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(2)
+n = 1000
+truth = rng.normal(0, 1, n)                    # the true answers
+# model: knows the truth with prob p_know, else confabulates
+p_know = 0.7
+knows = rng.random(n) < p_know
+model_ans = np.where(knows, truth, rng.normal(0, 3, n))   # wrong answers: overdispersed
+confident = rng.random(n) < 0.8                # the model is confident 80% of the time
+
+halluc = (~knows) & confident
+print(f"hallucination rate (confident & wrong): {halluc.mean():.3f}")
+print(f"overall error rate: {(model_ans != truth).mean():.3f}")
+
+# calibration: bucket by confidence
+for lo, hi in [(0, 0.4), (0.4, 0.7), (0.7, 1.0)]:
+    m = (confident.astype(float) >= lo) & (confident.astype(float) < hi)
+    if m.sum():
+        acc = (model_ans[m] == truth[m]).mean()
+        print(f"confidence [{lo},{hi}): acc {acc:.2f}")
+
+# RAG: ground the model — error rate becomes the retrieval error
+retrieval_err = 0.05
+print(f"\nwith RAG (retrieval error {retrieval_err}): "
+      f"hallucination ~ {retrieval_err} (grounded answers can only be wrong at the source)")
+```
+
+(a) The hallucination rate is the *confident-and-wrong* rate — the dangerous kind, because the confidence is what makes users trust it. (b) The calibration buckets show whether confidence tracks accuracy — a well-calibrated model's 90%-confident answers are right 90% of the time; LLM confidence is typically *miscalibrated* (overconfident), which is why "the model said so" is weaker evidence than it sounds. (c) RAG converts hallucination into *retrieval error* — a different, more tractable failure mode (you can measure and fix the retriever). The general principle: **decompose the error into its sources** (knowledge gap, reasoning gap, retrieval gap, expression gap) and measure each — the [4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd) habit of evaluating the *system*, not the vibes.
+</details>
+
+**Exercise 3.** The knowledge-cutoff experiment: simulate a model whose knowledge is a training corpus with a cutoff date. Questions about pre-cutoff facts: 95% accuracy. Post-cutoff: the model confabulates — 10% accuracy but 90% confidence. Compute the *expected* accuracy on a mixed benchmark (50% pre, 50% post) and show why the benchmark score (52.5%) is meaningless without the cutoff breakdown. Then state the two deployment mitigations.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+pre_acc, post_acc = 0.95, 0.10
+mixed = 0.5 * pre_acc + 0.5 * post_acc
+print(f"mixed benchmark accuracy: {mixed:.3f}")
+print(f"  pre-cutoff slice:  {pre_acc:.2f}")
+print(f"  post-cutoff slice: {post_acc:.2f}  <- the model is confidently wrong here")
+print(f"  a 52.5% average hides a 95-vs-10 split")
+```
+
+The mixed score (52.5%) is a number that describes *neither* slice — it's the [1.1](../part-01-statistics-bridge/01-1-descriptive-statistics.qmd) fallacy of the unstratified mean: an average over a bimodal distribution. The deployment mitigations: (i) **know the cutoff** — treat any question about post-cutoff events as out-of-scope and route it to RAG or a search tool ([13.6](13-6-customization.qmd)); (ii) **stratify your eval** — report per-slice accuracy (pre/post cutoff, per domain, per input type) so the average can never hide a failing slice. The general principle: a single accuracy number is a *summary*, and summaries fail exactly when the distribution is multimodal — the same reason [1.1](../part-01-statistics-bridge/01-1-descriptive-statistics.qmd) insists on distributions, not just means.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Benchmarks saturate, and saturation is not capability.** When a benchmark's top score approaches 100%, it stops measuring anything — the remaining errors are annotation noise and edge cases. A new benchmark is then invented, and the cycle repeats. The honest response: treat benchmark scores as *historical* measurements, not current capability.
+- **Goodhart's law is the field's shadow:** "when a measure becomes a target, it ceases to be a good measure." Training on benchmark questions (directly or via contamination) optimizes the measure, not the capability. The [13.3](13-3-training-pipeline.qmd) contamination exercise is Goodhart's law with a p-value.
+- **Prompt sensitivity is an evaluation confound:** the same model can score 10 points apart depending on the prompt template. Any single-prompt benchmark score is a draw from a prompt-distribution — report the variance, or average over a prompt set.
+- **"It passed the bar exam" is a category error:** passing a multiple-choice exam measures test-taking, not lawyering. Benchmark tasks are *proxies* for capabilities, and the proxy–capability gap widens as the model gets better at the proxy.
+- **The limitations are not evenly distributed:** hallucination is worse for rare facts (less training signal), worse for post-cutoff events, worse for precise outputs (numbers, citations, code) than for vague ones. Know *where* your task sits.
+- **Evaluation is a moving target:** the model you evaluate today is not the model you deploy (updates, prompt changes, RAG index changes). The [13.6](13-6-customization.qmd) C2 point: continuous evaluation — a standing eval harness that runs on every change — is the only stable practice.
+
+### Read & Refactor AI Code
+
+This AI-generated evaluation plan has **three flaws**. Diagnose before running the fixed version.
+
+> *"We evaluated our model on the MMLU test set and it scored 86.4%, so it's ready for medical diagnosis support. We also tested it on 5 questions from our own hospital and it got 4/5, which confirms it. For the report, we'll show the best of 3 prompt templates."*
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Contaminated benchmark:** MMLU questions are public and almost certainly in the training data — the 86.4% is an upper bound on capability, not a measurement of it ([13.3](13-3-training-pipeline.qmd) Exercise 3). Medical diagnosis support needs a *held-out, post-cutoff, expert-constructed* eval.
+2. **n = 5 is not an evaluation:** 4/5 has a 95% CI of roughly 44–100% — it confirms nothing. A clinical eval needs hundreds of cases, stratified by difficulty and rarity, with expert adjudication.
+3. **Best-of-3 prompt selection:** choosing the template that scores highest *on the test set* is selection on the test set — the winner's curse (Exercise 1). The template must be chosen on a dev set, then evaluated once on the test set.
+
+**Refactor:** construct a held-out eval of 500+ expert-written clinical questions (post-cutoff, not in any training data); select the prompt template on a 100-question dev set; report the test-set accuracy *with* a confidence interval, stratified by question rarity; add a hallucination audit (expert flags confident-wrong answers) and a monitoring plan for deployment. The discipline: evaluate like the deployment depends on it — because it does.
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Capability vs reliability: a model has 95% capability on a task (it *can* do it) but 90% reliability (it *does* do it, this deployment). Model the gap: capability is the accuracy on the eval distribution; reliability is the accuracy on the deployment distribution, which is shifted (longer tail, more adversarial). Compute the expected cost of the gap: if a wrong answer costs $C$ and the deployment processes $N$ queries, what is the expected cost difference between the eval estimate and the deployment reality? Then state the two engineering practices that close the gap.
+
+<details>
+<summary>Hint</summary>
+
+The gap is a distribution shift between eval and deployment — the [4.1](../part-04-validation-model-selection/04-1-generalization-problem.qmd) generalization gap, with a dollar sign.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+C, N = 100, 10000          # $100 per wrong answer, 10k queries
+eval_acc, deploy_acc = 0.95, 0.90
+cost_eval = (1 - eval_acc) * N * C
+cost_deploy = (1 - deploy_acc) * N * C
+print(f"expected cost at eval accuracy:    ${cost_eval:,.0f}")
+print(f"expected cost at deployment accuracy: ${cost_deploy:,.0f}")
+print(f"the gap costs ${cost_deploy - cost_eval:,.0f} — 2x the eval-estimated risk")
+```
+
+The eval estimate understates the expected cost by the shift between distributions — here 2×. The two practices: (i) **measure the deployment distribution** — stratify the eval by input type and weight by production frequency (the tail slices matter more than the average), and monitor production continuously; (ii) **design for the gap** — RAG and tool use convert ungrounded generation into verifiable computation ([13.6](13-6-customization.qmd)), and confidence-based routing sends low-confidence queries to humans. The general principle: capability is a property of the model, reliability is a property of the *system* — and the system is what you deploy.
+</details>
+
+**Q2.** The calibration–capability trade-off: RLHF improves human-preference scores but can *degrade* calibration (the model becomes more confident, not more correct — sycophancy and verbosity inflate preference). Simulate: a model with accuracy 0.80 and confidence 0.80 (calibrated) vs an RLHF'd model with accuracy 0.78 but confidence 0.95 (miscalibrated). Compute the expected cost of each under a policy that routes low-confidence queries to humans (cost $C_h$ per human review, $C_e$ per error). When does RLHF's preference win become a reliability loss?
+
+<details>
+<summary>Hint</summary>
+
+The routing policy makes confidence *load-bearing*: miscalibrated confidence sends the wrong queries to humans.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+C_h, C_e = 10, 100     # human review cost, error cost
+def expected_cost(acc, conf, n=10000):
+    # route queries with conf < 0.9 to humans; humans are (nearly) perfect
+    to_human = (1 - 0.9)          # fraction below the confidence threshold
+    # errors: model handles 90% of queries, errs at (1-acc) on those
+    model_err = 0.9 * (1 - acc)
+    return n * (to_human * C_h + model_err * C_e)
+
+base = expected_cost(0.80, 0.80)
+rlhf = expected_cost(0.78, 0.95)
+print(f"calibrated model:  ${base:,.0f}")
+print(f"RLHF'd model:      ${rlhf:,.0f}")
+print(f"RLHF preference win, reliability loss: ${rlhf - base:,.0f}")
+```
+
+With a confidence-routing policy, the RLHF'd model's overconfidence is *expensive*: its 95%-confident answers include the 22% it gets wrong, and the router never sends them to humans. The preference win (humans like the style) is real; the reliability loss is also real — and it's invisible in every benchmark that measures preference or accuracy-without-confidence. The general principle: **alignment optimizes what it measures**, so evaluation must measure the *decision-relevant* quantities (calibration, worst-slice accuracy, cost under the deployment policy), not just the headline metric. This is [13.3](13-3-training-pipeline.qmd)'s "the objective is a surrogate" applied to the eval itself.
+</details>
+
+## 6. Complex Questions
+
+**C1 (evaluation × [12.4 FDR](../part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.qmd) × [13.4](13-4-model-families.qmd)).** The field's model zoo is a multiple-testing experiment: 50 labs × 10 configurations each, publishing only the winners. Compute the expected number of "breakthrough" results under the global null (all models equal) and state the FDR correction that would apply. Then state why the *publication* version of the problem is worse than the statistical version (the null isn't "all equal" — it's "all within noise of each other," and the noise is correlated across labs via shared training data).
+
+**C2 (evaluation × [11.5 Cox](../part-11-survival-analysis/11-5-cox-model.qmd) × [13.6](13-6-customization.qmd)).** A hospital deploys a clinical LLM with a monitoring plan: monthly eval on 200 fresh questions, alert if accuracy drops below 90%. This is a survival problem — the "event" is the model's accuracy crossing the threshold, and the risk factors are deployment drift (new terminology, new guidelines, new user behavior). Frame the monitoring plan in [11.5](../part-11-survival-analysis/11-5-cox-model.qmd)'s language: what is the hazard, what are the covariates, and why is the *time-varying* covariate (months since last update) the one that matters most?
+
+## 7. Summary
+
+- Evaluate on *your* data: benchmarks are upper bounds (contamination), Arena is a biased sample, your eval set is the only deployment predictor.
+- The winner's curse: reporting the best of N benchmarks inflates the score by selection — pre-register or report the mean ([12.3](../part-12-multiple-testing-bioinformatics/12-3-family-wise-error-rate.qmd), [12.4](../part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.qmd)).
+- A single accuracy hides the distribution: stratify by slice (pre/post cutoff, common/rare/adversarial) — the tail is where the cost lives.
+- Hallucination is structural (the objective is prediction, not verification) — mitigate by design: RAG, tools, confidence routing, human review.
+- Capability ≠ reliability: the deployment distribution is shifted from the eval distribution; measure the gap and design for it.
+- Calibration is decision-relevant: overconfident models break confidence-routing policies — evaluate the quantities your deployment actually uses.
+- Next: [13.8 Applications and next steps](13-8-applications-next-steps.qmd) — where all of this goes to work.

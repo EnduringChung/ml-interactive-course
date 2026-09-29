@@ -1,0 +1,328 @@
+---
+title: "A.6 PCA: Deriving the First Principal Component"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - sympy
+---
+
+[A.1](a-1-normal-equations.qmd) solved a linear system; [A.5](a-5-lasso-no-closed-form.qmd) optimized under a constraint. PCA is the constrained-optimization member of the family: find the direction of maximum variance, subject to being a unit vector. The Lagrange multiplier turns out to be an eigenvalue — and that single fact is the whole of principal component analysis.
+
+> **Tier 1 — every cell below runs live (sympy for the symbolic derivation, NumPy for the check).**
+
+## 1. Basic Concept
+
+**The problem.** Given centered data $X \in \mathbb{R}^{n \times p}$ (each feature has mean zero), find the unit vector $w \in \mathbb{R}^p$ maximizing the variance of the projected data $Xw$:
+
+$$\max_w \; w^\top X^\top X w \quad \text{subject to} \quad w^\top w = 1$$
+
+The projected variance is $w^\top X^\top X w$ (the scatter matrix, $n$ times the covariance); the constraint keeps the scale from running away.
+
+**The derivation** — Lagrange multipliers:
+
+```{pyodide}
+import sympy as sp
+
+# two features, symbolic
+w1, w2, lam = sp.symbols('w1 w2 lambda', real=True)
+a, b, c = sp.symbols('a b c', positive=True)     # scatter matrix [[a, b], [b, c]]
+S = sp.Matrix([[a, b], [b, c]])
+w = sp.Matrix([w1, w2])
+
+# Lagrangian: w^T S w − λ(w^T w − 1)
+L = (w.T * S * w)[0] - lam * ((w.T * w)[0] - 1)
+grad = [sp.diff(L, wi) for wi in w]
+print("∂L/∂w =", grad)
+print("\nstationarity: S w = λ w  <- the eigenvalue equation")
+print("constraint:  w^T w = 1")
+```
+
+Setting the gradient to zero: $2Sw - 2\lambda w = 0$, i.e.
+
+$$S w = \lambda w$$
+
+The first principal component is an **eigenvector of the scatter matrix** $X^\top X$ — and the Lagrange multiplier is the corresponding eigenvalue. Which eigenvector? The objective's value at the solution is $w^\top S w = \lambda w^\top w = \lambda$ — so maximizing the variance means taking the **largest** eigenvalue's eigenvector.
+
+**The numerical check:**
+
+```{pyodide}
+import numpy as np
+
+rng = np.random.default_rng(0)
+n = 200
+x1 = rng.normal(size=n)
+x2 = 0.8 * x1 + 0.6 * rng.normal(size=n)        # correlated features
+X = np.column_stack([x1, x2])
+X = X - X.mean(0)                                # center (the [9.2] requirement)
+
+S = X.T @ X
+eigvals, eigvecs = np.linalg.eigh(S)             # ascending order
+w1 = eigvecs[:, -1]                              # top eigenvector
+print("eigenvalues:", np.round(eigvals, 2))
+print("first PC (top eigenvector):", np.round(w1, 4))
+print("variance along PC1 / total variance:",
+      round(eigvals[-1] / eigvals.sum(), 4))
+
+# verify it maximizes the projected variance over the unit circle
+thetas = np.linspace(0, 2 * np.pi, 1000)
+proj_var = [ (np.array([np.cos(t), np.sin(t)]) @ S @ np.array([np.cos(t), np.sin(t)]))
+             for t in thetas ]
+print("max over the unit circle:", round(max(proj_var), 2),
+      "= top eigenvalue:", round(eigvals[-1], 2))
+```
+
+## 2. Concept Questions
+
+1. The Lagrange multiplier $\lambda$ turned out to be an eigenvalue — and the objective's value at the solution is exactly $\lambda$. Why does this make "maximize variance" and "find the top eigenvector" the same problem?
+2. Why must the data be centered before PCA? What does the first component become if you skip centering (two cases: the mean is small vs large)?
+3. The second principal component is the top eigenvector *orthogonal to the first*. Derive this: maximize $w^\top S w$ subject to $w^\top w = 1$ **and** $w^\top w_1 = 0$ — what does the second constraint's multiplier do?
+4. PCA is not scale-invariant: the first component of unstandardized data points along the largest-variance feature, regardless of the underlying structure. Why is this a units problem, and what is the fix?
+5. The eigenvalues $\lambda_1 \ge \lambda_2 \ge \dots$ are the variances along the components. What does $\sum_j \lambda_j / \lambda_1$ tell you, and why is it the natural "how many components do I need" diagnostic?
+
+<details>
+<summary>Answers</summary>
+
+1. At a constrained optimum, the gradient of the objective is parallel to the gradient of the constraint — that's the Lagrange condition $\nabla f = \lambda \nabla g$, which here *is* the eigenvalue equation $Sw = \lambda w$. And since the objective's value at the solution is $w^\top S w = \lambda$, the constrained maximum is the largest eigenvalue. "Maximize the quadratic form over the sphere" and "find the spectral decomposition" are the same theorem — the Rayleigh quotient's maximum is the top eigenvalue, attained at its eigenvector.
+2. PCA finds directions of maximum *variance around the mean*. Without centering, the scatter matrix $X^\top X$ includes the mean's contribution — the first component points toward the mean vector itself (the data's "location"), not its spread. If the mean is small relative to the spread, the distortion is minor; if the mean is large (the common case — e.g., gene expression with a big baseline), the first component is dominated by the mean and the structure is lost. Centering makes the components describe *variation*, which is what PCA is for.
+3. With the extra constraint $w^\top w_1 = 0$, the Lagrangian gains a second multiplier: $L = w^\top S w - \lambda(w^\top w - 1) - \mu(w^\top w_1)$. The stationarity condition becomes $Sw - \lambda w - \mu w_1 = 0$; left-multiplying by $w_1^\top$ and using $w_1^\top S = \lambda_1 w_1^\top$ gives $\mu = 0$ — so the condition reduces to $Sw = \lambda w$ again, but now $w$ must be orthogonal to $w_1$. The largest eigenvalue whose eigenvector satisfies that is $\lambda_2$ — the second component. The constraints peel off the eigenpairs in order: each new orthogonality constraint removes the previous components from consideration, and the maximum is always the next eigenvalue.
+4. Variance is in units of the feature squared — a feature measured in millimeters has variance $10^6$ times the same feature in meters. Unstandardized PCA's first component is just "the feature with the biggest units," which is arbitrary. Standardizing (dividing by each feature's standard deviation) puts every feature in units of its own spread, so the components describe *correlation structure*, not unit choices. The fix: standardize when features are in incommensurate units; the cost: the components then describe the correlation matrix, not the covariance.
+5. $\sum_j \lambda_j = \text{tr}(X^\top X)$ = total variance, so $\lambda_j / \sum_k \lambda_k$ is the fraction of variance explained by component $j$, and the cumulative sum is the scree plot of [9.2](../part-09-unsupervised-learning/09-2-principal-component-analysis.qmd). The diagnostic: how many components are needed to explain, say, 95% of the total variance — the "elbow" of the scree plot is where the remaining components are noise-level. It's the natural diagnostic because the eigenvalues *are* the variances — the question "how many dimensions matter" is literally "how many eigenvalues are big."
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+# the Rayleigh quotient: w^T S w / w^T w is maximized at the top eigenvector
+rng = np.random.default_rng(0)
+S = rng.normal(size=(3, 3)); S = S.T @ S         # a random PSD scatter matrix
+eigvals, eigvecs = np.linalg.eigh(S)
+w_top = eigvecs[:, -1]
+rq = lambda w: w @ S @ w / (w @ w)
+print("Rayleigh quotient at the top eigenvector:", round(rq(w_top), 4),
+      "= top eigenvalue:", round(eigvals[-1], 4))
+print("at a random unit vector:", round(rq(rng.normal(size=3)), 4), "(always ≤ top)")
+```
+
+```{pyodide}
+import numpy as np
+# centering matters: the first component points at the mean if you don't center
+rng = np.random.default_rng(1)
+X = rng.normal(size=(100, 2)) + np.array([100, 0])   # big mean in feature 1
+S_uncentered = X.T @ X
+w_uncentered = np.linalg.eigh(S_uncentered)[1][:, -1]
+Xc = X - X.mean(0)
+w_centered = np.linalg.eigh(Xc.T @ Xc)[1][:, -1]
+print("uncentered PC1:", np.round(w_uncentered, 3), "(points at the mean)")
+print("centered PC1:   ", np.round(w_centered, 3), "(points at the spread)")
+```
+
+```{pyodide}
+import numpy as np
+# the scree diagnostic: cumulative variance explained
+rng = np.random.default_rng(2)
+X = rng.normal(size=(300, 10)) @ np.diag([5, 4, 3, 2, 1, 0.5, 0.3, 0.2, 0.1, 0.05])
+X = X - X.mean(0)
+eigvals = np.linalg.eigvalsh(X.T @ X)[::-1]
+cumvar = np.cumsum(eigvals) / eigvals.sum()
+for k in [1, 2, 3, 5]:
+    print(f"{k} components: {cumvar[k-1]:.1%} of variance")
+```
+
+```{pyodide}
+import numpy as np
+# the SVD connection: PCA = SVD of the centered data
+rng = np.random.default_rng(3)
+X = rng.normal(size=(50, 4)); X = X - X.mean(0)
+U, d, Vt = np.linalg.svd(X, full_matrices=False)
+eigvals = np.linalg.eigvalsh(X.T @ X)[::-1]
+print("singular values² / n:", np.round(d**2 / len(X), 4))
+print("eigenvalues of X^T X: ", np.round(eigvals, 4))
+print("right singular vectors = principal components:", np.allclose(np.abs(Vt.T), np.abs(np.linalg.eigh(X.T @ X)[1])))
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Derive the second principal component with the two-constraint Lagrangian (Q3 above): show the second multiplier $\mu = 0$, so the condition reduces to $Sw = \lambda w$ with $w \perp w_1$, and the solution is the second-largest eigenvector. Then verify numerically that the components are orthogonal and the variances are the eigenvalues in order.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import sympy as sp
+
+w1, w2, lam, mu = sp.symbols('w1 w2 lambda mu', real=True)
+a, b, c = sp.symbols('a b c', positive=True)
+S = sp.Matrix([[a, b], [b, c]])
+w = sp.Matrix([w1, w2])
+# constraint gradients: w^T w = 1 and w^T w1 = 0 (w1 = first PC, symbolic)
+v1, v2 = sp.symbols('v1 v2', real=True)
+w_pc1 = sp.Matrix([v1, v2])
+L = (w.T * S * w)[0] - lam * ((w.T * w)[0] - 1) - mu * (w.T * w_pc1)[0]
+grad = [sp.diff(L, wi) for wi in w]
+print("stationarity:", grad, "= 0  ->  S w = λ w + μ w_pc1")
+print("left-multiply by w_pc1^T and use S w_pc1 = λ1 w_pc1:")
+print("  w_pc1^T S w = λ (w_pc1^T w) + μ (w_pc1^T w_pc1)")
+print("  λ1 (w_pc1^T w) = λ·0 + μ·1  ->  μ = (λ1 − λ)(w_pc1^T w) = 0  when w ⊥ w_pc1")
+```
+
+With $w \perp w_1$ (the second constraint), $\mu = 0$ and the condition is $Sw = \lambda w$ again — but $w_1$ is already taken (it's the $\lambda_1$ eigenvector), so the largest remaining eigenvalue is $\lambda_2$. The components are orthogonal because eigenvectors of a symmetric matrix with distinct eigenvalues are orthogonal — and the variances along them are the eigenvalues in decreasing order. Numerical check: the SVD drill already showed the right singular vectors are the PCs; the orthogonality is $V^\top V = I$ by construction, and the variance along PC $j$ is $d_j^2/n = \lambda_j$.
+</details>
+
+**Exercise 2.** PCA as reconstruction error minimization: show that the top-$k$ principal components also solve $\min_{\text{rank-}k\, B} \|X - XB\|_F^2$ — the best rank-$k$ approximation of the centered data (in the Frobenius norm). This is the Eckart–Young theorem. Verify numerically: project a dataset onto its top-$k$ PCs and show the reconstruction error equals the sum of the discarded eigenvalues.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(4)
+X = rng.normal(size=(100, 5)); X = X - X.mean(0)
+n = len(X)
+eigvals, eigvecs = np.linalg.eigh(X.T @ X)
+
+for k in [1, 2, 3]:
+    W = eigvecs[:, -k:]                       # top-k components
+    X_proj = (X @ W) @ W.T                    # project onto the PC subspace
+    err = np.sum((X - X_proj)**2)
+    print(f"k={k}: reconstruction error {err:.2f} = sum of discarded eigenvalues "
+          f"{eigvals[:-k].sum() if k < 5 else 0:.2f}")
+```
+
+The reconstruction error of the rank-$k$ projection is exactly $\sum_{j > k} \lambda_j$ — the variance the discarded components carried. This is the Eckart–Young theorem in the PCA special case: the variance-maximizing projection (Section 1) and the error-minimizing approximation are the *same* projection. The two views are complementary: variance maximization says "keep the directions that matter"; error minimization says "the directions you drop cost you their variance." Both are why the scree plot's cumulative variance is the right diagnostic — it's literally the fraction of the data you keep.
+</details>
+
+**Exercise 3.** The scale sensitivity, measured: take a dataset with two features — one with variance 100, one with variance 1 — and a true underlying structure at 45°. Show that unstandardized PCA's first component points at the high-variance feature (not the structure), while standardized PCA recovers the 45° direction. Then state the rule for when to standardize.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(5)
+n = 300
+t = rng.normal(size=n)                        # the latent 45° structure
+X = np.column_stack([10 * t + rng.normal(0, .3, n),      # feature 1: big variance
+                     1 * t + rng.normal(0, .3, n)])      # feature 2: small variance
+X = X - X.mean(0)
+
+fig, axes = plt.subplots(1, 2, figsize=(7, 3.2), sharex=True, sharey=True)
+for ax, Xv, title in zip(axes, [X, (X - X.mean(0)) / X.std(0)],
+                        ["unstandardized: PC1 = the big-variance feature",
+                         "standardized: PC1 = the 45° structure"]):
+    ax.scatter(Xv[:, 0], Xv[:, 1], s=3, alpha=0.4)
+    w = np.linalg.eigh(Xv.T @ Xv)[1][:, -1]
+    ax.plot([-3 * w[0], 3 * w[0]], [-3 * w[1], 3 * w[1]], "r-", lw=2, label="PC1")
+    ax.set_title(title, fontsize=9)
+    ax.legend(fontsize=8)
+    ax.set_aspect("equal")
+plt.show()
+print("unstandardized PC1 angle:", round(np.degrees(np.arctan2(
+    np.linalg.eigh(X.T @ X)[1][1, -1], np.linalg.eigh(X.T @ X)[1][0, -1])), 1), "°")
+Xs = (X - X.mean(0)) / X.std(0)
+print("standardized PC1 angle:  ", round(np.degrees(np.arctan2(
+    np.linalg.eigh(Xs.T @ Xs)[1][1, -1], np.linalg.eigh(Xs.T @ Xs)[1][0, -1])), 1), "°")
+```
+
+Unstandardized, PC1 is within a few degrees of the high-variance feature's axis — the structure (the 45° direction) is invisible because feature 1's variance dominates the scatter matrix. Standardized, PC1 recovers the 45° structure — the correlation, not the units. The rule: **standardize when the features are in incommensurate units** (the common case: gene expression + age + blood pressure); skip it only when the units are comparable *and* the variance differences are meaningful (e.g., all features are the same measurement in the same units). The general principle: PCA answers "where is the variance?" — and if the variance is an artifact of units, so is the answer.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Centering is not optional** — the scatter matrix $X^\top X$ (vs the covariance $\frac{1}{n}X^\top X$ after centering) includes the mean's outer product, and the first component degenerates toward the mean direction (drill 2). Every PCA implementation centers internally; the pitfall is feeding it data you *think* is centered but isn't.
+- **Standardization is a modeling choice, not a default.** Standardizing makes PCA describe the *correlation* matrix (unit-free); not standardizing makes it describe the *covariance* (units matter). Neither is "correct" — they answer different questions. The pitfall is running the default without asking which question you have.
+- **The components are not interpretable by construction.** PC1 is a weighted sum of all features — the weights (loadings) can be inspected, but "what PC1 means" is a judgment, not a derivation. The [9.2](../part-09-unsupervised-learning/09-2-principal-component-analysis.qmd) interpretation step is where PCA projects meet domain knowledge.
+- **PCA is a linear method** — it finds directions, not manifolds. Curved structure (the Swiss roll, [9.7](../part-09-unsupervised-learning/09-7-umap-tsne.qmd)) is invisible to it; the eigenvalues will look fine while the structure is missed. Always plot the projection, not just the scree.
+- **The SVD is the stable algorithm** — never form $X^\top X$ explicitly (it squares the condition number, [A.1](a-1-normal-equations.qmd)'s warning); compute the SVD of the centered $X$ and read off the components. `sklearn`'s PCA does this; the eigen-decomposition of $X^\top X$ is the teaching version.
+
+### Read & Refactor AI Code
+
+This AI-generated PCA has **three bugs**. Diagnose before running the fixed version.
+
+```python
+# AI-generated: PCA via the eigen-decomposition (will not run here — spot the bugs)
+def pca(X, k):
+    S = X.T @ X                              # BUG 1
+    eigvals, eigvecs = np.linalg.eigh(S)
+    W = eigvecs[:, :k]                       # BUG 2
+    return (X @ W) @ W.T
+
+X = np.array([[1, 2], [3, 4], [5, 6]])      # BUG 3
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **No centering:** `X.T @ X` is the scatter matrix of *uncentered* data — the first component points at the mean (drill 2). Center first: `X = X - X.mean(0)`.
+2. **Wrong eigenvector order:** `np.linalg.eigh` returns eigenvalues in *ascending* order — `eigvecs[:, :k]` takes the *smallest* eigenvalues (the least variance). The top components are `eigvecs[:, -k:]` (or reverse the order).
+3. **Integer-typed input:** `np.array([[1, 2], ...])` is int64 — the mean subtraction and the matmul silently truncate. Cast to float.
+
+```python
+# fixed
+def pca(X, k):
+    X = np.asarray(X, dtype=float)
+    X = X - X.mean(axis=0)                   # center
+    _, _, Vt = np.linalg.svd(X, full_matrices=False)   # the stable algorithm
+    W = Vt[:k].T                             # top-k right singular vectors
+    return (X @ W) @ W.T
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** The variance-maximization and error-minimization views are one theorem (Eckart–Young, Exercise 2). Derive the general form: for any matrix $X$, the best rank-$k$ approximation in *any* unitarily invariant norm is the truncated SVD. Then state the two consequences: (a) PCA is optimal not just for the Frobenius norm but for the spectral norm and every Schatten norm; (b) the same theorem is why low-rank matrix completion ([9.3](../part-09-unsupervised-learning/09-3-missing-values.qmd)) works — the observed entries are approximated by a low-rank matrix, and the theorem guarantees the approximation is the best possible.
+
+<details>
+<summary>Hint</summary>
+
+The Eckart–Young–Mirsky theorem: the truncated SVD minimizes $\|X - A\|$ over rank-$k$ $A$ for every unitarily invariant norm. The proof sketch: the singular values of the error are bounded below by the discarded singular values of $X$.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+The theorem: for $X = UDV^\top$ and any rank-$k$ matrix $A$, $\|X - A\| \ge \|X - X_k\|$ where $X_k = \sum_{j \le k} d_j u_j v_j^\top$ — the truncated SVD — for every unitarily invariant norm (Frobenius, spectral, Schatten/nuclear). The proof's core: the singular values of $X - A$ majorize the discarded singular values $d_{k+1}, \dots$ of $X$ (a Weyl-type inequality), and the truncated SVD achieves equality. Consequence (a): PCA's rank-$k$ projection is the best rank-$k$ approximation under *any* of these norms — the choice of Frobenius norm in Exercise 2 is not a limitation. Consequence (b): matrix completion ([9.3](../part-09-unsupervised-learning/09-3-missing-values.qmd)) — filling in missing entries with a low-rank matrix — is the same theorem with a twist: the norm is only observed on the known entries, and the theorem's optimality becomes the *objective* that alternating minimization or nuclear-norm minimization pursues. The deep point: **the SVD is the unique right answer to "best low-rank approximation"** — every method in this space is an approximation to it, exact or computational.
+</details>
+
+**Q2.** PCA as a probabilistic model — PPCA: suppose the data is generated by $x = Wz + \mu + \varepsilon$ with $z \sim N(0, I)$ (latent) and $\varepsilon \sim N(0, \sigma^2 I)$ (isotropic noise). Show that the MLE of $W$ is the top-$k$ principal components (up to rotation), with the noise variance $\sigma^2$ equal to the mean of the discarded eigenvalues. Then state what the probabilistic view buys: a likelihood (model comparison, [A.2](a-2-least-squares-is-mle.qmd)), a generative model (sampling, imputation), and a principled missing-data handling.
+
+<details>
+<summary>Hint</summary>
+
+The marginal distribution of $x$ is $N(\mu, WW^\top + \sigma^2 I)$ — maximize its likelihood over $W$ and $\sigma^2$; the solution's $W$ spans the principal subspace.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+The marginal covariance is $C = WW^\top + \sigma^2 I$; the MLE of $C$ is the sample covariance, and the MLE of $W$ is $W = V_k (D_k - \sigma^2 I)^{1/2} R$ for an arbitrary rotation $R$ — the columns span the top-$k$ principal subspace, with the noise variance $\sigma^2 = \frac{1}{p-k}\sum_{j>k}\lambda_j$ (the mean of the discarded eigenvalues). What the probabilistic view buys: (i) a **likelihood** — so $k$ (the number of components) can be chosen by BIC or a held-out likelihood, not just the scree elbow; (ii) a **generative model** — sample new data, and impute missing values by their posterior given the observed ones (the [9.3](../part-09-unsupervised-learning/09-3-missing-values.qmd) connection); (iii) a **noise model** — the discarded eigenvalues are explicitly "noise variance," which is the right frame for the scree plot's tail. The classical PCA of Section 1 is the $\sigma^2 \to 0$ limit of PPCA — the same components, but without the likelihood that makes them comparable.
+</details>
+
+## 6. Complex Questions
+
+**C1 (PCA × [A.1 normal equations](a-1-normal-equations.qmd) × [A.4 ridge](a-4-ridge-regression.qmd)).** The normal equations solve $X^\top X \beta = X^\top y$; PCA diagonalizes $X^\top X$. Show that in the PCA basis, the OLS solution is $\beta = \sum_j \frac{1}{d_j}(u_j^\top y) v_j$ — each principal direction contributes independently, scaled by $1/d_j$ — and ridge's solution is the same sum with $1/d_j$ replaced by $d_j/(d_j^2 + \lambda)$. The three methods are one spectral computation: OLS inverts the eigenvalues, ridge shrinks them, PCA selects them. This is the unifying view of the appendix's linear algebra.
+
+**C2 (PCA × [9.4 k-means](../part-09-unsupervised-learning/09-4-k-means.qmd) × [A.5 lasso](a-5-lasso-no-closed-form.qmd)).** PCA and k-means are both "find structure in $X$" — PCA finds a linear subspace, k-means finds a partition. Show that k-means' objective (within-cluster sum of squares) is minimized by an alternating algorithm whose assignment step is a nearest-centroid rule and whose update step is a per-cluster mean — and that the cluster means span a subspace that PCA would find if the clusters were the only structure. Then state the general principle: **every unsupervised method is a constrained approximation of the data** — PCA constrains the rank, k-means constrains the representation to $k$ points, lasso constrains the support — and the constraint is the model.
+
+## 7. Summary
+
+- PCA: maximize $w^\top X^\top X w$ subject to $w^\top w = 1$ — the Lagrange condition *is* the eigenvalue equation $Sw = \lambda w$; the solution is the top eigenvector, the multiplier the variance.
+- Center first (or the first component points at the mean); standardize when units are incommensurate (or the first component points at the units).
+- The components peel off in eigenvalue order: each orthogonality constraint removes the previous one, and the next component is the next eigenvector.
+- Variance-maximization = error-minimization (Eckart–Young): the rank-$k$ projection's error is the sum of the discarded eigenvalues — the scree plot is the diagnostic.
+- The SVD is the stable algorithm (never form $X^\top X$); `eigh` returns ascending order — take the *last* columns.
+- PPCA: the probabilistic version — the MLE of the loading matrix spans the principal subspace, and the noise variance is the mean of the discarded eigenvalues.
+- Next: [A.7 AUPRC trapezoidal estimator, worked example](a-7-auprc-trapezoidal.qmd) — the appendix's final derivation, for the metric that matters on skewed data.

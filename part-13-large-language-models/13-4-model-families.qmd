@@ -1,0 +1,335 @@
+---
+title: "13.4 Model Families and Variants"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - matplotlib
+---
+
+[13.3](13-3-training-pipeline.qmd) trained one architecture; the field has since produced a zoo of variants. This page maps the family tree — encoder-only, decoder-only, encoder–decoder, mixture-of-experts, open vs closed — and turns "how big is it?" into exact arithmetic: parameter counts, FLOPs per token, and the compute-optimal scaling law that governs training budgets.
+
+> **Tier 1 — concept page with light compute; every cell below runs live (NumPy only).**
+
+## 1. Basic Concept
+
+**The three architectural families** (all from [13.2](13-2-transformer-architecture.qmd)'s block, differing in mask and usage):
+
+| Family | Mask | Trained on | Best at | Examples |
+|---|---|---|---|---|
+| **Encoder-only** | bidirectional (no mask) | masked-token prediction (MLM) | classification, NER, embeddings | BERT, RoBERTa |
+| **Decoder-only** | causal | next-token prediction | generation, general LLMs | GPT, Llama, Mistral, Qwen |
+| **Encoder–decoder** | bidirectional encoder + causal decoder | span corruption (denoising) | translation, summarization | T5, BART, original Transformer |
+
+**Why decoder-only won for general LLMs:** its training objective *is* the inference procedure ([13.1](13-1-foundations.qmd) Q2) — no train/test mismatch, and one uniform architecture serves every text task. Encoder-only models remain the right tool for *understanding* tasks (classification, retrieval, embeddings — [13.6](13-6-customization.qmd)'s RAG uses them); encoder–decoder survives in sequence-to-sequence niches.
+
+**The modern decoder-only recipe** (Llama-lineage): pre-norm residual blocks (LayerNorm *before* each sublayer — more stable than the original post-norm), RoPE positional encoding, SwiGLU feed-forward (gated, ~5/3× wider to match parameter count), grouped-query attention (GQA — fewer KV heads than Q heads, cheaper KV-cache), no bias terms, tokenizer with ~32k–128k vocabulary. Each choice is an engineering response to a [13.2](13-2-transformer-architecture.qmd)–[13.3](13-3-training-pipeline.qmd) problem.
+
+**Mixture-of-experts (MoE):** replace the single FFN with $E$ parallel FFNs ("experts") plus a router that sends each token to the top-$k$ experts. Parameters grow (total capacity) while compute stays flat (active parameters) — a 47B-total/13B-active model trains and runs at 13B cost with near-47B capacity. The cost: routing load-balancing, communication, and a new failure mode (expert collapse).
+
+**Open vs closed:** closed = API-only (GPT-4, Claude); open = public weights (Llama, Mistral, Qwen) — you can download, inspect, fine-tune, and run locally ([13.5](13-5-local-deployment.qmd)). "Open" spans a spectrum: fully open weights+data, weights-only, and "open" in name with restrictive licenses.
+
+**Worked example** — the parameter count of a transformer, exactly:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+
+def count_params(V, d, L, ffn_mult=4, heads=None, moe_experts=1, moe_active=1):
+    emb = V * d                       # token embeddings (tied head: counted once)
+    attn = 4 * d * d                  # Wq, Wk, Wv, Wo
+    ffn = 2 * d * (ffn_mult * d) * moe_active   # up + down (active experts)
+    norm = 2 * d                      # two LayerNorms
+    per_layer = attn + ffn + norm
+    total = emb + L * per_layer
+    return total, per_layer
+
+configs = {
+    "GPT-2 small (12L, 768d, 50k V)": (50257, 768, 12),
+    "Llama-7B (32L, 4096d, 32k V)": (32000, 4096, 32),
+    "Llama-70B (80L, 8192d, 32k V)": (32000, 8192, 80),
+}
+fig, ax = plt.subplots(figsize=(7, 3.4))
+for name, (V, d, L) in configs.items():
+    total, per_layer = count_params(V, d, L)
+    ax.bar(name, total / 1e9, color="steelblue")
+    ax.text(name, total / 1e9 + 0.02, f"{total/1e9:.2f}B", ha="center", fontsize=9)
+    print(f"{name}: {total/1e6:.1f}M params "
+          f"(embeddings {V*d/1e6:.0f}M, per-layer {per_layer/1e6:.2f}M x {L})")
+ax.set(ylabel="parameters (billions)", title="transformer parameter counting")
+plt.xticks(rotation=12, ha="right", fontsize=8)
+plt.show()
+```
+
+The count is dominated by the FFN ($8d^2$ of the $12d^2$ per layer) — [13.2](13-2-transformer-architecture.qmd)'s "the FFN is where the parameters live," now in billable form. The embedding matrix is a rounding error at 7B but a real fraction at small vocab × wide models.
+
+## 2. Concept Questions
+
+1. Why did decoder-only architectures win the general-LLM race, and in what sense is that a *training-objective* argument rather than an architecture-quality argument? When is encoder-only still the right choice?
+2. MoE gives 47B capacity at 13B compute. What exactly is the trade-off — what do you lose when most parameters are inactive for every token?
+3. "Open weights" and "open source" are different claims. What can you do with open weights that you cannot do with an API, and what does "open" still not give you (two things)?
+4. The parameter-count formula has no term for context length $T$. Why not — and what *does* grow with $T$ (two things: one at training, one at inference)?
+5. GQA reduces KV heads from $h$ to $h_{kv} < h$. What problem does it solve at inference, and why doesn't it hurt quality much?
+
+<details>
+<summary>Answers</summary>
+
+1. The decoder-only objective (next-token prediction) is exactly the inference procedure — no train/test mismatch, one architecture for all text tasks, and the objective scales to any corpus without task-specific labels. It's an argument about *what you can train at scale with a uniform recipe*, not about the block being intrinsically better. Encoder-only remains right for understanding tasks: classification, retrieval, embedding — where you want a bidirectional representation of a *given* input, not generation.
+2. You lose *reliability of capacity*: the router must learn to balance load (unbalanced routing → some experts overtrained, others dead), the model's knowledge is fragmented across experts (a fact may live in expert 7, unreachable for tokens routed elsewhere), and serving is harder (all experts must be resident). The capacity is there but not uniformly accessible — a library where most books are in a wing you can only enter with the right key.
+3. With open weights: run locally (privacy, air-gapped), fine-tune ([13.6](13-6-customization.qmd)), inspect internals (interpretability research), and self-host at scale without per-token fees. Still missing: the *training data* (you can't reproduce pretraining), and usually the *alignment recipe* in full detail — so "open" gives you the artifact, not the process.
+4. Parameters are per-weight; $T$ affects only activations. What grows with $T$: (i) at *training*, the attention score matrix $T \times T$ — memory and compute are quadratic in $T$ ([13.2](13-2-transformer-architecture.qmd) Exercise 3); (ii) at *inference*, the KV-cache — memory grows linearly in $T$ (and with it, serving cost per token). A 128k-context model isn't bigger; it's *hungrier*.
+5. The KV-cache (every token's K and V for all layers) is the inference memory bottleneck — it scales with the number of KV heads. GQA lets multiple Q heads share one KV head, shrinking the cache (and its memory bandwidth, often the real serving bottleneck) by the ratio $h/h_{kv}$ with minimal quality loss because Q heads in a group tend to attend similarly. It's a compression of the cache, not of the model.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+# FLOPs per token: the ~2N rule (forward) and why training costs ~6N
+N = 7e9
+print(f"forward FLOPs/token ~ 2N = {2*N:.0e}")
+print(f"training FLOPs/token ~ 6N = {6*N:.0e}  (fwd 2N + bwd 4N)")
+print(f"training 1.4T tokens: {6*N*1.4e12:.1e} FLOPs")
+print(f"  on 10k H100s at 50% MFU (1e15 FLOP/s each): "
+      f"{6*N*1.4e12/(1e4*0.5*1e15)/86400:.0f} days")
+```
+
+```{pyodide}
+# MoE arithmetic: total vs active parameters
+E, active = 8, 2
+d, L = 4096, 32
+dense_ffn = 2 * d * 4 * d
+moe_total = E * dense_ffn * L
+moe_active = active * dense_ffn * L
+print(f"dense FFN params: {dense_ffn*L/1e9:.2f}B")
+print(f"MoE total: {moe_total/1e9:.1f}B | active per token: {moe_active/1e9:.2f}B")
+print(f"capacity/compute ratio: {E/active:.0f}x")
+```
+
+```{pyodide}
+# KV-cache memory: why context length is a serving problem
+d, L, h_kv, h = 4096, 32, 8, 32
+bytes_per = 2   # float16
+for T in [4096, 32768, 131072]:
+    kv_bytes = 2 * L * h_kv * d * bytes_per * T   # K and V, all layers
+    print(f"T={T:>6}: KV-cache {kv_bytes/2**30:.2f} GiB (model weights: {7e9*2/2**30:.1f} GiB)")
+```
+
+```{pyodide}
+# embedding share of the total: vocab matters more than you think
+for V, d, L in [(50257, 768, 12), (32000, 4096, 32), (128256, 4096, 32)]:
+    emb = V * d
+    total = emb + L * 12 * d * d
+    print(f"V={V:>6}: embeddings {emb/1e6:>6.0f}M of {total/1e6:>7.0f}M = {emb/total:.1%}")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Identify the model from its config: a decoder-only model has $V = 32{,}000$, $d = 4096$, $L = 32$, FFN multiplier 4, tied embeddings. Compute its parameter count. Then compute the count for the same config with (a) SwiGLU at the *matched* parameter count (FFN multiplier 8/3 ≈ 2.67 — why this number?), and (b) an 8-expert MoE with top-2 routing on the FFN. State which real model family the first config matches.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+V, d, L = 32000, 4096, 32
+def total(ffn_mult, experts=1, active=1):
+    emb = V * d
+    per_layer = 4 * d * d + 2 * d * (ffn_mult * d) * active + 2 * d
+    return emb + L * per_layer
+
+base = total(4)
+swiglu = total(8 / 3)
+moe = total(4, experts=8, active=2)
+print(f"dense (mult 4):   {base/1e9:.2f}B")
+print(f"SwiGLU (mult 8/3): {swiglu/1e9:.2f}B  (matched: {abs(swiglu-base)/base:.1%} off)")
+print(f"MoE 8x top-2:     {moe/1e9:.2f}B total, {total(4,1,1)*0 + (V*d + L*(4*d*d + 2*d*4*d*2 + 2*d))/1e9:.2f}B active")
+```
+
+The first config is Llama-7B-class (32k vocab, 4096 dim, 32 layers ≈ 6.7B). SwiGLU's 8/3 multiplier: the gated FFN has *three* matmuls (gate, up, down) instead of two, so to hold the parameter count constant the hidden width shrinks by 2/3 — 4 × 2/3 = 8/3. The gated FFN buys better quality per parameter; the multiplier is the accounting that keeps the comparison honest. MoE 8×top-2: total ≈ 4× the dense FFN params (8 experts × 4 = 32 vs 4... precisely: 8 experts at mult 4 = 8× the FFN, active 2× — total ≈ 27B, active ≈ 7B), the Mixtral-8x7B pattern: 46.7B total, ~12.9B active per token.
+</details>
+
+**Exercise 2.** The compute-optimal scaling law: Chinchilla found that compute-optimal training allocates parameters and tokens in a fixed ratio — roughly 20 tokens per parameter for the *optimal* model. Given a compute budget $C$ (FLOPs) and the approximations training FLOPs ≈ $6ND$ and optimal $D \approx 20N$, derive the optimal $N$ and $D$ as functions of $C$, then compute: for $C = 10^{24}$ FLOPs (a large but feasible run), what are the optimal model size and token count? Compare with the actual Llama-70B training (70B params, 1.4T tokens) — is it over- or under-sized relative to the law, and why might a lab deliberately deviate?
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+C = 1e24
+# C = 6 N D, D = 20 N  =>  C = 120 N^2
+N_opt = np.sqrt(C / 120)
+D_opt = 20 * N_opt
+print(f"compute-optimal: N = {N_opt/1e9:.1f}B params, D = {D_opt/1e12:.2f}T tokens")
+print(f"ratio check: D/N = {D_opt/N_opt:.0f} tokens per parameter")
+
+N_llama, D_llama = 70e9, 1.4e12
+print(f"\nLlama-70B actual: {N_llama/1e9:.0f}B params, {D_llama/1e12:.1f}T tokens")
+print(f"its ratio: {D_llama/N_llama:.0f} tokens/param (law says ~20)")
+print(f"compute used: {6*N_llama*D_llama:.1e} FLOPs")
+```
+
+The law says $10^{24}$ FLOPs is optimal spent on ≈ 9B params × 180T tokens; Llama-70B (70B × 1.4T) is *far* over-sized by the ratio — 20 tokens/param vs the law's 20... precisely: Llama-70B used 20 tokens/param, which *matches* the Chinchilla-optimal ratio — the deviation is that the law's *absolute* optimum at that compute is smaller; labs train over-sized models because inference cost (per-token serving) is not in the training-compute objective: a 70B model trained on 1.4T tokens is cheaper to *serve* than a 9B model trained on 180T tokens would be to reach the same quality, when you expect to serve many tokens per parameter. The law optimizes training compute for a fixed quality; the field optimizes total cost of ownership — which is why "Chinchinchilla-optimal" and "what ships" differ systematically.
+</details>
+
+**Exercise 3.** MoE routing, simulated: implement a toy router — $E = 8$ experts, a learned linear router $W_r \in \mathbb{R}^{d \times E}$, top-2 selection with a load-balancing loss. Train it on a synthetic task (each token's "expert assignment" is a function of its cluster) for 200 steps and measure (a) the expert usage distribution, (b) what happens *without* the balancing loss (expert collapse), (c) the gradient path through the non-differentiable top-k selection.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+T, d, E, k = 512, 16, 8, 2
+# synthetic: 8 clusters, each "belongs" to one expert
+centers = rng.normal(size=(E, d))
+assign = rng.integers(0, E, T)
+X = centers[assign] + 0.3 * rng.normal(size=(T, d))
+
+def train(balance_coef, steps=200, lr=0.5):
+    Wr = rng.normal(size=(d, E)) * 0.1
+    usage = np.zeros(E)
+    for _ in range(steps):
+        logits = X @ Wr
+        top = np.argsort(-logits, axis=1)[:, :k]          # non-differentiable
+        # straight-through: gradient flows to all logits, mask applied after
+        probs = np.exp(logits - logits.max(-1, keepdims=True))
+        probs /= probs.sum(-1, keepdims=True)
+        mask = np.zeros_like(probs)
+        np.put_along_axis(mask, top, 1.0, axis=1)
+        # target: the true expert's probability should be high
+        target = np.zeros_like(probs)
+        target[np.arange(T), assign] = 1.0
+        grad = (probs - target) * mask                      # masked softmax grad
+        # load-balancing: push usage toward uniform
+        usage = 0.9 * usage + 0.1 * np.bincount(top.ravel(), minlength=E) / (T * k)
+        if balance_coef > 0:
+            grad += balance_coef * (usage - 1 / E)         # balancing pressure
+        Wr -= lr * (X.T @ grad) / T
+    return usage
+
+fig, axes = plt.subplots(1, 2, figsize=(7, 3.2), sharey=True)
+for ax, coef, title in zip(axes, [0.0, 0.1],
+                           ["no balancing loss", "with balancing loss"]):
+    u = train(coef)
+    ax.bar(range(E), u, color="steelblue")
+    ax.axhline(1 / E, color="red", ls="--", label="uniform")
+    ax.set(title=title, xlabel="expert", ylabel="usage fraction")
+    ax.legend(fontsize=8)
+plt.show()
+```
+
+Without balancing, collapse: the router sends most tokens to a few experts (rich-get-richer — the experts that get used get trained, get better, get used more), and the "capacity" of the MoE evaporates. The balancing loss (or the auxiliary-loss/free-bias variants used in practice) pushes usage toward uniform. The top-k selection is non-differentiable — the standard fix is the straight-through estimator used here: apply the mask to the gradient, let the softmax probabilities carry the signal. This is the MoE-specific training instability that dense models never face.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Parameter count ≠ capability.** A 7B model trained on 10T tokens beats a 70B model trained on 300B — data and recipe dominate raw size. Counting parameters is accounting, not evaluation ([13.7](13-7-evaluation-limitations.qmd)).
+- **"Context length" is a spec, not a capability.** Models advertised at 128k often use only the first few thousand tokens effectively ("lost in the middle" — performance degrades for information in the middle of long contexts). Always test the *effective* context for your use case.
+- **The open/closed spectrum is a business fact, not a technical one.** Weights can be open while the data, alignment recipe, and evaluation are closed — and licenses can restrict commercial use. Read the actual license, not the announcement.
+- **MoE's hidden costs:** all experts must be resident in memory (total params, not active, set the hardware bar), routing adds communication in distributed training, and expert collapse is a live failure mode. The compute saving is real but not free.
+- **Architecture convergence:** the field has largely settled on the Llama recipe (pre-norm, RoPE, SwiGLU, GQA) — differences between "GPT-4-class" models are now mostly data, alignment, and scale, not block design. The interesting variation is in the *training*, not the transformer.
+- **Multimodal is the same recipe:** vision transformers (ViT) apply [9.2](../part-09-unsupervised-learning/09-2-principal-component-analysis.qmd)'s patch idea to images; multimodal LLMs add a vision encoder whose output is projected into the LLM's embedding space — the LLM itself stays a text next-token model.
+
+### Read & Refactor AI Code
+
+This AI-generated parameter counter has **three bugs**. Diagnose before running the fixed version.
+
+```python
+# AI-generated: count a transformer's parameters (will not run here — spot the bugs)
+def count_params(V, d, L):
+    attn = 4 * d * d
+    ffn = 2 * d * 4 * d
+    total = L * (attn + ffn) + V * d      # BUG 1
+    return total
+
+def flops_per_token(N, T):
+    return 2 * N * T                     # BUG 2
+
+def kv_cache_gb(N, T, L):
+    return 2 * L * d * T * 2 / 1e9       # BUG 3 (uses d, not KV heads; wrong units)
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Missing LayerNorms and the output head:** the two LayerNorms per layer ($2d$) are small but real; more importantly, if the output head is *untied* (not shared with the embedding), it adds a second $V \times d$ matrix — at $V = 128$k, $d = 4096$ that's 0.5B parameters the counter silently drops. Also missing: whether embeddings are tied changes the count by $Vd$.
+2. **FLOPs per token is $2N$, not $2NT$:** the $2N$ rule is *per token* — each parameter participates in one multiply and one add per token processed. Multiplying by $T$ double-counts: the $T$-dependence lives in the attention score terms ($O(T^2 d)$), not in the projection FLOPs. The correct statement: forward FLOPs per token ≈ $2N$ (projections) + attention terms; total for a sequence ≈ $2NT$ + $O(T^2 dL)$.
+3. **KV-cache uses full $d$ and GB-vs-GiB confusion:** the cache stores K and V for each *KV head* ($h_{kv}$ of them, often $d/h_{kv}$ wide — GQA means the cache is much smaller than $2LdT$), in float16 (2 bytes), and the divisor should be $2^{30}$ for GiB (or $10^9$ for GB — pick one and say which).
+
+```python
+# fixed
+def count_params(V, d, L, tied=True):
+    emb = V * d
+    head = 0 if tied else V * d
+    per_layer = 4 * d * d + 2 * d * 4 * d + 2 * d   # attn + FFN + 2 LayerNorms
+    return emb + L * per_layer + head
+
+def flops_per_token(N, T, d, L):
+    proj = 2 * N                       # per token, projections
+    attn = 2 * L * T * d * 2           # QK^T and weights@V, per token amortized
+    return proj + attn
+
+def kv_cache_gib(L, h_kv, d_kv, T, bytes_per=2):
+    return 2 * L * h_kv * d_kv * T * bytes_per / 2**30
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Why 20 tokens per parameter? The Chinchilla ratio is empirical, but it has a theoretical shadow: derive it from a simple model where loss $L(N, D) = a N^{-\alpha} + b D^{-\beta} + c$ (the two power-law terms: undertraining and model-size), minimize $N$ subject to $C = 6ND$ fixed, and show the optimal ratio $D/N$ is a constant determined by $\alpha, \beta$. Then state what the empirical exponents imply about which term dominates in practice.
+
+<details>
+<summary>Hint</summary>
+
+Lagrange multiplier on $L(N,D)$ subject to $6ND = C$: the optimum balances the marginal loss reduction per FLOP of more parameters vs more data.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+With $L = aN^{-\alpha} + bD^{-\beta} + c$ and constraint $6ND = C$: at the optimum, $\partial L/\partial N \cdot \partial(6ND)/\partial D = \partial L/\partial D \cdot \partial(6ND)/\partial N$ (equal marginal loss reduction per unit compute), giving $\alpha a N^{-\alpha-1} \cdot 6D = \beta b D^{-\beta-1} \cdot 6N$, i.e. $\frac{\alpha a N^{-\alpha}}{\beta b D^{-\beta}} = \frac{N}{D}$ — the ratio $D/N$ is pinned by the exponents and coefficients, independent of $C$. Empirically $\alpha \approx \beta \approx 0.3$–$0.5$ and the fitted constants give $D/N \approx 20$. Interpretation: the two power laws are nearly symmetric, so the optimum splits compute evenly between parameters and tokens — and because the exponents are small (loss improves slowly), the *absolute* optimum is flat: a factor of 2 off-ratio costs only a few percent of loss, which is why the field tolerates "over-trained" small models and "over-sized" big ones. The law is a soft optimum, not a cliff — the practical rule is "roughly 20:1, don't sweat 10:1 or 40:1."
+</details>
+
+**Q2.** The encoder-only vs decoder-only question, revisited with your own evidence: BERT (encoder-only, bidirectional MLM) and GPT-2 (decoder-only, causal LM) were trained on comparable corpora at comparable sizes. Using the [13.1](13-1-foundations.qmd) Q2 argument and the [13.2](13-2-transformer-architecture.qmd) mask mechanics, predict and then explain the *asymmetry* in what each model can do zero-shot: why can GPT-2 continue a story but not fill a mask as well as BERT, and why did the field nonetheless converge on decoder-only for general LLMs?
+
+<details>
+<summary>Hint</summary>
+
+The mask is the training target: each model is an expert at its own conditional. The question is which conditional is more useful — and which objective transfers.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+BERT's MLM trains $P(w_t \mid w_{\ne t})$ — every token predicted with full bidirectional context — so it's superb at *understanding* tasks (the representation at position $t$ has seen everything) but was never trained to generate: sampling from it requires approximations (insert-mask-iterate) because the conditionals assume the other positions are observed. GPT-2's causal LM trains $P(w_t \mid w_{<t})$ — weaker context per prediction (left only) but *exactly* the conditional generation needs, and — the key empirical finding — a good enough next-token predictor *internalizes* understanding: to predict well, the model must represent the answer, so the representation is there even though the objective never asked for bidirectional context. The field converged on decoder-only because (i) one objective serves all tasks (no task-specific heads), (ii) the objective scales to the entire internet without labels, and (iii) understanding emerges from prediction at sufficient scale — while BERT-style models remain the right tool when the task *is* understanding (classification, retrieval, embeddings for [13.6](13-6-customization.qmd)'s RAG).
+</details>
+
+## 6. Complex Questions
+
+**C1 (families × [9.2 PCA](../part-09-unsupervised-learning/09-2-principal-component-analysis.qmd) × [13.2](13-2-transformer-architecture.qmd)).** The Llama recipe's components each solve a named problem: pre-norm ↔ deep-network gradient flow ([10.5](../part-10-deep-learning/10-5-regularization-for-nns.qmd)), RoPE ↔ positional extrapolation, SwiGLU ↔ FFN quality-per-parameter, GQA ↔ KV-cache memory. Pick two and trace the full causal chain from the [13.2](13-2-transformer-architecture.qmd) baseline problem to the modern fix, stating what each fix costs (parameters, compute, or complexity). The discipline: every architectural choice is a trade with a name, not a free lunch.
+
+**C2 (families × [13.3 scaling](13-3-training-pipeline.qmd) × [13.7](13-7-evaluation-limitations.qmd)).** The "model zoo" is itself a multiple-testing problem: dozens of labs, each trying many architectures/data mixes/recipes, publishing only the winners. Write the critique in Part 12's language — selection bias across the field, the winner's curse on reported benchmarks — and state what a pre-registered, compute-controlled comparison would look like (fixed compute budget, fixed eval suite, all results reported). Then state why the market incentive structure makes this hard, and what the *minimum* viable norm is (report compute, data, and eval protocol alongside the score).
+
+## 7. Summary
+
+- Three families: encoder-only (understanding), decoder-only (generation — won the general race), encoder–decoder (seq2seq niches); the decoder-only win is a training-objective argument.
+- Parameter count: embeddings $Vd$ + per-layer $12d^2$ (attention $4d^2$ + FFN $8d^2$); the FFN holds most of the parameters.
+- FLOPs per token ≈ $2N$ forward, $6N$ training; the KV-cache (not parameters) is what grows with context length.
+- MoE: total capacity at active-parameter compute — the trade is routing balance, fragmented knowledge, and serving complexity.
+- Chinchilla: compute-optimal ≈ 20 tokens/parameter; the optimum is flat, and serving costs push real models off it.
+- Open weights ≠ open process: you get the artifact (local run, fine-tune, inspect), not the data or the recipe.
+- Next: [13.5 Local deployment](13-5-local-deployment.qmd) — how to actually run these models on your own hardware.

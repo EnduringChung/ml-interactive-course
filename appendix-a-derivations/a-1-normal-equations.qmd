@@ -1,0 +1,323 @@
+---
+title: "A.1 Normal Equations for Linear Regression"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - sympy
+---
+
+Every model page in this course uses $\hat\beta = (X^\top X)^{-1}X^\top y$ — this appendix page derives it from first principles, so the formula is a conclusion rather than an incantation. The derivation is three lines of calculus; the interesting parts are the assumptions underneath and the numerical warnings on top.
+
+> **Tier 1 — every cell below runs live (sympy for the symbolic derivation, NumPy for the check).**
+
+## 1. Basic Concept
+
+The least-squares problem: given $X \in \mathbb{R}^{n \times p}$ (design matrix, one row per observation, one column per feature, plus an intercept column of 1s) and $y \in \mathbb{R}^n$, find $\beta$ minimizing the residual sum of squares:
+
+$$\text{RSS}(\beta) = (y - X\beta)^\top (y - X\beta) = \sum_{i=1}^n (y_i - x_i^\top \beta)^2$$
+
+**The derivation, symbolically:**
+
+```{pyodide}
+import sympy as sp
+
+n, p = 3, 2                      # small enough to print, general enough to be real
+X = sp.Matrix(sp.symbols('x:4', real=True)).reshape(2, 2)   # 2 observations, 2 features
+beta = sp.Matrix(sp.symbols('b0 b1', real=True))
+y = sp.Matrix(sp.symbols('y0 y1', real=True))
+
+resid = y - X * beta
+rss = (resid.T * resid)[0]
+print("RSS(beta) =", sp.expand(rss))
+
+# the gradient, component by component
+grad = [sp.diff(rss, b) for b in beta]
+print("\n∂RSS/∂β =", grad)
+
+# setting the gradient to zero gives the normal equations
+# X^T X beta = X^T y  — verify the identity symbolically
+XtX = X.T * X
+Xty = X.T * y
+normal_eq = sp.simplify(XtX * beta - Xty)
+print("\nX^T X β − X^T y =", normal_eq.T, " (the normal equations, LHS)")
+print("gradient == −2 · (X^T X β − X^T y):",
+      all(sp.simplify(grad[i] + 2 * normal_eq[i]) == 0 for i in range(p)))
+```
+
+The gradient of RSS is $-2X^\top(X\beta - y)$; setting it to zero gives the **normal equations** $X^\top X \beta = X^\top y$, and when $X^\top X$ is invertible:
+
+$$\hat\beta = (X^\top X)^{-1} X^\top y$$
+
+**The geometric reading** (the one to keep): $\hat y = X\hat\beta$ is the *orthogonal projection* of $y$ onto the column space of $X$ — the residual $y - \hat y$ is perpendicular to every column of $X$, which is exactly what $X^\top(y - X\hat\beta) = 0$ says. Least squares = closest point in the feature subspace.
+
+**The numerical check:**
+
+```{pyodide}
+import numpy as np
+
+rng = np.random.default_rng(0)
+n, p = 200, 3
+X = np.column_stack([np.ones(n), rng.normal(size=(n, p - 1))])
+beta_true = np.array([1.0, 2.0, -1.0])
+y = X @ beta_true + rng.normal(0, 0.5, n)
+
+beta_hat = np.linalg.solve(X.T @ X, X.T @ y)     # solve, don't invert
+beta_lstsq, *_ = np.linalg.lstsq(X, y, rcond=None)
+print("normal equations:", np.round(beta_hat, 4))
+print("np.linalg.lstsq:  ", np.round(beta_lstsq, 4))
+print("max difference:", np.abs(beta_hat - beta_lstsq).max())
+```
+
+## 2. Concept Questions
+
+1. The normal equations are $X^\top X \beta = X^\top y$. What is the $i$-th row of this system, in words — what does each equation say about the residuals?
+2. Why is $X^\top X$ invertible if and only if $X$ has full column rank? What does rank deficiency mean for the data (two ways it happens)?
+3. The geometric reading says $\hat y$ is the projection of $y$ onto $\text{col}(X)$. What is the projection matrix $H = X(X^\top X)^{-1}X^\top$ called, and what are its two key algebraic properties?
+4. Why does the course recommend `solve(X.T @ X, X.T @ y)` over `inv(X.T @ X) @ X.T @ y` — what is the numerical difference?
+5. The derivation never mentioned probability. What assumption about the *data-generating process* would make $\hat\beta$ the maximum-likelihood estimate? (Forward reference: [A.2](a-2-least-squares-is-mle.qmd).)
+
+<details>
+<summary>Answers</summary>
+
+1. The $i$-th row says $\sum_j (X^\top X)_{ij} \beta_j = (X^\top y)_i$ — but the *meaning* is in the residual form: $X^\top(y - X\hat\beta) = 0$ says the residual vector is orthogonal to every feature column, i.e., no feature has any linear association with the residuals left. If a feature did correlate with the residual, you could reduce RSS by moving $\beta$ along it — so the equations are the "no exploitable linear signal left" condition.
+2. $X^\top X$ is invertible iff its columns are linearly independent iff $X$ has full column rank ($p$ independent columns). Rank deficiency happens when: (i) two features are collinear (one is a linear combination of others — e.g., including both "cm" and "inches" of the same measurement), or (ii) $n < p$ (more features than observations — the [5.6](../part-05-regularization-high-dimensions/05-6-high-dimensional.qmd) regime, where infinitely many $\beta$ fit perfectly).
+3. The **hat matrix** (it "puts the hat on $y$"). Properties: **idempotent** ($H^2 = H$ — projecting twice is the same as projecting once) and **symmetric** ($H = H^\top$ — the projection is orthogonal). Its trace is $p$: the "degrees of freedom" of the fit.
+4. `inv` explicitly forms $(X^\top X)^{-1}$ — an $O(p^3)$ operation that squares the condition number (the inverse of a nearly-singular matrix is numerically unstable). `solve` factors $X^\top X$ (Cholesky) and solves the system directly — same answer, half the condition-number exposure. At $p$ = 10,000 features the difference is the difference between an answer and NaN.
+5. Gaussian noise: if $y = X\beta + \varepsilon$ with $\varepsilon \sim N(0, \sigma^2 I)$, the likelihood is maximized exactly when RSS is minimized — least squares *is* maximum likelihood under Gaussian errors. That is [A.2](a-2-least-squares-is-mle.qmd), the next page.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+# the normal equations by hand on a 2-point line
+X = np.array([[1., 1.], [1., 2.]])     # intercept + one feature
+y = np.array([2., 3.])
+beta = np.linalg.solve(X.T @ X, X.T @ y)
+print("beta:", beta, "(the line through (1,2) and (2,3): slope 1, intercept 1)")
+```
+
+```{pyodide}
+import numpy as np
+# rank deficiency: a duplicated column makes X^T X singular
+X = np.array([[1., 2., 4.], [1., 3., 6.], [1., 5., 10.]])   # col3 = 2*col2
+print("rank:", np.linalg.matrix_rank(X), "of 3 -> X^T X singular:",
+      np.linalg.matrix_rank(X.T @ X) < 3)
+try:
+    np.linalg.solve(X.T @ X, np.array([1., 2., 3.]))
+except np.linalg.LinAlgError as e:
+    print("solve fails:", e)
+```
+
+```{pyodide}
+import numpy as np
+# the hat matrix properties
+rng = np.random.default_rng(0)
+X = np.column_stack([np.ones(50), rng.normal(size=(50, 2))])
+H = X @ np.linalg.solve(X.T @ X, X.T)
+print("symmetric:", np.allclose(H, H.T))
+print("idempotent:", np.allclose(H @ H, H))
+print("trace = p:", np.trace(H), "(p = 3)")
+```
+
+```{pyodide}
+import numpy as np
+# condition number: why solve beats inv
+rng = np.random.default_rng(1)
+X = np.column_stack([np.ones(100), rng.normal(size=100), rng.normal(size=100)])
+X[:, 2] = X[:, 1] + rng.normal(0, 1e-8, 100)      # nearly collinear
+print("cond(X^T X):", f"{np.linalg.cond(X.T @ X):.2e}")
+b = rng.normal(size=3)
+via_inv = np.linalg.inv(X.T @ X) @ X.T @ (X @ b)
+via_solve = np.linalg.solve(X.T @ X, X.T @ (X @ b))
+print("error via inv:  ", np.abs(via_inv - b).max())
+print("error via solve:", np.abs(via_solve - b).max())
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Derive the normal equations for simple linear regression *without matrices*: minimize $\sum (y_i - a - b x_i)^2$ over $(a, b)$ by setting both partial derivatives to zero, and show the solution is the familiar $\hat b = \text{Cov}(x,y)/\text{Var}(x)$, $\hat a = \bar y - \hat b \bar x$. Then verify the matrix and scalar forms agree on a random dataset.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import sympy as sp
+
+a, b, x, y = sp.symbols('a b x y', real=True)
+n = sp.symbols('n', integer=True, positive=True)
+# scalar RSS over data points (x_i, y_i) — use summation form
+i = sp.symbols('i', integer=True)
+xi, yi = sp.symbols('x_i y_i')
+rss = sp.summation((yi - a - b * xi)**2, (i, 1, n))
+# the two first-order conditions (per-observation form, then summed)
+eq_a = sp.Eq(sp.diff(rss, a), 0)
+eq_b = sp.Eq(sp.diff(rss, b), 0)
+print("∂RSS/∂a = 0:", sp.simplify(eq_a))
+print("∂RSS/∂b = 0:", sp.simplify(eq_b))
+```
+
+The two equations are $n a + b\sum x_i = \sum y_i$ and $a\sum x_i + b\sum x_i^2 = \sum x_i y_i$. Solving: subtract $\bar x$×(first) from the second to get $b = \frac{\sum(x_i - \bar x)(y_i - \bar y)}{\sum(x_i - \bar x)^2} = \text{Cov}(x,y)/\text{Var}(x)$, and $a = \bar y - b\bar x$ — the covariance-over-variance form you know from [2.2](../part-02-linear-regression/02-2-simple-linear-regression.qmd), now *derived*. The matrix form with the intercept column of 1s produces exactly these two equations — the scalar and matrix derivations are the same calculus in different notation.
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(0)
+x = rng.normal(size=100); y = 3 + 2 * x + rng.normal(0, .3, 100)
+b_scalar = ((x - x.mean()) * (y - y.mean())).sum() / ((x - x.mean())**2).sum()
+a_scalar = y.mean() - b_scalar * x.mean()
+X = np.column_stack([np.ones(100), x])
+a_mat, b_mat = np.linalg.solve(X.T @ X, X.T @ y)
+print(f"scalar: a={a_scalar:.6f} b={b_scalar:.6f}")
+print(f"matrix: a={a_mat:.6f} b={b_mat:.6f}")
+```
+</details>
+
+**Exercise 2.** The projection view, verified: for a random $X$ and $y$, compute $\hat y = X\hat\beta$, the residual $r = y - \hat y$, and verify (a) $X^\top r = 0$ (orthogonality), (b) $\hat y$ is in the column space of $X$ (it is $X\hat\beta$ by construction — verify it's unchanged by re-projecting: $H\hat y = \hat y$), (c) the Pythagorean decomposition $\|y\|^2 = \|\hat y\|^2 + \|r\|^2$. State why (c) is the geometric content of $R^2$.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(1)
+X = np.column_stack([np.ones(30), rng.normal(size=(30, 2))])
+y = rng.normal(size=30)
+beta = np.linalg.solve(X.T @ X, X.T @ y)
+yhat = X @ beta
+r = y - yhat
+H = X @ np.linalg.solve(X.T @ X, X.T)
+
+print("(a) ||X^T r||_inf:", np.abs(X.T @ r).max(), "(~0: residual orthogonal to features)")
+print("(b) ||H yhat - yhat||:", np.abs(H @ yhat - yhat).max(), "(~0: yhat is already projected)")
+print("(c) ||y||^2 =", round(y @ y, 4),
+      "= ||yhat||^2 + ||r||^2 =", round(yhat @ yhat + r @ r, 4))
+print("R^2 = ||yhat||^2 / ||y||^2 =", round(yhat @ yhat / (y @ y), 4))
+```
+
+(c) is the geometric $R^2$: the total sum of squares splits into the explained (projected) and residual (orthogonal) parts — *because* the projection is orthogonal, the Pythagorean theorem applies, and $R^2$ is the fraction of $\|y\|^2$ lying in the feature subspace. This is why $R^2$ is a geometric quantity, not just a formula: it's the squared cosine of the angle between $y$ and its projection.
+</details>
+
+**Exercise 3.** The singular case and its fix: construct $X$ with $n < p$ (more features than observations), show that $X^\top X$ is singular and infinitely many solutions achieve RSS = 0, then show that adding $\lambda I$ (ridge, [A.4](a-4-ridge-closed-form.qmd)) makes the system solvable for any $\lambda > 0$. State the statistical moral.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(2)
+n, p = 5, 20                       # n < p: the [5.6] regime
+X = rng.normal(size=(n, p))
+y = rng.normal(size=n)
+print("rank(X):", np.linalg.matrix_rank(X), "< p =", p, "-> X^T X singular:",
+      np.linalg.matrix_rank(X.T @ X) < p)
+# infinitely many exact solutions: the minimum-norm one
+beta_min_norm = np.linalg.lstsq(X, y, rcond=None)[0]
+print("min-norm solution achieves RSS =", np.abs(y - X @ beta_min_norm).max(), "(~0: perfect fit)")
+# ridge fix: (X^T X + λI) is always invertible for λ > 0
+lam = 1.0
+beta_ridge = np.linalg.solve(X.T @ X + lam * np.eye(p), X.T @ y)
+print("ridge solution exists, RSS =", round(np.sum((y - X @ beta_ridge)**2), 3),
+      "(> 0: the price of regularization)")
+```
+
+With $n < p$ the system is underdetermined: a $p$-dimensional coefficient space, only $n$ equations — a $(p-n)$-dimensional affine space of exact solutions (all achieving RSS = 0, all overfit). Ridge's $\lambda I$ adds $p$ independent equations' worth of curvature, making $X^\top X + \lambda I$ positive definite and the solution unique — at the cost of a nonzero RSS. The statistical moral: **when the data can't identify the model, you must supply the missing information** — ridge supplies it as a prior belief ("coefficients are small"), which is [A.4](a-4-ridge-closed-form.qmd)'s Bayesian reading. The normal equations are a *identification* result first and a *fitting* result second.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **$X^\top X$ squares the condition number.** If $X$ has condition number $\kappa$, $X^\top X$ has $\kappa^2$ — near-collinear features (the drill-4 example) make the normal equations numerically treacherous. The stable path is QR or SVD factorization of $X$ itself (never forming $X^\top X$); `np.linalg.lstsq` does this, which is why it's the default recommendation.
+- **The intercept is a column of 1s** — including it makes the first normal equation $\sum r_i = 0$ (the residuals sum to zero). Forgetting the intercept forces the regression line through the origin and biases every slope.
+- **Centering changes the conditioning, not the fit:** with an intercept, the slopes are identical whether or not you center $X$ — but the *numerical* problem is better conditioned when features are centered (the intercept column is orthogonal to the centered features). Same math, kinder floating point.
+- **The normal equations are not the definition of least squares** — they're the first-order condition. RSS is convex (its Hessian $2X^\top X$ is positive semidefinite), so the stationary point is the global minimum — but only when $X^\top X$ is invertible is it *unique*. Convexity is why the derivation "just works"; invertibility is why it sometimes doesn't.
+- **Weighted least squares** (heteroscedastic errors, [2.10](../part-02-linear-regression/02-10-regression-assumptions.qmd)): replace $X^\top X$ with $X^\top W X$ and $X^\top y$ with $X^\top W y$ for a diagonal weight matrix $W$ — the same derivation, reweighted. The normal equations are a template, not a one-off.
+
+### Read & Refactor AI Code
+
+This AI-generated regression solver has **three bugs**. Diagnose before running the fixed version.
+
+```python
+# AI-generated: least squares via the normal equations (will not run here — spot the bugs)
+def fit(X, y):
+    beta = np.linalg.inv(X.T @ X) @ X.T @ y     # BUG 1
+    return beta
+
+def predict(X, beta):
+    return X @ beta + np.mean(y)                # BUG 2
+
+X = np.array([[1, 1], [1, 2], [1, 3]])          # BUG 3
+y = np.array([2, 3, 4])
+print(fit(X, y))
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Explicit inverse:** `inv(X.T @ X)` forms the inverse — squares the condition number and is slower than solving. Use `np.linalg.solve(X.T @ X, X.T @ y)` (or `lstsq` for the rank-deficient case).
+2. **Prediction adds the mean of the training y:** the model's prediction is `X @ beta` — the intercept is *already in* $\beta$ (via the column of 1s). Adding `np.mean(y)` double-counts the intercept and shifts every prediction.
+3. **The design matrix is integer-typed:** `np.array([[1, 1], ...])` creates an int64 array — `X.T @ X` is integer arithmetic, and the solve can silently truncate. Cast to float: `X = np.array(..., dtype=float)`.
+
+```python
+# fixed
+def fit(X, y):
+    X = np.asarray(X, dtype=float)
+    return np.linalg.solve(X.T @ X, X.T @ y)
+
+def predict(X, beta):
+    return np.asarray(X, dtype=float) @ beta
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** The normal equations as a template: derive the weighted least squares solution for heteroscedastic errors $\text{Var}(\varepsilon_i) = \sigma^2/w_i$, showing the solution is $\hat\beta = (X^\top W X)^{-1} X^\top W y$ with $W = \text{diag}(w_i)$. Then show the *transformation* trick: WLS is OLS on the transformed data $\tilde X = W^{1/2}X$, $\tilde y = W^{1/2}y$ — and state why this means every OLS diagnostic (residuals, hat matrix, $R^2$) has a weighted version.
+
+<details>
+<summary>Hint</summary>
+
+Multiply both sides of each equation by $\sqrt{w_i}$ — the weights become a change of units.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+With $\text{Var}(\varepsilon) = \sigma^2 W^{-1}$, the MLE minimizes the weighted RSS $\sum w_i (y_i - x_i^\top\beta)^2 = (y - X\beta)^\top W (y - X\beta)$. The gradient is $-2X^\top W(X\beta - y)$; setting it to zero gives $\hat\beta = (X^\top W X)^{-1} X^\top W y$. The transformation: let $\tilde X = W^{1/2}X$, $\tilde y = W^{1/2}y$ — then the weighted RSS is exactly $(\tilde y - \tilde X\beta)^\top(\tilde y - \tilde X\beta)$, the *unweighted* RSS of the transformed data, so the WLS solution is the OLS solution on $(\tilde X, \tilde y)$. Consequence: every OLS result transfers — the hat matrix becomes $\tilde X(\tilde X^\top \tilde X)^{-1}\tilde X^\top$, residuals and $R^2$ are computed on the transformed scale, and the geometry (projection, orthogonality) is unchanged because $W^{1/2}$ is just a change of inner product. The deep point: **weights are a geometry**, not a correction — WLS is OLS in a space where the axes are scaled by the precision.
+</details>
+
+**Q2.** The normal equations in the $n \to \infty$ limit: show that $X^\top X / n$ converges to the feature second-moment matrix $\Sigma = \mathbb{E}[x x^\top]$ and $X^\top y / n$ to $\mathbb{E}[x y]$, so the population normal equations are $\Sigma \beta = \mathbb{E}[xy]$. Then state what this says about what least squares *estimates* (the best linear predictor, not the true causal effect) and connect to [2.10](../part-02-linear-regression/02-10-regression-assumptions.qmd)'s assumptions.
+
+<details>
+<summary>Hint</summary>
+
+The law of large numbers turns sums into expectations — the normal equations become a statement about the population, not the sample.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Dividing the normal equations by $n$: $\frac{1}{n}X^\top X \beta = \frac{1}{n}X^\top y$. As $n \to \infty$, $\frac{1}{n}X^\top X \to \mathbb{E}[x x^\top] = \Sigma$ and $\frac{1}{n}X^\top y \to \mathbb{E}[x y]$ (law of large numbers, assuming i.i.d. draws), so the population solution solves $\Sigma \beta^* = \mathbb{E}[xy]$ — the **best linear predictor** of $y$ from $x$ in the population, minimizing $\mathbb{E}[(y - x^\top\beta)^2]$. The crucial distinction: $\beta^*$ is the best linear *prediction* rule, which equals the true causal effect only under [2.10](../part-02-linear-regression/02-10-regression-assumptions.qmd)'s assumptions (exogeneity: $\mathbb{E}[\varepsilon | x] = 0$). With omitted variables or reverse causality, $\Sigma$ and $\mathbb{E}[xy]$ are still well-defined, the normal equations still have a solution — but it estimates the projection of $y$ onto $x$, not the effect of $x$ on $y$. The normal equations are a *prediction* device; causality is a *modeling* assumption you add on top. This is the gap between [2.5](../part-02-linear-regression/02-5-multiple-linear-regression.qmd)'s "the coefficients" and what they mean.
+</details>
+
+## 6. Complex Questions
+
+**C1 (normal equations × [A.4 ridge](a-4-ridge-closed-form.qmd) × [5.2](../part-05-regularization-high-dimensions/05-2-ridge-regression.qmd)).** The ridge solution $(X^\top X + \lambda I)^{-1}X^\top y$ is the normal equations of a *modified* problem — derive what problem (add $\lambda\|\beta\|^2$ to RSS), then show the two solutions coincide in the limit $\lambda \to 0$ (when $X^\top X$ is invertible) and that ridge is the *unique* solution when $X^\top X$ is singular. The normal equations are the fixed point of this whole family: OLS, ridge, WLS, and (via the KKT conditions) lasso ([A.5](a-5-lasso-no-closed-form.qmd)) are all "solve a linear system" at heart.
+
+**C2 (normal equations × [9.2 PCA](../part-09-unsupervised-learning/09-2-principal-component-analysis.qmd) × [A.6](a-6-pca-first-component.qmd)).** PCA's first component is the unit vector maximizing $w^\top X^\top X w$ — the same matrix as the normal equations' $X^\top X$, but *maximizing* a quadratic form instead of solving a linear system. Show that the PCA solution is the top eigenvector of $X^\top X$ while the OLS solution is $(X^\top X)^{-1}$ applied to $X^\top y$ — then state the unifying view: both are spectral statements about the same matrix, one about its largest eigenvalue, the other about its inverse. This is the bridge from regression to dimensionality reduction.
+
+## 7. Summary
+
+- Least squares = minimize RSS; the gradient is $-2X^\top(X\beta - y)$; the normal equations $X^\top X\beta = X^\top y$ are the "no linear signal left in the residuals" condition.
+- $\hat\beta = (X^\top X)^{-1}X^\top y$ when $X$ has full column rank; the solution is the orthogonal projection of $y$ onto the column space (the hat matrix, idempotent and symmetric).
+- Rank deficiency (collinearity or $n < p$) breaks invertibility — ridge's $\lambda I$ is the fix ([A.4](a-4-ridge-closed-form.qmd)).
+- Use `solve`/`lstsq`, never `inv` — $X^\top X$ squares the condition number.
+- The population limit is the best linear *predictor* $\Sigma\beta = \mathbb{E}[xy]$ — prediction, not causation ([2.10](../part-02-linear-regression/02-10-regression-assumptions.qmd)).
+- Next: [A.2 Why least squares is maximum likelihood](a-2-least-squares-is-mle.qmd) — the probabilistic justification of the same formula.

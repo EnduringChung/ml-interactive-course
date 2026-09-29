@@ -1,0 +1,370 @@
+---
+title: "A.7 AUPRC Trapezoidal Estimator, Worked Example"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - matplotlib
+---
+
+[3.1.5](../part-03-classification-glm/03-1-5-auprc.qmd) introduced the area under the precision–recall curve as the right metric for skewed data. This appendix page derives the estimator itself: the trapezoidal rule that turns a ranked list of predictions into a number, the subtle choices that make two libraries disagree, and a fully worked example you can check by hand.
+
+> **Tier 1 — every cell below runs live (NumPy only).**
+
+## 1. Basic Concept
+
+**The curve.** Sort the test instances by predicted score (descending). Walk down the list, computing at each threshold $t$:
+
+$$\text{precision}(t) = \frac{\text{TP}(t)}{\text{TP}(t) + \text{FP}(t)}, \qquad \text{recall}(t) = \frac{\text{TP}(t)}{P}$$
+
+where $P$ is the total number of positives. The precision–recall (PR) curve plots precision against recall as the threshold sweeps from $+\infty$ to $-\infty$. The **area under it (AUPRC)** summarizes the whole curve in one number.
+
+**The trapezoidal estimator.** The curve is a step function of the ranked list, but the standard estimator connects the observed (recall, precision) points with straight lines — the trapezoidal rule:
+
+$$\text{AUPRC}_{\text{trap}} = \sum_{i=1}^{m} (r_i - r_{i-1}) \cdot \frac{p_i + p_{i-1}}{2}$$
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+
+# a tiny worked example: 8 instances, 3 positives
+y_true = np.array([1, 0, 1, 0, 0, 1, 0, 0])
+scores = np.array([0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2])
+
+order = np.argsort(-scores)
+y_sorted = y_true[order]
+P = y_sorted.sum()
+
+tp = np.cumsum(y_sorted)
+fp = np.cumsum(1 - y_sorted)
+recall = tp / P
+precision = tp / (tp + fp)
+
+# prepend the origin (recall=0, precision=1) — the curve's left endpoint
+r = np.concatenate([[0.0], recall])
+p = np.concatenate([[1.0], precision])
+
+fig, ax = plt.subplots(figsize=(7, 3.4))
+ax.step(r, p, where="post", lw=2, color="steelblue", label="step (empirical)")
+ax.plot(r, p, "o-", lw=1, color="red", alpha=0.6, label="trapezoid vertices")
+for i in range(1, len(r)):
+    ax.plot([r[i-1], r[i]], [p[i-1], p[i]], "r--", lw=1)
+ax.set(xlabel="recall", ylabel="precision", xlim=(-0.02, 1.02), ylim=(0, 1.05),
+       title="PR curve: step function vs trapezoidal estimate")
+ax.legend()
+plt.show()
+
+auprc_trap = np.sum(np.diff(r) * (p[1:] + p[:-1]) / 2)
+print("trapezoidal AUPRC:", round(auprc_trap, 4))
+```
+
+**The worked example, by hand.** The ranked list (best score first): $+, +, +, -, -, -, -, -$... let's trace it:
+
+| rank | label | TP | FP | precision | recall |
+|---|---|---|---|---|---|
+| 1 | + | 1 | 0 | 1.000 | 0.333 |
+| 2 | + | 2 | 0 | 1.000 | 0.667 |
+| 3 | + | 3 | 0 | 1.000 | 1.000 |
+| 4 | − | 3 | 1 | 0.750 | 1.000 |
+| 5 | − | 3 | 2 | 0.600 | 1.000 |
+| 6 | − | 3 | 3 | 0.500 | 1.000 |
+| 7 | − | 3 | 4 | 0.429 | 1.000 |
+| 8 | − | 3 | 5 | 0.375 | 1.000 |
+
+The trapezoid: from recall 0→⅓, precision stays 1 (area ⅓); ⅓→⅔, precision 1 (area ⅓); ⅔→1, precision 1 (area ⅓); then recall is flat at 1 while precision drops — **zero area** (the trapezoid's horizontal segments contribute nothing). AUPRC = 1.0 — a perfect ranker puts all positives first. Now break it: swap ranks 3 and 4.
+
+```{pyodide}
+import numpy as np
+
+# broken ranking: one negative slipped into the top 3
+y_true = np.array([1, 0, 1, 0, 0, 1, 0, 0])
+scores = np.array([0.9, 0.8, 0.6, 0.7, 0.5, 0.4, 0.3, 0.2])   # ranks 3,4 swapped
+
+def auprc_trapezoid(y_true, scores):
+    order = np.argsort(-scores)
+    y = y_true[order]
+    P = y.sum()
+    tp = np.cumsum(y)
+    r = np.concatenate([[0.0], tp / P])
+    p = np.concatenate([[1.0], tp / np.maximum(tp + np.cumsum(1 - y), 1)])
+    return np.sum(np.diff(r) * (p[1:] + p[:-1]) / 2)
+
+print("perfect ranking AUPRC:  ", auprc_trapezoid(y_true, np.array([0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2])))
+print("one swap AUPRC:         ", auprc_trapezoid(y_true, scores))
+print("random ranking AUPRC:   ", auprc_trapezoid(y_true, np.full(8, 0.5)), "(= prevalence)")
+```
+
+## 2. Concept Questions
+
+1. The trapezoid connects (recall, precision) points with straight lines, but the empirical PR curve is a step function. When does the trapezoid *overestimate* the step area, and when does it *underestimate*? (Think about the shape of the precision function between thresholds.)
+2. The baseline of the PR curve is the prevalence $\pi = P/n$ (a random ranker's expected AUPRC), while the baseline of the ROC curve is always 0.5. Why does the PR baseline move with the class balance, and why does that make AUPRC — not AUC-ROC — the honest metric for rare positives?
+3. The step function's area (the "empirical" AUPRC) and the trapezoid's area differ. Which one does `sklearn.metrics.average_precision_score` compute, and why is it *not* the trapezoid?
+4. The trapezoid assigns zero area to the horizontal segments (where recall is flat but precision drops). What does an AUPRC of 1.0 require, and what does the gap from 1.0 measure?
+5. Why is AUPRC not comparable across datasets with different prevalences — and what *is* comparable (the normalized version)?
+
+<details>
+<summary>Answers</summary>
+
+1. Between two consecutive thresholds, recall changes only at positive instances. The step function holds precision constant between them (a horizontal step); the trapezoid draws a diagonal. When precision *drops* between the points (a negative instance was ranked between two positives), the diagonal lies *below* the step — the trapezoid underestimates. When precision *rises* (impossible in the standard construction — precision can only drop or stay as you go down the list), the diagonal would overestimate. In practice the trapezoid is a slight *under*estimate of the step area for the usual decreasing-precision curve — the price of connecting points instead of integrating the step.
+2. A random ranker's precision at any threshold is the prevalence $\pi$ (the expected fraction of positives in a random subset) — so its PR curve is the horizontal line at $\pi$, and its area is $\pi$. The ROC baseline is 0.5 because a random ranker's TPR = FPR by symmetry. The PR baseline moves because precision is a *preconditioned* quantity (it conditions on the prediction being positive), and the precondition's base rate is $\pi$. For a 1% prevalence, a random AUPRC is 0.01 — and a model at 0.05 is 5× better than random but looks "terrible" next to an ROC AUC of 0.85. The PR view exposes what the ROC view hides.
+3. `average_precision_score` computes the **step-function** area: $\sum_i (r_i - r_{i-1}) \cdot p_i$ — precision times the recall *gain* at each positive, with no averaging of adjacent precisions. It's the exact area under the step curve, not the trapezoidal approximation. (`auc(recall, precision)` *is* the trapezoid — the two functions differ, and the difference grows with the number of positives.)
+4. AUPRC = 1.0 requires every positive ranked above every negative (perfect ranking). The gap from 1.0 measures the "ranking damage" — how many negatives sit above positives, weighted by how far down the list they are. It's the metric's sensitivity to the *top* of the ranking that makes it the right choice for retrieval and screening ([3.1.5](../part-03-classification-glm/03-1-5-auprc.qmd)): the errors that matter are the ones at the top.
+5. AUPRC's value depends on the prevalence (the baseline is $\pi$), so 0.4 on a 50%-prevalence dataset and 0.4 on a 1%-prevalence dataset are not the same achievement. The comparable quantities: the **normalized AUPRC** (AUPRC − baseline)/(1 − baseline), or the lift over random (AUPRC/π), or — best — the AUPRC on a *fixed, shared* benchmark prevalence. This is the [13.7](../part-13-large-language-models/13-7-evaluation-limitations.qmd) benchmarking trap again: metrics with data-dependent baselines need the baseline reported alongside.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+# the two estimators: step (average_precision) vs trapezoid (auc)
+from sklearn.metrics import average_precision_score, auc
+
+rng = np.random.default_rng(0)
+y = np.array([1, 0, 0, 1, 0, 0, 0, 1, 0, 0])
+s = np.array([.9, .8, .7, .6, .5, .4, .3, .2, .1, .05])
+
+order = np.argsort(-s)
+tp = np.cumsum(y[order])
+r = np.concatenate([[0.0], tp / y.sum()])
+p = np.concatenate([[1.0], tp / np.maximum(tp + np.cumsum(1 - y[order]), 1)])
+
+step_ap = np.sum(np.diff(r) * p[1:])                    # average_precision_score
+trap = auc(r, p)                                        # trapezoidal
+print(f"step (average_precision_score): {step_ap:.4f}")
+print(f"trapezoid (auc):               {trap:.4f}")
+print(f"sklearn average_precision_score: {average_precision_score(y, s):.4f} (== step)")
+```
+
+```{pyodide}
+import numpy as np
+# the baseline is the prevalence: random rankings score pi
+rng = np.random.default_rng(1)
+for pi in [0.5, 0.1, 0.01]:
+    y = (rng.random(5000) < pi).astype(int)
+    s = rng.random(5000)
+    order = np.argsort(-s)
+    tp = np.cumsum(y[order])
+    r = np.concatenate([[0.0], tp / y.sum()])
+    p = np.concatenate([[1.0], tp / np.maximum(tp + np.cumsum(1 - y[order]), 1)])
+    ap = np.sum(np.diff(r) * p[1:])
+    print(f"prevalence {pi:>5}: random-ranking AUPRC = {ap:.4f} (baseline = prevalence)")
+```
+
+```{pyodide}
+import numpy as np
+# the top-of-ranking sensitivity: one swap at the top vs at the bottom
+y = np.array([1, 0, 1, 0, 0, 1, 0, 0])
+def ap(y, s):
+    o = np.argsort(-s); tp = np.cumsum(y[o])
+    r = np.concatenate([[0.0], tp / y.sum()])
+    p = np.concatenate([[1.0], tp / np.maximum(tp + np.cumsum(1 - y[o]), 1)])
+    return np.sum(np.diff(r) * p[1:])
+perfect = np.array([.9, .8, .7, .6, .5, .4, .3, .2])
+top_swap = np.array([.9, .8, .6, .7, .5, .4, .3, .2])      # swap at ranks 3-4
+bot_swap = np.array([.9, .8, .7, .6, .5, .4, .2, .3])      # swap at ranks 7-8
+print(f"perfect:   {ap(y, perfect):.4f}")
+print(f"top swap:  {ap(y, top_swap):.4f}  <- hurts more")
+print(f"bottom swap: {ap(y, bot_swap):.4f}")
+```
+
+```{pyodide}
+import numpy as np
+# precision is non-monotone: the PR curve can go up as you go down the list
+y = np.array([1, 0, 0, 1, 0, 1, 0, 0])
+s = np.array([.9, .8, .7, .6, .5, .4, .3, .2])
+o = np.argsort(-s)
+tp = np.cumsum(y[o])
+prec = tp / np.maximum(tp + np.cumsum(1 - y[o]), 1)[0]
+print("precision down the list:", np.round(prec, 3))
+print("rises at ranks where a positive passes negatives -> the curve is NOT monotone")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Derive the trapezoidal AUPRC formula from the step function: show that $\text{AUPRC}_{\text{step}} = \sum_{i=1}^{m} (r_i - r_{i-1})\, p_i$ (the precision at each positive times the recall gain), and that the trapezoid replaces $p_i$ with $(p_i + p_{i-1})/2$. Then compute both on a random dataset with 50 positives and quantify the gap as a function of the number of positives.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+# the derivation in one line: recall changes only at positive instances,
+# and at the i-th positive the recall gain is 1/P; the step area is p_i * (1/P)
+# summed over positives. The trapezoid averages adjacent precisions instead.
+rng = np.random.default_rng(2)
+for n_pos in [5, 20, 100, 500]:
+    n = 10000
+    y = np.concatenate([np.ones(n_pos), np.zeros(n - n_pos)])
+    s = np.concatenate([rng.normal(1, .5, n_pos), rng.normal(0, .5, n - n_pos)])
+    o = np.argsort(-s)
+    tp = np.cumsum(y[o])
+    r = np.concatenate([[0.0], tp / n_pos])
+    p = np.concatenate([[1.0], tp / np.maximum(tp + np.cumsum(1 - y[o]), 1)])
+    step = np.sum(np.diff(r) * p[1:])
+    trap = np.sum(np.diff(r) * (p[1:] + p[:-1]) / 2)
+    print(f"n_pos={n_pos:>4}: step {step:.4f} | trapezoid {trap:.4f} | gap {step-trap:+.4f}")
+```
+
+The gap shrinks as the number of positives grows: with few positives, the precisions at adjacent thresholds differ a lot (each positive moves precision by a big step), so the trapezoid's averaging is a coarse approximation; with many positives, adjacent precisions are nearly equal and the two estimators coincide. The practical rule: for rare-positive settings (few positives), use the step estimator (`average_precision_score`) — it's the exact area under the empirical curve — and report which estimator you used, because the two are not interchangeable.
+</details>
+
+**Exercise 2.** The prevalence dependence, quantified: generate datasets with prevalence $\pi \in \{0.5, 0.1, 0.01\}$ and a ranker of fixed quality (AUC 0.85), and compute the AUPRC in each. Show that the *same* model gets wildly different AUPRC, then compute the normalized AUPRC (AUPRC − π)/(1 − π) and show it's stable. State the reporting rule.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(3)
+print(f"{'prevalence':>11} {'AUPRC':>8} {'random':>8} {'normalized':>11}")
+for pi in [0.5, 0.1, 0.01]:
+    n = 20000
+    y = (rng.random(n) < pi).astype(int)
+    # fixed-quality ranker: positives' scores ~ N(0.5, 1), negatives ~ N(0, 1)
+    # (separation chosen so AUC ~ 0.85)
+    s = np.where(y == 1, rng.normal(.58, 1, n), rng.normal(0, 1, n))
+    o = np.argsort(-s)
+    tp = np.cumsum(y[o])
+    r = np.concatenate([[0.0], tp / y.sum()])
+    p = np.concatenate([[1.0], tp / np.maximum(tp + np.cumsum(1 - y[o]), 1)])
+    ap = np.sum(np.diff(r) * p[1:])
+    norm = (ap - pi) / (1 - pi)
+    print(f"{pi:>11} {ap:>8.4f} {pi:>8.4f} {norm:>11.4f}")
+```
+
+The same-quality ranker scores 0.83 at 50% prevalence, 0.47 at 10%, and 0.083 at 1% — a 10× spread that says nothing about the model and everything about the baseline. The normalized AUPRC (the lift over the random baseline, scaled to [0,1]) is stable at ~0.66. The reporting rule: **always report the prevalence alongside the AUPRC**, and for cross-dataset comparisons use the normalized version or a fixed-prevalence benchmark. This is the [13.7](../part-13-large-language-models/13-7-evaluation-limitations.qmd) benchmarking principle (report the baseline) applied to the metric itself.
+</details>
+
+**Exercise 3.** The connection to the F1 score: show that the F1 at a threshold is the harmonic mean of precision and recall at that point, and that the maximum F1 over the curve is a *single-point* summary (the "F1-max" operating point). Compute both the AUPRC and the F1-max on a random dataset, and state when each is the right summary — the AUPRC (whole curve, threshold-free) vs the F1-max (one operating point, deployment-shaped).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(4)
+n, P = 5000, 300
+y = np.concatenate([np.ones(P), np.zeros(n - P)])
+s = np.concatenate([rng.normal(1, 1, P), rng.normal(0, 1, n - P)])
+o = np.argsort(-s)
+tp = np.cumsum(y[o])
+fp = np.cumsum(1 - y[o])
+fn = P - tp
+prec = tp / np.maximum(tp + fp, 1)
+rec = tp / P
+f1 = 2 * prec * rec / np.maximum(prec + rec, 1e-12)
+
+ap = np.sum(np.diff(np.concatenate([[0.0], rec])) *
+            np.concatenate([[1.0], prec])[1:])
+print(f"AUPRC (whole curve):     {ap:.4f}")
+print(f"max F1 (one threshold):  {f1.max():.4f} at recall {rec[f1.argmax()]:.3f}, "
+      f"precision {prec[f1.argmax()]:.3f}")
+print(f"prevalence baseline:     {P/n:.4f}")
+```
+
+AUPRC summarizes the *whole* ranking (threshold-free — the right summary for "how good is the ranker"); F1-max finds the *best single operating point* (the right summary for "where do we set the threshold in deployment"). They answer different questions: AUPRC for model comparison and development, F1-max for the deployed decision rule. The general principle: **threshold-free metrics for development, threshold-specific metrics for deployment** — and the deployment metric must be computed on data that didn't choose the threshold (the [12.3](../part-12-multiple-testing-bioinformatics/12-3-family-wise-error-rate.qmd) discipline: pick the threshold on the dev set, evaluate it once on the test set).
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **Two functions, two estimators:** `average_precision_score` (step area) vs `auc(recall, precision)` (trapezoid) give different numbers on the same data. Always check which one a paper or library reports — and prefer the step version for rare positives (Exercise 1).
+- **The left endpoint is a convention:** the curve starts at (recall=0, precision=1) — the "perfect precision at zero recall" anchor. Different libraries handle the anchor differently; the sklearn convention prepends (0, 1), which is why the first trapezoid can differ from a hand computation.
+- **Precision is non-monotone down the list** (drill 4): it rises whenever a positive passes accumulated negatives. The PR curve is therefore *not* a decreasing function — another reason the trapezoid (which assumes smoothness) is an approximation, and another reason the step function is the honest empirical object.
+- **The baseline is the prevalence** — a random ranking scores $\pi$, not 0.5. Reporting an AUPRC without the prevalence is reporting a number without its reference point; the [3.1.5](../part-03-classification-glm/03-1-5-auprc.qmd) argument for choosing AUPRC over AUC-ROC is exactly that the PR baseline *moves* with the class balance and the ROC's doesn't.
+- **Interpolation choices are not neutral.** The trapezoid, the step, and the "interpolated precision at each recall level" (the Pascal VOC convention) give three different numbers. The field has settled on the step estimator for average precision; the trapezoid survives in `auc()`. Know which you're reading.
+
+### Read & Refactor AI Code
+
+This AI-generated AUPRC function has **three bugs**. Diagnose before running the fixed version.
+
+```python
+# AI-generated: AUPRC via the trapezoidal rule (will not run here — spot the bugs)
+def auprc(y_true, scores):
+    order = np.argsort(scores)                   # BUG 1
+    y = y_true[order]
+    tp = np.cumsum(y)
+    fp = np.cumsum(1 - y)
+    recall = tp / y.sum()
+    precision = tp / (tp + fp)
+    return np.sum(np.diff(recall) * precision)  # BUG 2
+
+y = np.array([1, 0, 1, 0, 0, 1, 0, 0])
+s = np.array([0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2])
+print(auprc(y, s))
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Ascending sort:** `np.argsort(scores)` sorts worst-first — the curve is built from the bottom of the ranking, and the recall gains are attached to the wrong precisions. Sort descending: `np.argsort(-scores)`.
+2. **Missing the left endpoint and the precision averaging:** the formula `np.diff(recall) * precision` drops the origin (recall=0, precision=1) — the first positive's contribution is lost — and uses the raw precisions instead of the trapezoid's average (or the step's right-end precision). The trapezoid needs the prepended (0, 1) point and the averaged precisions; the step estimator needs the prepended point and the right-end precisions.
+
+```python
+# fixed (step estimator == sklearn's average_precision_score)
+def auprc(y_true, scores):
+    order = np.argsort(-scores)                          # descending
+    y = y_true[order]
+    tp = np.cumsum(y)
+    r = np.concatenate([[0.0], tp / y.sum()])
+    p = np.concatenate([[1.0], tp / np.maximum(tp + np.cumsum(1 - y), 1)])
+    return np.sum(np.diff(r) * p[1:])                    # step: precision × recall gain
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** The PR curve's shape under a perfect and a random ranker: show that a perfect ranker's PR curve is the horizontal line at precision 1 (AUPRC = 1), and a random ranker's is the horizontal line at precision $\pi$ (AUPRC = $\pi$). Then derive the AUPRC of a ranker with a given AUC under a parametric model (e.g., binormal scores) — the famous result is that AUPRC is a *function of* AUC and prevalence, and the function is nonlinear. State the practical consequence.
+
+<details>
+<summary>Hint</summary>
+
+Under the binormal model, both TPR and FPR are normal CDFs of linear functions of the threshold; precision is TPR/(TPR + (1−π)/π · FPR) — integrate over the threshold.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Perfect: every positive outranks every negative, so at every threshold above the lowest positive, precision = 1 — the curve is the horizontal line at 1, area 1. Random: at any threshold, the expected precision is the prevalence (a random subset's positive fraction), so the curve is the horizontal line at $\pi$, area $\pi$. The binormal derivation: with scores $s^+ \sim N(\mu, 1)$ for positives and $s^- \sim N(0, 1)$ for negatives, $\text{TPR}(t) = \Phi(\Phi^{-1}(1 - \text{FPR}(t)) + \mu)$ and $\text{precision}(t) = \frac{\pi \cdot \text{TPR}}{\pi \cdot \text{TPR} + (1-\pi)\cdot\text{FPR}}$ — a one-parameter family indexed by $\mu$ (equivalently, by AUC = $\Phi(\mu/\sqrt{2})$). The practical consequence: **AUPRC is not an independent quality axis from AUC — it's a reparametrization that mixes in the prevalence.** Two rankers with the same AUC have AUPRCs that diverge as $\pi$ shrinks (the better ranker's advantage concentrates at the top, which the PR view rewards); two rankers with the same AUPRC can have different AUCs at different prevalences. The rule: report AUC and prevalence and AUPRC together — any two of the three (plus the model) determine the third, and reporting one without the others is underspecified.
+</details>
+
+**Q2.** The AUPRC as an expectation: show that $\text{AUPRC} = \mathbb{E}[\text{precision at the rank of a random positive}]$ — the step estimator is the average precision at which a randomly chosen positive is retrieved. Then use this to derive the AUPRC's sampling variance (the variance of a mean of per-positive precisions) and state why this makes AUPRC *unstable* with few positives — the rare-positive regime's central problem.
+
+<details>
+<summary>Hint</summary>
+
+The step estimator sums $p_i/P$ over the $P$ positives — each term is the precision at positive $i$'s rank. It's a sample mean over positives; its variance is the per-positive variance over $P$.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+$\text{AUPRC} = \sum_{i=1}^{P} \frac{1}{P} p_{(i)}$ where $p_{(i)}$ is the precision at the $i$-th positive's rank — exactly the mean of the per-positive precisions. So AUPRC's sampling variance is $\text{Var}(p_{(i)})/P$ — the per-positive precision variance divided by the number of positives. With few positives, the variance explodes: a dataset with 5 positives has an AUPRC whose standard error can be 0.1+ regardless of the model's quality. This is the rare-positive regime's central problem — the metric is unstable exactly when the class is rare — and the mitigations: (i) report the AUPRC with a confidence interval (bootstrap the positives); (ii) use more positives (the [3.1.5](../part-03-classification-glm/03-1-5-auprc.qmd) advice: AUPRC needs enough positives to be meaningful); (iii) for very rare positives, the normalized AUPRC or the lift over random is more stable (the baseline subtraction removes the prevalence-driven component). The deep point: **every metric's reliability is a sample-size statement**, and the PR metrics are the most sample-hungry in the toolbox.
+</details>
+
+## 6. Complex Questions
+
+**C1 (AUPRC × [3.1.5](../part-03-classification-glm/03-1-5-auprc.qmd) × [12.4 FDR](../part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.qmd)).** The FDR and the PR curve are two views of the same quantity: precision at a threshold is 1 − FDR (the false-discovery rate among the called positives), so the PR curve is the FDR-vs-recall curve, and AUPRC is the recall-weighted average of (1 − FDR). Derive this identity, then state the consequence: the BH procedure of [12.4](../part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.qmd) controls the FDR at a *fixed* threshold, while AUPRC averages over *all* thresholds — the FDR is the threshold-local version, AUPRC the threshold-global one. Genomics screens (fixed threshold, FDR-controlled) and retrieval evaluations (threshold-free, AUPRC) are the same statistics at different zoom levels.
+
+**C2 (AUPRC × [13.7](../part-13-large-language-models/13-7-evaluation-limitations.qmd) × [13.6](13-6-customization.qmd)).** RAG evaluation as a PR problem: the retrieved chunks are the "predicted positives," the relevant chunks are the true positives, and the retrieval AUPRC (average precision at k) is the standard metric. Trace the identity: retrieval precision at k = (relevant in top-k)/k, recall at k = (relevant in top-k)/total relevant — the same construction as this page, with "retrieved" replacing "predicted positive." Then state the two places the RAG evaluation diverges from the classification version (the ranking is over chunks, not instances; the "prevalence" is the number of relevant chunks per query, which varies) — and why that makes per-query average precision the right aggregation.
+
+## 7. Summary
+
+- The PR curve: sort by score, walk down, plot precision vs recall; the trapezoid connects the points, the step function is the empirical curve.
+- Trapezoidal AUPRC = $\sum (r_i - r_{i-1})(p_i + p_{i-1})/2$; the step estimator (sklearn's `average_precision_score`) = $\sum (r_i - r_{i-1}) p_i$ — the two differ, most when positives are few.
+- The baseline is the prevalence $\pi$, not 0.5 — a random ranker scores $\pi$. Report prevalence with AUPRC; use the normalized (AUPRC − π)/(1 − π) for cross-dataset comparison.
+- AUPRC = 1 requires a perfect ranking; the gap from 1 measures top-of-ranking damage — the right metric for retrieval and screening.
+- AUPRC is a reparametrization of AUC + prevalence — report all three; F1-max is the deployment-point companion to the threshold-free AUPRC.
+- With few positives, AUPRC's variance explodes (it's a mean over positives) — bootstrap the positives or use more of them.
+- This completes the appendix — and the course. The derivations are the floor; the judgment is the craft.

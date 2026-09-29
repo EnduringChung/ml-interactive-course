@@ -1,0 +1,346 @@
+---
+title: "13.5 Local Deployment"
+tier: 3
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - matplotlib
+---
+
+[13.4](13-4-model-families.qmd) ended with "open weights: you can run it yourself." This page is the *how*: the local-inference stack (Ollama, llama.cpp, vLLM, Hugging Face), the quantization math that makes 7B–70B models fit in consumer VRAM, and the hardware arithmetic that decides what runs where. The heavy lifting — actually loading and running a model — happens in the companion Colab lab; the concepts (quantization, memory budgets, bandwidth limits) run live here.
+
+> **Tier 3 — model inference does not run in this browser.** Concept cells below are live NumPy; the full deployment lab runs in Colab:
+>
+> [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/EnduringChung/ml-interactive-course/blob/main/notebooks/13-5-local-deployment.ipynb)
+
+## 1. Basic Concept
+
+**Why run locally:** privacy (data never leaves the machine — clinical notes, proprietary code), cost at scale (API per-token fees vs a one-time hardware cost), offline/air-gapped operation, and the prerequisite for fine-tuning ([13.6](13-6-customization.qmd)). The trade: you supply the hardware and the quality ceiling is your GPU.
+
+**The stack, simplest to most control:**
+
+| Tool | What it is | You reach for it when |
+|---|---|---|
+| **Ollama** | one-command model runner (llama.cpp wrapped) | you want to *use* a model, not engineer one |
+| **llama.cpp** | the C++ inference engine (GGUF format) | you want minimal deps, CPU+GPU hybrid, or to embed |
+| **Hugging Face `transformers`** | the Python library (training + inference) | you want to *program* against models |
+| **vLLM** | high-throughput serving engine (PagedAttention) | you're serving many users, not one |
+
+**Quantization — the core trick.** A float16 weight is 2 bytes; an int8 weight is 1 byte; int4 is 0.5. Quantization maps each weight (or group of weights) from a float range to an integer grid: $w \approx s \cdot (q - z)$, where $s$ is the scale, $q$ the integer, $z$ the zero-point. The model gets 2–4× smaller and faster (integer math, less memory traffic) at a small quality cost. The formats: **GGUF** (llama.cpp's file format, Q4_K_M etc. — per-block scales), **GPTQ** (post-training quantization, layer-by-layer error compensation), **AWQ** (activation-aware — protects the weights that matter most), **bitsandbytes** (int8/int4 for `transformers`, the Colab path).
+
+**The memory budget — the number that decides everything:**
+
+$$\text{VRAM} \approx \underbrace{2 \text{ bytes} \times N}_{\text{weights (fp16)}} \; \text{or} \; \underbrace{b \times N}_{\text{quantized}} + \underbrace{\text{KV-cache}}_{\propto T} + \underbrace{\text{activations + overhead}}_{\sim 1\text{–}2 \text{ GiB}}$$
+
+A 7B model in fp16 needs ~14 GiB — just over a 12 GiB laptop GPU; in int4, ~3.5 GiB — comfortable. A 70B model in int4 needs ~35 GiB — a 48 GiB A6000 or an 80 GiB A100, or a multi-GPU setup. **Worked example** — the quantization math, live:
+
+```{pyodide}
+#| fig-width: 7
+#| fig-height: 3.2
+import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(0)
+W = rng.normal(size=(256, 256)) * 0.02     # a realistic weight matrix (small values)
+
+def quantize_per_tensor(W, bits):
+    qmax = 2 ** (bits - 1) - 1
+    s = W.max() / qmax
+    q = np.clip(np.round(W / s), -qmax, qmax)
+    return s * q
+
+def quantize_per_group(W, bits, group=32):
+    out = np.zeros_like(W)
+    for i in range(0, W.shape[1], group):
+        out[:, i:i+group] = quantize_per_tensor(W[:, i:i+group], bits)
+    return out
+
+fig, ax = plt.subplots(figsize=(7, 3.2))
+for bits, q in [(16, W), (8, quantize_per_tensor(W, 8)),
+                (4, quantize_per_tensor(W, 4)), (4, quantize_per_group(W, 4))]:
+    label = f"fp16 (ref)" if bits == 16 and q is W else (
+        f"int{bits} per-tensor" if q is not W and bits == 8 else
+        f"int{bits} per-tensor" if q is not W else f"int{bits} per-group-32")
+    err = np.abs(q - W).mean()
+    ax.bar(label, err, color="steelblue")
+    ax.text(label, err + 1e-5, f"{err:.2e}", ha="center", fontsize=8)
+ax.set(ylabel="mean |quantization error|", title="quantization error: per-tensor vs per-group")
+plt.xticks(rotation=12, ha="right", fontsize=8)
+plt.show()
+print("fp16 baseline error: 0 (reference)")
+print("int8 per-tensor:", f"{np.abs(quantize_per_tensor(W,8)-W).mean():.2e}")
+print("int4 per-tensor:", f"{np.abs(quantize_per_tensor(W,4)-W).mean():.2e}")
+print("int4 per-group: ", f"{np.abs(quantize_per_group(W,4)-W).mean():.2e}")
+```
+
+Per-group scales (a scale per 32 weights instead of one per tensor) cut the error dramatically — the tensor-wide scale is dominated by a few large outliers, and per-group scales let each region use the full integer range. This is why GGUF's Q4_K_M (per-block scales with a 6-bit scale-of-scale) is the default "small but good" format.
+
+## 2. Concept Questions
+
+1. Why is *generation* (not pretraining) the memory-bandwidth-bound phase? Compute the arithmetic intensity of one decoding step: the model reads every weight once to produce one token. What does that imply for tokens/second on a given GPU?
+2. Per-group quantization beats per-tensor because of outlier weights. Why do transformers have outlier dimensions, and what does AWQ do differently from plain per-group quantization?
+3. The memory budget has a KV-cache term that grows with context length $T$. Why does a 128k-context model need *more* VRAM at inference even if you only ever send 1k-token prompts — and what is the mitigation?
+4. Ollama's `Q4_K_M` and a `bf16` file of the same model differ by ~4× in size. Where does the quality difference actually come from — the *number of bits*, or *how the bits are spent*?
+5. You want to run a 32B model on a 24 GiB consumer GPU. fp16 needs 64 GiB, int8 needs 32 GiB, int4 needs 16 GiB. Which do you pick, and what two other knobs (besides bits-per-weight) can close the gap?
+
+<details>
+<summary>Answers</summary>
+
+1. Decoding reads all $N$ weights from VRAM to compute one token's logits: $2N$ FLOPs per token against $2N$ bytes of weight traffic — arithmetic intensity ≈ 1 FLOP/byte, far below any GPU's compute/bandwidth ratio (an H100: ~1000 TFLOPs vs ~3 TB/s → ratio ~300). So decoding speed ≈ (memory bandwidth) / (bytes per token) — the GPU's compute units are mostly idle, waiting on memory. Consequence: tokens/second scales with *bandwidth*, not FLOPs — which is why quantization (fewer bytes) directly buys speed, and why CPU inference (lower bandwidth) is slow even with spare compute.
+2. A few embedding dimensions carry systematically large activations ("massive activations"); the weights interacting with them must stay precise or every token's output is corrupted. Plain per-group quantization treats all groups alike; AWQ measures activation magnitudes and protects the weight columns with the largest activation overlap (scaling them up before quantizing so they land on the finer part of the grid). Same bits, better spent.
+3. The KV-cache is allocated for the *maximum* context length — the engine reserves memory for a 128k sequence whether you use 1k or 128k, because it can't know in advance. Mitigations: context-length caps at load time, PagedAttention (vLLM — allocate cache in blocks as needed, like virtual memory), and sliding-window attention (the model only *uses* a window anyway, [13.2](13-2-transformer-architecture.qmd) Exercise 3).
+4. How the bits are spent. Per-block scales, mixed precision (keep sensitive layers at higher bits), and activation-aware protection (AWQ) all buy quality at fixed bit-width — the difference between a naive int4 and Q4_K_M is larger than the difference between naive int4 and naive int8. Quantization is an allocation problem, not just a precision problem.
+5. int4 (16 GiB) leaves headroom. The other knobs: (i) **offload** — keep some layers on CPU/RAM and stream them (llama.cpp's `-ngl` flag; slower but fits), (ii) **sharding** — split the model across two GPUs (or GPU+CPU) so no single device holds it all. Also: smaller context allocation (Q3) and accepting a smaller model (a 14B int4 at 7 GiB often beats a 32B int4 at 16 GiB on quality-per-latency for single-user use).
+
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+# the bandwidth bound: tokens per second from bytes per token
+bandwidth_gbs = 2000          # H100 HBM3 ~3.35 TB/s; use 2000 for a consumer 4090 (~1 TB/s)
+for name, bytes_per_tok in [("fp16 7B", 14e9), ("int8 7B", 7e9), ("int4 7B", 3.5e9)]:
+    tps = bandwidth_gbs / bytes_per_tok * 1e9 / 1e9 * 1e9  # bytes/s / bytes per token
+    print(f"{name}: {bandwidth_gbs*1e9/bytes_per_tok:.1f} tokens/s (bandwidth-bound)")
+```
+
+```{pyodide}
+# VRAM budget arithmetic
+def vram_gib(N_billions, bytes_per_weight, context=4096, d=4096, L=32, h_kv=8, bytes_kv=2):
+    weights = N_billions * 1e9 * bytes_per_weight / 2**30
+    kv = 2 * L * h_kv * d * context * bytes_kv / 2**30
+    return weights, kv, weights + kv + 1.5   # + overhead
+for name, b in [("fp16", 2), ("int8", 1), ("int4", 0.5)]:
+    w, kv, tot = vram_gib(7, b)
+    print(f"7B {name}: weights {w:.1f} + KV(4k) {kv:.2f} + overhead = {tot:.1f} GiB")
+```
+
+```{pyodide}
+# quantization reflex: the zero-point (asymmetric) vs scale-only (symmetric)
+import numpy as np
+W = np.array([-0.5, -0.1, 0.0, 0.1, 0.9])   # asymmetric range
+qmax = 7
+s = (W.max() - W.min()) / (2 * qmax)
+z = np.round(-W.min() / s) - qmax            # zero-point: where 0.0 lands
+q = np.round(W / s) + z
+print("asymmetric int8:", q, "->", np.round(s * (q - z), 3))
+print("max error:", np.abs(s * (q - z) - W).max().round(4))
+```
+
+```{pyodide}
+# offload arithmetic: what fraction fits on GPU?
+total_layers, on_gpu = 32, 20
+print(f"GPU holds {on_gpu}/{total_layers} layers; "
+      f"CPU streams {total_layers - on_gpu} at RAM speed (~25 GB/s vs 1000+ GB/s)")
+print(f"effective speed ~ {on_gpu/total_layers*100:.0f}% GPU + "
+      f"{(total_layers-on_gpu)/total_layers*25/1000*100:.1f}% GPU-speed for the rest")
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Implement group-wise int4 quantization with the GGUF-style twist: per-block scales *and* a per-block scale-of-scale (the "K" in Q4_K_M — the scale itself is quantized to 6 bits). Quantize the Section 1 weight matrix, measure the error vs plain per-group int4, and state the memory cost of the extra metadata (per 32-weight block: 0.5 bytes/weight + 2 bytes scale + 2 bytes scale-of-scale ≈ 0.56 bytes/weight — why "Q4" is really ~4.5 bits).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(1)
+W = rng.normal(size=(256, 256)) * 0.02
+
+def q4_group(W, group=32):
+    out = np.zeros_like(W)
+    for i in range(0, W.shape[1], group):
+        blk = W[:, i:i+group]
+        s = blk.max() / 7
+        q = np.clip(np.round(blk / s), -7, 7)
+        out[:, i:i+group] = s * q
+    return out
+
+def q4_k(W, group=32):
+    out = np.zeros_like(W)
+    for i in range(0, W.shape[1], group):
+        blk = W[:, i:i+group]
+        s = blk.max() / 7
+        # quantize the scale itself to 6 bits (the "K" trick)
+        s_q = np.round(s / (s.max() / 63)) * (s.max() / 63)
+        q = np.clip(np.round(blk / s_q), -7, 7)
+        out[:, i:i+group] = s_q * q
+    return out
+
+e_plain = np.abs(q4_group(W) - W).mean()
+e_k = np.abs(q4_k(W) - W).mean()
+print(f"plain per-group int4: {e_plain:.2e}")
+print(f"Q4_K-style (6-bit scales): {e_k:.2e}")
+print(f"metadata per block: 2B scale + 2B scale-of-scale = 4B / 32 weights = "
+      f"{4/32:.3f} B/weight -> effective {0.5 + 4/32/1:.2f}... "
+      f"true cost {0.5 + 4/32:.3f} bytes/weight = {(0.5 + 4/32)*8:.2f} bits/weight")
+```
+
+The scale-of-scale costs 4 bytes per 32-weight block — 0.125 bytes/weight on top of the 0.5 bytes/weight of the int4 values, so "Q4" is really ~4.5–5 bits/weight once metadata is counted. The error reduction is modest on this synthetic matrix (real weight distributions with outliers benefit more); the point is the accounting: **quantization formats are a bit-budget, and metadata is part of the budget.** Always compute effective bits/weight as (values + scales + zero-points) / weights — the marketing number (Q4) and the file-size number differ by ~15%.
+</details>
+
+**Exercise 2.** The bandwidth-bound speed model: a 7B int4 model (3.5 GB weights) on a GPU with 1 TB/s bandwidth should decode at ~285 tokens/s by the drill-1 arithmetic. But real llama.cpp on a 4090 gets ~60–100 tokens/s. List the three reasons the simple model overpredicts, then compute what fraction of peak bandwidth a well-tuned kernel actually achieves, and state what that implies for choosing between "more quantization" and "better kernels."
+
+<details>
+<summary>Hint</</summary>
+
+The simple model assumes: weights are read once, nothing else competes for bandwidth, and the kernel achieves peak. Reality: dequantization compute, KV-cache traffic, and kernel efficiency all take their cut.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+peak_tps = 1e12 / 3.5e9
+print(f"naive model: {peak_tps:.0f} tokens/s")
+print(f"observed ~80 tokens/s -> kernel achieves {80*3.5e9/1e12:.1%} of peak bandwidth")
+```
+
+Three reasons for the gap: (i) **dequantization compute** — int4 weights are unpacked to float in registers; the unpacking ALU work and the extra register pressure slow the memory pipeline (the kernel is not purely bandwidth-bound at these tiny per-token matmuls); (ii) **KV-cache traffic** — every step also reads/writes the KV-cache (growing with $T$), competing for the same bandwidth; (iii) **kernel efficiency** — small matmuls (one token × 4096-dim layers) don't saturate HBM; achieving 80–90% of peak needs large batched GEMMs, which single-user decoding doesn't have. Implication: at ~25% of peak, the first 2× of speedup comes from *better kernels* (batching, fused dequant, tensor-core int4 GEMMs), not more quantization — which is why the field ships both (quantized formats *and* optimized runtimes). The crossover: once kernels are near peak, quantization is the only lever left — the two strategies are sequential, not either/or.
+</details>
+
+**Exercise 3.** Size the deployment: you have a 24 GiB GPU and want the best possible model for (a) a single-user chat with 8k context, (b) a RAG server handling 50 concurrent users with 4k contexts. For each, compute the memory budget (weights + KV-cache + overhead), pick a quantization level for 7B / 14B / 32B / 70B candidates, and state which you'd deploy and why. Use the drill-2 formula with $h_{kv} = 8$, $d = 4096$ (7B/14B) or $8192$ (70B), $L = 32/32/80$.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+def budget(N_b, bytes_w, users, T, d, L, h_kv=8):
+    w = N_b * 1e9 * bytes_w / 2**30
+    kv = users * 2 * L * h_kv * d * T * 2 / 2**30
+    return w, kv, w + kv + 1.5
+
+print("(a) single user, 8k context, 24 GiB:")
+for N_b in [7, 14, 32, 70]:
+    for name, b in [("int4", 0.5), ("int8", 1)]:
+        w, kv, tot = budget(N_b, b, 1, 8192, 4096 if N_b <= 14 else 8192,
+                            32 if N_b <= 32 else 80)
+        if tot < 24:
+            print(f"  {N_b}B {name}: {tot:.1f} GiB (w {w:.1f} + kv {kv:.1f})  <- fits")
+
+print("(b) 50 users, 4k context, 24 GiB:")
+for N_b in [7, 14]:
+    w, kv, tot = budget(N_b, 0.5, 50, 4096, 4096, 32)
+    print(f"  {N_b}B int4: {tot:.1f} GiB (w {w:.1f} + kv {kv:.1f})")
+```
+
+(a) Single-user: 32B int4 (~16 + 0.5 + 1.5 ≈ 18 GiB) or 14B int8 (~14 + 0.25 + 1.5 ≈ 16 GiB) both fit; 70B int4 (~35 GiB) doesn't. Pick 32B int4 — quality per user is what matters when there's one user, and the KV-cache at 8k is small. (b) 50 concurrent: the KV-cache term explodes — 50 users × 4k context × 32 layers × 8 KV heads × 4096 × 2 (K+V) × 2 bytes ≈ 41 GiB *per 7B model* — the cache, not the weights, is the constraint. Pick 7B int4 and cap context/users, or move to a serving engine (vLLM's PagedAttention shares cache across users with common prefixes). The general lesson: **single-user deployment is weight-bound; multi-user deployment is cache-bound** — the two regimes size completely differently, and the serving stack (batching, paged cache) matters more than the model choice in the second.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **"It runs" ≠ "it runs well."** A 70B int4 on a 48 GiB GPU works; at 5 tokens/s with 200 ms/word latency it's unusable for interactive chat. Always benchmark *your* prompt lengths and *your* concurrency before committing hardware.
+- **Quantization quality is task-dependent.** A Q4 model loses ~0.1–0.3 perplexity on average — invisible on chat, visible on precise multi-step reasoning or rare-domain knowledge. Evaluate on *your* task's data, not on the format's marketing.
+- **Outlier dimensions break naive quantization** — a few large-magnitude weights force a coarse per-tensor scale. If you ever quantize yourself: per-group scales, and consider keeping the outlier dims in fp16 (mixed precision, as AWQ/GGUF do).
+- **Model files are code-adjacent trust objects.** A GGUF from an untrusted source is a multi-GB binary you're loading into a tool with filesystem access. Use official repos (Hugging Face verified, Ollama's model library) and check hashes.
+- **CPU inference is a different trade:** llama.cpp on a Mac with unified memory can run 7B int4 at ~30 tokens/s with *zero* GPU — the memory is shared, the bandwidth is decent, and the laptop stays silent. For many users this is the best deployment, not a compromise.
+- **The KV-cache is the silent cost:** at long contexts it exceeds the weights (Exercise 3b). If your use case is long documents, budget for the cache first — a 7B model at 128k context needs more VRAM than a 14B model at 8k.
+
+### Read & Refactor AI Code
+
+This AI-generated quantization function has **three bugs**. Diagnose before running the fixed version.
+
+```python
+# AI-generated: quantize a weight matrix to int4 (will not run here — spot the bugs)
+def quantize(W, bits=4):
+    qmax = 2 ** bits - 1                    # BUG 1
+    s = W.max() / qmax
+    q = np.round(W / s)
+    return s * q                             # BUG 2
+
+def dequantize(q, s):
+    return s * (q - 128)                     # BUG 3
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **Wrong range for signed int4:** `2**4 - 1 = 15` treats int4 as unsigned [0, 15]. Signed int4 is [-8, 7] (or [-7, 7] symmetric) — the scale must be computed from the actual min/max, and the rounding clipped to the signed range. As written, negative weights all quantize to 0.
+2. **No clipping:** `np.round(W / s)` can exceed the integer range (any weight above `qmax * s` — and `s` is set by the max, so values near the max round to exactly `qmax`, but the *unsigned* range means the top half of the grid is wasted on sign). Clip to `[-qmax, qmax]` after rounding.
+3. **Hardcoded 128 zero-point:** `q - 128` assumes uint8's zero-point; for int4 the zero-point is 0 (symmetric) or computed from the data (asymmetric). The dequantization must use the *same* convention as the quantization — and the scale must be passed consistently.
+
+```python
+# fixed
+def quantize(W, bits=4):
+    qmax = 2 ** (bits - 1) - 1               # signed range [-7, 7]
+    s = W.max() / qmax
+    q = np.clip(np.round(W / s), -qmax, qmax)
+    return q, s
+
+def dequantize(q, s):
+    return s * q                             # symmetric: zero-point is 0
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** Why is decoding bandwidth-bound but pretraining compute-bound? Compute the arithmetic intensity of both: pretraining processes a batch of $B$ tokens with the same weights (weights read once per *batch*), decoding processes 1 token. Then state the architectural consequence — why tensor cores matter for training but barely for single-user decoding, and why *batching* users (continuous batching, vLLM) is the serving-side fix.
+
+<details>
+<summary>Hint</summary>
+
+Arithmetic intensity = FLOPs / bytes of memory traffic. Compare $B$ tokens vs 1 token against the same weight read.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Pretraining: one weight read serves $B$ tokens (say $B$ = 4M tokens in a large run's micro-batches — even $B$ = 512 gives intensity $2N \cdot B / 2N = B$ FLOP/byte ≈ 512, well above the ~300 ratio — compute-bound, tensor cores saturated). Decoding: one weight read serves 1 token — intensity ≈ 1, memory-bound, tensor cores idle. Consequence: training efficiency is about FLOPs utilization (MFU — the 50% figure in the drill); single-user decoding efficiency is about bandwidth. The serving fix is **continuous batching**: pack many users' tokens into one GEMM — the weights are read once per *batch of users*, restoring compute-bound economics (intensity = number of users in flight). This is why vLLM/TGI can serve 50 users at aggregate speeds near the pretraining hardware's potential, while naive one-user-at-a-time serving wastes 75% of it (Exercise 2). The same hardware, two regimes — the batch size is the dial between them.
+</details>
+
+**Q2.** The quantization error → quality relationship: using the Section 1 matrix, measure how quantization error scales with bits (2, 3, 4, 8, 16) and fit the exponent (error ∝ 2^(−bits)?). Then state why the *perplexity* impact is sublinear in the weight error (the network averages over thousands of weights — errors partially cancel), and why the worst case (outlier dimensions) dominates the tail of the quality loss.
+
+<details>
+<summary>Hint</summary>
+
+Fit log(error) vs bits — the slope is the exponent. Then think about error accumulation across a 32-layer network with 4096-dim dot products.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+
+rng = np.random.default_rng(2)
+W = rng.normal(size=(512, 512)) * 0.02
+errs = []
+for bits in [2, 3, 4, 6, 8, 16]:
+    qmax = 2 ** (bits - 1) - 1
+    s = W.max() / qmax
+    q = np.clip(np.round(W / s), -qmax, qmax)
+    errs.append(np.abs(s * q - W).mean())
+slope = np.polyfit([2, 3, 4, 6, 8], np.log(errs[:5]), 1)[0]
+print("error by bits:", np.round(errs, 6))
+print(f"fitted: error ~ 2^({slope:.2f} * bits)  (theory: -1.00)")
+```
+
+Error halves per bit (slope ≈ −1 in log2) — each bit buys one binary digit of precision, as expected. But perplexity impact is sublinear in weight error: a dot product of 4096 terms with independent quantization errors has error growing as $\sqrt{d}$ while the signal grows as $d$ — the *relative* error shrinks with dimension, and across 32 layers the errors partially cancel (they're zero-mean). That's why int4's naive error looks scary in isolation but costs only ~0.1–0.3 perplexity in practice. The exception: **outlier dimensions** — a few weights with 10–100× the typical magnitude. Their quantization error is large *and* they interact with large activations (every token touches them), so they don't average away — they dominate the tail of the quality loss. This is the entire motivation for AWQ and mixed-precision formats: protect the outliers, quantize the rest aggressively.
+</details>
+
+## 6. Complex Questions
+
+**C1 (deployment × [10.1 tensors](../part-10-deep-learning/10-1-pytorch-foundations.qmd) × [13.4](13-4-model-families.qmd)).** The KV-cache is a tensor that grows every decoding step — a define-by-run shape change. Trace the memory lifecycle: pre-allocated max-context buffer (llama.cpp) vs PagedAttention's block allocator (vLLM) vs the naive `torch.cat` approach (OOMs at long contexts). State which [10.1](../part-10-deep-learning/10-1-pytorch-foundations.qmd) concept each design is an instance of, and why the naive approach fails the [13.2](13-2-transformer-architecture.qmd) Exercise 3 memory arithmetic.
+
+**C2 (deployment × [13.6](13-6-customization.qmd) × [13.3](13-3-training-pipeline.qmd)).** Fine-tuning a local model (LoRA, [13.6](13-6-customization.qmd)) has its own deployment story: the base model is int4 on the GPU, the LoRA adapter is fp16, and the serving engine must fuse or compose them. Compute the memory cost of a 7B int4 base + 50M-param fp16 LoRA adapter, state whether the adapter changes the quantization story (it doesn't — why?), and describe the inference-time composition (W + BA applied per forward) and its cost.
+
+## 7. Summary
+
+- Local deployment: Ollama (use it) → llama.cpp (embed it) → transformers (program it) → vLLM (serve it).
+- Quantization: $w \approx s(q - z)$; per-group scales beat per-tensor because of outlier weights; metadata is part of the bit budget ("Q4" ≈ 4.5–5 bits/weight).
+- The VRAM budget = weights + KV-cache + overhead; single-user is weight-bound, multi-user is cache-bound.
+- Decoding is memory-bandwidth-bound (intensity ≈ 1 FLOP/byte); pretraining is compute-bound (intensity ≈ batch size) — batching users is the serving-side fix.
+- Quantization error halves per bit but perplexity impact is sublinear (errors average over dimensions) — except at outlier dimensions, which AWQ/mixed-precision protect.
+- "Runs" ≠ "runs well": benchmark your prompt lengths, concurrency, and task before buying hardware.
+- Next: [13.6 Customization](13-6-customization.qmd) — RAG, LoRA, and agents on top of your local model.

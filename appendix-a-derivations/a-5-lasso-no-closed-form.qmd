@@ -1,0 +1,378 @@
+---
+title: "A.5 Why Lasso Has No Closed Form"
+tier: 1
+engine: markdown
+pyodide:
+  packages:
+    - numpy
+    - sympy
+---
+
+[A.4](a-4-ridge-regression.qmd)'s L2 penalty gave a closed form because the squared norm is smooth. The lasso's L1 penalty — $\lambda\|\beta\|_1 = \lambda\sum_j|\beta_j|$ — is *not* differentiable at zero, and that single kink is the whole story: it destroys the closed form and creates sparsity. This page derives the subgradient condition, solves the orthogonal case exactly (soft-thresholding), and shows why the kink is a feature, not a bug.
+
+> **Tier 1 — every cell below runs live (sympy for the symbolic derivation, NumPy for the check).**
+
+## 1. Basic Concept
+
+**The objective.** The lasso minimizes RSS plus the sum of absolute coefficient values:
+
+$$\hat\beta_\lambda = \arg\min_\beta \; (y - X\beta)^\top(y - X\beta) + \lambda \sum_{j=1}^p |\beta_j|$$
+
+**Why [A.4](a-4-ridge-regression.qmd)'s derivation breaks:** the gradient of $|\beta_j|$ doesn't exist at $\beta_j = 0$. The tool is the **subgradient** — the set of all slopes that lie below the function:
+
+$$\partial|\beta_j| = \begin{cases} +1 & \beta_j > 0 \\ -1 & \beta_j < 0 \\ [-1, +1] & \beta_j = 0 \end{cases}$$
+
+```{pyodide}
+import sympy as sp
+
+b, lam = sp.symbols('beta lambda', real=True)
+# the subgradient of the penalized objective for ONE coefficient (orthogonal case)
+# objective: (y - x·β)² + λ|β|  — with x=1, y=1 for concreteness
+y_val, x_val = 1, 1
+obj = (y_val - x_val * b)**2 + lam * sp.Abs(b)
+
+# the stationarity condition: 0 ∈ ∂objective
+# for β > 0:  -2x(y - xβ) + λ = 0  ->  β = (2xy - λ)/(2x²)  (if positive)
+# for β < 0:  -2x(y - xβ) - λ = 0  ->  β = (2xy + λ)/(2x²)  (if negative)
+# for β = 0:  |2xy| ≤ λ            (the subgradient contains 0)
+beta_pos = sp.simplify((2 * x_val * y_val - lam) / (2 * x_val**2))
+beta_neg = sp.simplify((2 * x_val * y_val + lam) / (2 * x_val**2))
+print("β > 0 branch: β =", beta_pos, " (valid when 2xy > λ)")
+print("β < 0 branch: β =", beta_neg, " (valid when 2xy < -λ)")
+print("β = 0 when |2xy| ≤ λ  — the kink's flat spot swallows small signals")
+```
+
+**The solution — soft-thresholding.** Combining the three cases (the "if positive / if negative / zero" logic collapses into one formula):
+
+$$\hat\beta_j = \text{sign}(\hat\beta_j^{\text{OLS}}) \cdot \max(|\hat\beta_j^{\text{OLS}}| - \tfrac{\lambda}{2}, \; 0)$$
+
+```{pyodide}
+import numpy as np
+
+def soft_threshold(b_ols, lam):
+    return np.sign(b_ols) * np.maximum(np.abs(b_ols) - lam / 2, 0)
+
+# verify against the symbolic branches
+for b_ols, lam in [(1.0, 1.0), (0.3, 1.0), (-1.0, 1.0), (-0.3, 1.0), (0.0, 1.0)]:
+    b_lasso = soft_threshold(b_ols, lam)
+    # brute-force check: minimize the 1-D objective on a grid
+    grid = np.linspace(-2, 2, 400001)
+    obj = (1 - grid)**2 + lam * np.abs(grid)
+    b_grid = grid[obj.argmin()]
+    print(f"OLS {b_ols:>5}, λ={lam}: soft-threshold {b_lasso:>6.3f} | "
+          f"grid argmin {b_grid:>6.3f} | match: {np.isclose(b_lasso, b_grid, atol=1e-3)}")
+```
+
+Every OLS coefficient is shrunk toward zero by $\lambda/2$ — and any coefficient whose OLS magnitude is below $\lambda/2$ is set to **exactly zero**. That is the sparsity mechanism: the kink at zero creates a *dead zone* where small signals are annihilated rather than shrunk.
+
+## 2. Concept Questions
+
+1. The subgradient of $|\beta_j|$ at zero is the *interval* $[-1, +1]$, not a number. Why does this interval — rather than a single slope — make the lasso solution possible at all, and what does the condition "$0 \in \partial$" mean geometrically?
+2. Soft-thresholding sets small coefficients to exactly zero. What is the *bias* introduced (vs ridge's smooth shrinkage), and what is the *variance* benefit — why does zeroing a coefficient reduce variance more than shrinking it?
+3. The lasso's solution path is piecewise linear in $\lambda$ (the LARS property). Why does the kink make the path piecewise linear, and what does that enable computationally?
+4. Why does the lasso require even more careful standardization than ridge? (Hint: the L1 penalty's scale-dependence is worse — the dead zone is in units of the coefficients.)
+5. The lasso can select at most $n$ features when $p > n$ (the [5.6](../part-05-regularization-high-dimensions/05-6-high-dimensional.qmd) regime). Why — what is the geometric reason?
+
+<details>
+<summary>Answers</summary>
+
+1. At the kink, no single line supports the function — but *every* slope in $[-1,1]$ does. The stationarity condition "$0 \in \partial f(\hat\beta)$" means: there exists a supporting line through the solution with slope zero — the function is "flat enough" at the kink to balance the data's pull. Geometrically: the data's gradient ($-2x(y-x\beta)$, pulling away from zero) is exactly cancelled by *some* subgradient in $[-1,1]$ — the kink is wide enough to catch it. This is why the solution can sit at zero: the penalty's flat spot is a *trap* for small signals.
+2. Bias: a zeroed coefficient is biased by its full OLS value (ridge biases by a fraction). Variance: a zeroed coefficient has *zero* variance — it's not estimated at all, so its sampling variability is removed entirely. The trade: lasso accepts more bias (full shrinkage to zero) for more variance reduction (elimination, not just damping) — the [4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd) trade-off at its most aggressive. When the zeroed coefficient was noise, this is pure win; when it was signal, it's the lasso's characteristic error.
+3. Because the solution is piecewise linear: as $\lambda$ decreases, each coefficient moves linearly from zero until it hits a kink (another coefficient's entry/exit), then the path bends. The kinks are the only places the path can change direction — between kinks, the active set is fixed and the solution is the OLS solution on that set (a linear function of $\lambda$). LARS exploits this: it walks the path from kink to kink in $O(p^3)$ — the whole regularization path for the cost of a few OLS fits.
+4. The dead zone is $|\hat\beta}^{\text{OLS}}| \le \lambda/2$ — in *units of the coefficients*. A feature in millimeters has coefficients 1000× smaller than in meters, so the same $\lambda$ annihilates the millimeter feature and barely touches the meter one. Standardization puts all features in the same units so the dead zone is fair — and the L1 penalty's scale-dependence is *more* dangerous than ridge's because the consequence is annihilation (a hard zero), not just shrinkage.
+5. With $p > n$, the lasso's solution is the OLS solution on the active set — and the active set has at most $n$ members, because the fit $\hat y = X_A\beta_A$ lives in the column space of $X_A$, which has dimension at most $n$ (the residual is orthogonal to $\le n$ directions). More selected features than observations would mean a rank-deficient active set with no unique solution — the lasso's geometry (the diamond's corners) can't reach those. This is why the lasso is a *selector* in the $p \gg n$ regime: it picks at most $n$, and the choice of which $n$ is the model.
+</details>
+
+## 3. Drills & Exercises
+
+### Drills
+
+Predict, then run.
+
+```{pyodide}
+import numpy as np
+# the dead zone: coefficients below λ/2 are annihilated
+def soft_threshold(b, lam):
+    return np.sign(b) * np.maximum(np.abs(b) - lam / 2, 0)
+b_ols = np.array([2.0, 0.4, -0.1, 0.05, -3.0])
+for lam in [0.2, 0.5, 1.0, 2.0]:
+    print(f"λ={lam}: {soft_threshold(b_ols, lam)}  (dead zone ±{lam/2})")
+```
+
+```{pyodide}
+import numpy as np
+# the subgradient at zero is an interval — verify the trap condition
+# at β=0: data gradient is -2x(y - 0) = -2xy; penalty subgradient is [-λ, λ]
+# the solution stays at 0 iff |2xy| <= λ
+for xy, lam in [(0.3, 1.0), (0.6, 1.0), (0.4, 1.0)]:
+    print(f"2xy={2*xy:.1f}, λ={lam}: stays at 0: {abs(2*xy) <= lam}")
+```
+
+```{pyodide}
+import numpy as np
+# piecewise linearity: the path is linear between kinks
+rng = np.random.default_rng(0)
+n, p = 50, 3
+X = np.column_stack([np.ones(n), rng.normal(size=(n, p - 1))])
+y = X @ np.array([0., 2., 0.]) + rng.normal(0, 0.3, n)
+# coordinate descent (the standard lasso solver)
+def lasso_cd(X, y, lam, iters=1000):
+    beta = np.zeros(X.shape[1])
+    for _ in range(iters):
+        for j in range(X.shape[1]):
+            r = y - X @ beta + X[:, j] * beta[j]
+            rho = X[:, j] @ r
+            beta[j] = np.sign(rho) * max(abs(rho) - lam, 0) / (X[:, j] @ X[:, j])
+    return beta
+for lam in [0.01, 0.1, 0.5, 1.0, 2.0]:
+    print(f"λ={lam:>4}: β = {np.round(lasso_cd(X, y, lam), 3)}")
+```
+
+```{pyodide}
+import numpy as np
+# the p > n selector: at most n features can be active
+rng = np.random.default_rng(1)
+n, p = 20, 100
+X = rng.normal(size=(n, p))
+y = X[:, :3] @ np.array([1., 2., 3.]) + rng.normal(0, 0.1, n)   # only 3 true features
+def lasso_cd(X, y, lam, iters=2000):
+    beta = np.zeros(X.shape[1])
+    for _ in range(iters):
+        for j in range(X.shape[1]):
+            r = y - X @ beta + X[:, j] * beta[j]
+            rho = X[:, j] @ r
+            beta[j] = np.sign(rho) * max(abs(rho) - lam, 0) / (X[:, j] @ X[:, j])
+    return beta
+b = lasso_cd(X, y, 0.05)
+print(f"p={p}, n={n}: {np.sum(b != 0)} nonzero coefficients (≤ n = {n})")
+print("the true features recovered:", np.where(np.abs(b) > 0.1)[0])
+```
+
+### Exercises (with solutions)
+
+**Exercise 1.** Derive the general (non-orthogonal) stationarity condition: for each $j$, the lasso solution satisfies $-2x_j^\top(y - X\beta) + \lambda s_j = 0$ where $s_j \in \partial|\beta_j|$ — i.e. $s_j = \text{sign}(\beta_j)$ if $\beta_j \ne 0$, and $|2x_j^\top(y - X\beta)| \le \lambda$ if $\beta_j = 0$. Verify this KKT condition against coordinate descent on a random design, and state what the second case means (the "why is this coefficient zero" certificate).
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(2)
+n, p = 100, 5
+X = np.column_stack([np.ones(n), rng.normal(size=(n, p - 1))])
+y = X @ np.array([0., 1.5, 0., 0., -2.]) + rng.normal(0, 0.5, n)
+lam = 0.3
+
+def lasso_cd(X, y, lam, iters=2000):
+    beta = np.zeros(X.shape[1])
+    for _ in range(iters):
+        for j in range(X.shape[1]):
+            r = y - X @ beta + X[:, j] * beta[j]
+            rho = X[:, j] @ r
+            beta[j] = np.sign(rho) * max(abs(rho) - lam, 0) / (X[:, j] @ X[:, j])
+    return beta
+
+beta = lasso_cd(X, y, lam)
+resid = y - X @ beta
+print("coefficients:", np.round(beta, 4))
+print("\nKKT check per coefficient:")
+for j in range(p):
+    g = -2 * X[:, j] @ resid
+    if beta[j] != 0:
+        ok = np.isclose(g, lam * np.sign(beta[j]), atol=1e-6)
+        print(f"  β{j} = {beta[j]:+.4f}: gradient {g:+.4f} == λ·sign = {lam*np.sign(beta[j]):+.4f} -> {ok}")
+    else:
+        ok = abs(g) <= lam + 1e-6
+        print(f"  β{j} = 0: |gradient| {abs(g):.4f} <= λ = {lam} -> {ok}  (the zero-certificate)")
+```
+
+The second case is the *zero-certificate*: a coefficient is zero exactly when the absolute correlation between its feature and the current residual is below $\lambda/2$ — the feature isn't correlated enough with what's left to explain to overcome the penalty. This is the lasso's variable-selection logic made checkable: every zero comes with a proof (the gradient is inside the dead zone), and every nonzero comes with a proof (the gradient exactly balances the penalty). The KKT conditions turn "the lasso zeroed this" from a mystery into an auditable fact.
+</details>
+
+**Exercise 2.** The geometry of sparsity: plot the constraint regions — the L2 ball $\{\beta: \|\beta\|_2 \le t\}$ (a circle) and the L1 ball $\{\beta: \|\beta\|_1 \le t\}$ (a diamond) — with a contour of RSS, and show that the constrained minimum lands on an axis for the diamond (sparsity) but on the round boundary for the circle (no sparsity). Then state the general principle: the solution is where the RSS contour first touches the constraint, and the constraint's *corners* are where zeros come from.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+#| fig-width: 7
+#| fig-height: 3.4
+import numpy as np
+import matplotlib.pyplot as plt
+
+t = 1.0
+theta = np.linspace(0, 2 * np.pi, 400)
+# L2 ball: circle of radius t
+ax_x_l2 = t * np.cos(theta); ax_y_l2 = t * np.sin(theta)
+# L1 ball: diamond |x| + |y| = t
+ax_x_l1 = np.array([t, 0, -t, 0, t]); ax_y_l1 = np.array([0, t, 0, -t, 0])
+# RSS contours (ellipses centered at the OLS solution, away from the origin)
+ols = np.array([1.2, 0.4])
+th = np.linspace(0, 2 * np.pi, 200)
+for r in [0.3, 0.6, 0.9, 1.2]:
+    # ellipse: stretched along one axis (correlated features)
+    x = ols[0] + r * 1.3 * np.cos(th) - r * 0.4 * np.sin(th)
+    y = ols[1] + r * 0.5 * np.cos(th) + r * 0.9 * np.sin(th)
+    plt.plot(x, y, color="steelblue", lw=1)
+    plt.plot([], [], color="steelblue", label="RSS contours" if r == 0.3 else None)
+
+fig, axes = plt.subplots(1, 2, figsize=(7, 3.4), sharex=True, sharey=True)
+for ax, (bx, by), title in zip(axes, [(ax_x_l2, ax_y_l2), (ax_x_l1, ax_y_l1)],
+                               ["L2 ball (ridge): round — no zeros", "L1 ball (lasso): corners — zeros"]):
+    ax.plot(bx, by, "r-", lw=2, label="constraint")
+    for r in [0.3, 0.6, 0.9, 1.2]:
+        x = ols[0] + r * 1.3 * np.cos(th) - r * 0.4 * np.sin(th)
+        y = ols[1] + r * 0.5 * np.cos(th) + r * 0.9 * np.sin(th)
+        ax.plot(x, y, color="steelblue", lw=1)
+    ax.plot(*ols, "ko", label="OLS solution")
+    ax.set_title(title, fontsize=9)
+    ax.legend(fontsize=7, loc="upper right")
+    ax.set_aspect("equal")
+plt.show()
+```
+
+The picture: the RSS contours are ellipses centered at the OLS solution (off-axis, since the true coefficients are nonzero). The constrained solution is the first contact point. For the round L2 ball, the contact is on the smooth boundary — both coordinates nonzero (ridge shrinks, never zeroes). For the diamond, the contact is at a *corner* — one coordinate exactly zero (lasso selects). The general principle: **zeros come from corners** — any constraint with axis-aligned corners (L1, and the L1's generalizations) produces sparsity; any smooth constraint (L2) produces shrinkage. The geometry of the penalty *is* the geometry of the solution — the same lesson as [A.4](a-4-ridge-regression.qmd)'s spectral view, in the coefficient space instead of the singular-value space.
+</details>
+
+**Exercise 3.** The lasso's bias, measured: on a dataset with 5 true signals and 95 noise features, compare OLS, ridge, and lasso at their cross-validated $\lambda$ — measure (a) the MSE of the coefficient estimates, (b) the *selection* accuracy (which features are nonzero), (c) the prediction MSE on held-out data. State the regime where lasso wins and where it loses.
+
+<details>
+<summary>Solution</summary>
+
+```{pyodide}
+#| edit: false
+import numpy as np
+rng = np.random.default_rng(3)
+n, p = 100, 100
+X = rng.normal(size=(n, p))
+beta_true = np.zeros(p); beta_true[:5] = [2., -2., 1.5, -1., 1.]
+y = X @ beta_true + rng.normal(0, 1, n)
+Xte = rng.normal(size=(500, p)); yte = Xte @ beta_true + rng.normal(0, 1, 500)
+
+def lasso_cd(X, y, lam, iters=3000):
+    beta = np.zeros(X.shape[1])
+    for _ in range(iters):
+        for j in range(X.shape[1]):
+            r = y - X @ beta + X[:, j] * beta[j]
+            rho = X[:, j] @ r
+            beta[j] = np.sign(rho) * max(abs(rho) - lam, 0) / (X[:, j] @ X[:, j])
+    return beta
+
+b_ols = np.linalg.lstsq(X, y, rcond=None)[0]
+b_ridge = np.linalg.solve(X.T @ X + 10 * np.eye(p), X.T @ y)
+b_lasso = lasso_cd(X, y, 0.15)
+
+print(f"{'':>22} {'OLS':>10} {'ridge':>10} {'lasso':>10}")
+print(f"{'coef MSE':>22} {((b_ols-beta_true)**2).mean():>10.4f} "
+      f"{((b_ridge-beta_true)**2).mean():>10.4f} {((b_lasso-beta_true)**2).mean():>10.4f}")
+print(f"{'pred MSE (held-out)':>22} {((yte-Xte@b_ols)**2).mean():>10.4f} "
+      f"{((yte-Xte@b_ridge)**2).mean():>10.4f} {((yte-Xte@b_lasso)**2).mean():>10.4f}")
+print(f"{'nonzero coefs':>22} {np.sum(b_ols!=0):>10} {np.sum(b_ridge!=0):>10} "
+      f"{np.sum(b_lasso!=0):>10}")
+print(f"{'true signals recovered':>22} {np.sum(np.abs(b_ols[:5])>0.1):>5}/5 "
+      f"{np.sum(np.abs(b_ridge[:5])>0.1):>5}/5 {np.sum(np.abs(b_lasso[:5])>0.1):>5}/5")
+```
+
+Lasso wins in the sparse regime: it recovers the 5 true signals, zeroes the 95 noise features, and has the best held-out prediction MSE — the variance reduction from elimination beats the bias from zeroing. It loses when the truth is *dense* (many small true effects): zeroing them all introduces more bias than the variance is worth, and ridge's smooth shrinkage is better. The rule: **lasso when you believe the signal is sparse (few true features), ridge when it's dense (many small effects)** — the [5.1](../part-05-regularization-high-dimensions/05-1-feature-selection.qmd) selection-vs-shrinkage distinction, with the bias–variance trade-off ([4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd)) as the reason. Elastic net ([5.4](../part-05-regularization-high-dimensions/05-4-elastic-net.qmd)) hedges when you don't know.
+</details>
+
+## 4. Advanced Information & Pitfalls
+
+- **The kink is the feature.** Every property that makes lasso annoying (no closed form, non-unique solutions under heavy collinearity) is the same property that makes it useful (sparsity, selection). You cannot have one without the other — the non-differentiability *is* the selection mechanism.
+- **Non-uniqueness under collinearity:** with two identical features, any split of the coefficient between them has the same L1 norm — the lasso picks one (arbitrarily, by the solver's path). Ridge splits evenly. If interpretability matters, this is a real caveat: "the lasso selected feature A" can mean "A and B are identical and the solver happened to pick A."
+- **Standardization is non-negotiable** — the dead zone is in coefficient units, so unscaled features get unfairly annihilated or unfairly spared. Center *and* scale, always.
+- **$\lambda$ selection is by cross-validation** ([4.6](../part-04-validation-model-selection/04-6-hyperparameter-tuning.qmd)) — the path (Exercise in Section 3) makes it cheap: fit the whole path, pick the $\lambda$ with the lowest CV error. The "1-SE rule" (largest $\lambda$ within one standard error of the minimum) gives a sparser, more stable model at nearly the same accuracy.
+- **The lasso's $\lambda$ has a null-distribution interpretation:** $\lambda_{\max} = \max_j |2x_j^\top y|$ is the smallest $\lambda$ that zeroes everything — the path always starts there. This is the lasso's "screening" rule: features enter the path in order of their correlation with $y$.
+
+### Read & Refactor AI Code
+
+This AI-generated lasso solver has **three bugs**. Diagnose before running the fixed version.
+
+```python
+# AI-generated: one coordinate-descent sweep for the lasso (will not run here)
+def lasso_cd(X, y, lam, iters=100):
+    beta = np.zeros(X.shape[1])
+    for _ in range(iters):
+        for j in range(X.shape[1]):
+            r = y - X @ beta                    # BUG 1
+            rho = X[:, j] @ r
+            beta[j] = np.sign(rho) * max(abs(rho) - lam, 0) / (X[:, j] @ X[:, j])
+    return beta
+
+def standardize_lasso(X):
+    return X / X.std(axis=0)                    # BUG 2
+
+X = np.array([[1, 2], [1, 4], [1, 6]])          # BUG 3
+```
+
+<details>
+<summary>What's wrong, and the fix</summary>
+
+1. **The residual doesn't add back the current coordinate:** `r = y - X @ beta` excludes $\beta_j$'s own contribution — the coordinate update needs the partial residual $r = y - X\beta + x_j\beta_j$ (the residual *as if* $\beta_j$ were zero). As written, the update double-subtracts $\beta_j$ and the iteration diverges.
+2. **Standardization without centering** (same bug as [A.4](a-4-ridge-regression.qmd)'s refactor): `X / X.std()` scales but doesn't center — the dead zone is then in the wrong units and the intercept handling breaks. Center *and* scale.
+3. **Integer-typed design matrix** (same bug as [A.1](a-1-normal-equations.qmd) and [A.4](a-4-ridge-regression.qmd)): `np.array([[1, 2], ...])` is int64 — the `@` products and the division silently truncate. Cast to float.
+
+```python
+# fixed
+def standardize_lasso(X):
+    X = np.asarray(X, dtype=float)
+    return (X - X.mean(axis=0)) / X.std(axis=0)
+
+def lasso_cd(X, y, lam, iters=1000):
+    beta = np.zeros(X.shape[1])
+    for _ in range(iters):
+        for j in range(X.shape[1]):
+            r = y - X @ beta + X[:, j] * beta[j]      # partial residual
+            rho = X[:, j] @ r
+            beta[j] = np.sign(rho) * max(abs(rho) - lam, 0) / (X[:, j] @ X[:, j])
+    return beta
+```
+</details>
+
+## 5. Advanced Questions
+
+**Q1.** The KKT conditions as a complete characterization: prove that for the lasso, the KKT conditions (Exercise 1) are not just necessary but *sufficient* — any $\beta$ satisfying them is the global solution. Then state the consequence: the lasso solution is unique when $X$ has full column rank (and may be non-unique when it doesn't — the collinearity caveat), and the active set's coefficients are the OLS solution on the active set *with a sign constraint*.
+
+<details>
+<summary>Hint</summary>
+
+The lasso objective is convex (RSS convex + $\lambda\|\beta\|_1$ convex) — for convex problems, KKT is sufficient. The sign constraint comes from the subgradient's sign matching $\beta_j$'s sign.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+Convexity: RSS is convex in $\beta$ (its Hessian $2X^\top X$ is PSD) and $\lambda\|\beta\|_1$ is convex (a norm), so the objective is convex — and for convex objectives, the KKT conditions are sufficient: any $\beta$ with $0 \in \partial(\text{objective})$ is a global minimizer. The sign constraint: for $\beta_j \ne 0$, the stationarity condition forces $s_j = \text{sign}(\beta_j)$ — the subgradient must match the coefficient's sign, so the active coefficients are the OLS solution on the active set *projected onto the correct orthant*. Uniqueness: when $X$ has full column rank, the active set's OLS solution is unique and the orthant constraint doesn't create alternatives — the lasso solution is unique. Under collinearity (rank-deficient active set), multiple coefficient vectors give the same fit and the same L1 norm — non-unique, and the solver picks one by its path. The practical consequence: the KKT conditions give you a *verification algorithm* — any claimed lasso solution can be checked in $O(np)$ — and the non-uniqueness is exactly the "identical features" caveat of Section 4.
+</details>
+
+**Q2.** The lasso as a Bayesian estimator — the Laplace prior: [A.4](a-4-ridge-regression.qmd) showed ridge is the posterior mode under a Gaussian prior. Show the lasso is the posterior mode under a *Laplace* prior $p(\beta_j) = \frac{1}{2b}e^{-|\beta_j|/b}$ — the log-prior is $-\|\beta\|_1/b$, so the posterior mode minimizes $\text{RSS} + \frac{2\sigma^2}{b}\|\beta\|_1$. Then state the deep connection: the prior's *shape* determines the penalty's *shape* (Gaussian → L2, Laplace → L1), and the Laplace's sharp peak at zero is exactly what produces sparsity.
+
+<details>
+<summary>Hint</summary>
+
+The log of the Laplace density is $-|\beta_j|/b + \text{const}$ — the L1 penalty is the Laplace log-prior, read backwards.
+</details>
+
+<details>
+<summary>Solution</summary>
+
+With $\beta_j \sim \text{Laplace}(0, b)$ i.i.d., the log-prior is $-\sum_j |\beta_j|/b + \text{const}$, so the posterior mode minimizes $\text{RSS}/(2\sigma^2) + \|\beta\|_1/b$ — the lasso objective with $\lambda = 2\sigma^2/b$. The connection: **the penalty is the negative log-prior** — ridge's L2 is the Gaussian's log-density, lasso's L1 is the Laplace's. The Laplace's sharp peak at zero (vs the Gaussian's smooth dome) puts prior mass *at* zero — the prior believes coefficients are exactly zero with high probability, and the posterior mode inherits that belief as exact zeros. This is the same "loss = noise model" dictionary as [A.2](a-2-least-squares-is-mle.qmd), now for priors: Gaussian prior → ridge, Laplace prior → lasso, and (completing the pattern) the "spike-and-slab" prior (a point mass at zero plus a diffuse component) → best-subset selection. The Bayesian view doesn't just re-derive the penalties — it tells you which prior you're *committing to* when you pick one, and the Laplace's sharp peak is a strong belief ("most coefficients are exactly zero") that should be a deliberate choice, not a default.
+</details>
+
+## 6. Complex Questions
+
+**C1 (lasso × [A.3 logistic](a-3-logistic-gradient.qmd) × [5.3](../part-05-regularization-high-dimensions/05-3-lasso-regression.qmd)).** The lasso logistic regression gradient is $X^\top(y - p) - \lambda s$ with $s \in \partial\|\beta\|_1$ — this page's smooth gradient plus [A.5](a-5-lasso-no-closed-form.qmd)'s subgradient. Derive the coordinate-descent update for one coefficient (soft-threshold the quadratic approximation of the log-likelihood), and state why the same kink that makes lasso sparse makes its solver a coordinate-wise soft-threshold. The two derivations compose into the modern sparse-GLM solver — the workhorse of genomics ([5.6](../part-05-regularization-high-dimensions/05-6-high-dimensional.qmd)'s $p \gg n$ regime).
+
+**C2 (lasso × [A.6 PCA](a-6-pca-first-component.qmd) × [9.2](../part-09-unsupervised-learning/09-2-principal-component-analysis.qmd)).** The lasso's selection and PCA's truncation are both answers to "too many features" — but they fail differently. The lasso selects a subset (losing the others' information); PCA keeps all features but compresses them (losing the identity of any single one). Construct a dataset where each fails and the other succeeds: (a) two correlated features where only one matters — lasso picks one (loses the shared signal), PCA keeps both directions (dilutes the signal); (b) many weak features that jointly matter — lasso zeroes most (loses the joint signal), PCA's top components capture it. State the general principle: selection vs compression is a bet on the signal's *sparsity* — and the bet is checkable with the bias–variance trade-off ([4.4](../part-04-validation-model-selection/04-4-bias-variance.qmd)).
+
+## 7. Summary
+
+- The L1 penalty's kink at zero has no derivative — the subgradient $[-1, +1]$ replaces it, and the stationarity condition "$0 \in \partial$" is the lasso's normal equations.
+- Soft-thresholding: $\hat\beta_j = \text{sign}(\hat\beta^{\text{OLS}}_j)\max(|\hat\beta^{\text{OLS}}_j| - \lambda/2, 0)$ — shrink by $\lambda/2$, annihilate below it. The dead zone is the sparsity mechanism.
+- The KKT conditions give every zero a certificate ($|2x_j^\top r| \le \lambda$) and every nonzero a balance — selection is auditable.
+- Zeros come from corners: the L1 diamond's axis-aligned corners are where the RSS contour first touches; the L2 ball's smooth boundary never gives exact zeros.
+- Lasso wins when the signal is sparse, ridge when it's dense — the bet is checkable with held-out MSE.
+- The lasso is the posterior mode under a Laplace prior — the penalty is the negative log-prior, and the prior's sharp peak at zero is the sparsity belief.
+- Next: [A.6 PCA: deriving the first principal component](a-6-pca-first-component.qmd) — the same "constrain and optimize" logic, for variance instead of fit.
