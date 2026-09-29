@@ -1,0 +1,1664 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>13.8 Applications and Next Steps – ML, Statistics &amp; LLM — Interactive Course</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../">
+<link href="../appendix-a-derivations/a-1-normal-equations.qmd" rel="next">
+<link href="../part-13-large-language-models/13-7-evaluation-limitations.html" rel="prev">
+<script src="../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../site_libs/quarto-html/popper.min.js"></script>
+<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../site_libs/bootstrap/bootstrap-84cfdeff8e8ddd510a79be3971e85af5.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script src="../site_libs/quarto-contrib/live-runtime/live-runtime.js" type="module"></script>
+<link href="../site_libs/quarto-contrib/live-runtime/live-runtime.css" rel="stylesheet">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<script type="module" src="../site_libs/quarto-ojs/quarto-ojs-runtime.js"></script>
+<link href="../site_libs/quarto-ojs/quarto-ojs.css" rel="stylesheet">
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+
+<body class="nav-sidebar floating nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="../index.html">
+    <span class="navbar-title">ML, Statistics &amp; LLM — Interactive Course</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll me-auto">
+  <li class="nav-item">
+    <a class="nav-link active" href="../index.html" aria-current="page"> 
+<span class="menu-text">Home</span></a>
+  </li>  
+</ul>
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/EnduringChung/ml-interactive-course"> <i class="bi bi-github" role="img">
+</i> 
+<span class="menu-text"></span></a>
+  </li>  
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../part-13-large-language-models/13-1-foundations.html">Part 13 — Large Language Models</a></li><li class="breadcrumb-item"><a href="../part-13-large-language-models/13-8-applications-next-steps.html">13.8 Applications and Next Steps</a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">ML, Statistics &amp; LLM — Interactive Course</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 0 — Python &amp; Data Foundations</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-00-python-foundations/00-1-python-basics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">0.1 Python for Numerical Work</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-00-python-foundations/00-2-numpy.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">0.2 NumPy</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-00-python-foundations/00-3-pandas.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">0.3 pandas</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-00-python-foundations/00-4-visualization-eda.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">0.4 Visualisation &amp; Exploratory Analysis</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-00-python-foundations/00-5-data-splitting.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">0.5 Data Splitting</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 1 — Statistics Bridge for ML</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-01-statistics-bridge/01-1-descriptive-statistics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">1.1 Descriptive Statistics</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-01-statistics-bridge/01-2-relationships.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">1.2 Relationships Between Variables</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-01-statistics-bridge/01-3-probability-essentials.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">1.3 Probability Essentials</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-01-statistics-bridge/01-4-statistical-inference.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">1.4 Statistical Inference</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-01-statistics-bridge/01-5-resampling-intuition.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">1.5 Resampling Intuition</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 2 — Linear Regression &amp; Prediction</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-1-regression-setup.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.1 The Regression Problem</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-2-simple-linear-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.2 Simple Linear Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-3-accuracy-of-coefficients.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.3 Accuracy of the Coefficients</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-4-accuracy-of-model.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.4 Accuracy of the Full Model</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-5-multiple-linear-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.5 Multiple Linear Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-6-categorical-predictors.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.6 Categorical Predictors</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-7-interaction-terms.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.7 Interaction Terms</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-8-nonlinear-transformations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.8 Nonlinear Feature Transformations</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-9-knn-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.9 KNN Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-02-linear-regression/02-10-regression-assumptions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">2.10 Regression Assumptions &amp; Diagnostics</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 3 — Classification &amp; GLMs</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-1-classification-fundamentals.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.1 Classification Fundamentals</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-1-5-auprc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.1.5 AUPRC for Skewed Datasets</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-2-why-not-linear-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.2 Why Not Linear Regression for Categories?</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-3-logistic-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.3 Logistic Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-4-generative-classifiers.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.4 Generative Classifiers: LDA, QDA, Naive Bayes</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-5-knn-classification.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.5 KNN Classification</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-6-generalized-linear-models.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.6 Generalized Linear Models</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-03-classification-glm/03-7-model-comparison.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">3.7 Classification Model Comparison</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 4 — Validation &amp; Model Selection</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-04-validation-model-selection/04-1-generalization-problem.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">4.1 The Generalization Problem</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-04-validation-model-selection/04-2-validation-set.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">4.2 The Validation Set Approach</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-04-validation-model-selection/04-3-cross-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">4.3 Cross-Validation</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-04-validation-model-selection/04-4-bias-variance.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">4.4 The Bias–Variance Trade-off</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-04-validation-model-selection/04-5-bootstrap.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">4.5 The Bootstrap</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-04-validation-model-selection/04-6-hyperparameter-tuning.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">4.6 Hyperparameter Tuning</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 5 — Regularization &amp; High Dimensions</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-05-regularization-high-dimensions/05-1-feature-selection.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">5.1 Feature Selection</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-05-regularization-high-dimensions/05-2-ridge-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">5.2 Ridge Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-05-regularization-high-dimensions/05-3-lasso-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">5.3 Lasso Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-05-regularization-high-dimensions/05-4-elastic-net.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">5.4 Elastic Net</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-05-regularization-high-dimensions/05-5-pcr-pls.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">5.5 PCR and PLS</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-05-regularization-high-dimensions/05-6-high-dimensional.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">5.6 High-Dimensional Data</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 6 — Nonlinear Regression</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-7" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-06-nonlinear-regression/06-1-polynomial-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">6.1 Polynomial Regression — Beyond the Line</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-06-nonlinear-regression/06-2-step-functions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">6.2 Step Functions</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-06-nonlinear-regression/06-3-basis-functions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">6.3 Basis Functions — The General Recipe</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-06-nonlinear-regression/06-4-regression-splines.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">6.4 Regression Splines</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-06-nonlinear-regression/06-5-smoothing-splines.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">6.5 Smoothing Splines</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-06-nonlinear-regression/06-6-local-regression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">6.6 Local Regression (LOESS)</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-06-nonlinear-regression/06-7-gam.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">6.7 Generalized Additive Models</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 7 — Trees &amp; Ensembles</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-8" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-07-trees-ensembles/07-1-decision-trees.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">7.1 Decision Trees</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-07-trees-ensembles/07-2-advantages-limitations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">7.2 Advantages and Limitations of Trees</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-07-trees-ensembles/07-3-bagging.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">7.3 Bagging</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-07-trees-ensembles/07-4-random-forests.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">7.4 Random Forests</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-07-trees-ensembles/07-5-gradient-boosting.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">7.5 Gradient Boosting</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-07-trees-ensembles/07-6-modern-boosting.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">7.6 Modern Boosting Libraries</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-07-trees-ensembles/07-7-bart.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">7.7 Bayesian Additive Regression Trees (BART)</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-9" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 8 — Support Vector Machines</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-9" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-9" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-08-svm/08-1-geometry.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">8.1 Geometry Essentials</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-08-svm/08-2-maximal-margin.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">8.2 The Maximal-Margin Classifier</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-08-svm/08-3-soft-margin.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">8.3 The Soft-Margin Classifier</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-08-svm/08-4-kernel-svm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">8.4 Kernel SVM</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-08-svm/08-5-svm-vs-logistic.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">8.5 SVM vs Logistic Regression</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-08-svm/08-6-multiclass-svm.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">8.6 Multiclass SVM</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-10" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 9 — Unsupervised Learning</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-10" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-10" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-09-unsupervised-learning/09-1-unsupervised-mindset.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">9.1 The Unsupervised Mindset</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-09-unsupervised-learning/09-2-principal-component-analysis.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">9.2 Principal Component Analysis</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-09-unsupervised-learning/09-3-missing-values.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">9.3 Missing Values &amp; Matrix Completion</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-09-unsupervised-learning/09-4-k-means.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">9.4 K-means Clustering</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-09-unsupervised-learning/09-5-hierarchical-clustering.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">9.5 Hierarchical Clustering</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-09-unsupervised-learning/09-6-practical-clustering.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">9.6 Practical Clustering Issues</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-11" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 10 — Deep Learning with PyTorch</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-11" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-11" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-10-deep-learning/10-1-pytorch-foundations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">10.1 PyTorch Foundations</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-10-deep-learning/10-2-single-layer-networks.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">10.2 Single-Layer Neural Networks</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-10-deep-learning/10-3-multilayer-networks.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">10.3 Multilayer Neural Networks</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-10-deep-learning/10-4-gradient-descent-backprop.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">10.4 Gradient Descent and Backpropagation</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-10-deep-learning/10-5-regularization-for-nns.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">10.5 Regularization for Neural Networks</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-10-deep-learning/10-6-convolutional-nets.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">10.6 Convolutional Neural Networks</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-10-deep-learning/10-7-recurrent-networks.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">10.7 Recurrent Neural Networks</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-10-deep-learning/10-8-lstm-gru.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">10.8 LSTM and GRU</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-10-deep-learning/10-9-attention-transformers.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">10.9 Attention and Transformers</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-10-deep-learning/10-10-when-deep-learning-is-appropriate.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">10.10 When Deep Learning Is Appropriate</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-12" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 11 — Survival Analysis &amp; Censored Data</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-12" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-12" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-11-survival-analysis/11-1-why-survival-is-special.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">11.1 Why Survival Data Is Special</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-11-survival-analysis/11-2-kaplan-meier.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">11.2 Kaplan–Meier Survival Curves</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-11-survival-analysis/11-3-log-rank-test.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">11.3 The Log-Rank Test</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-11-survival-analysis/11-4-hazard-functions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">11.4 Hazard Functions</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-11-survival-analysis/11-5-cox-model.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">11.5 Cox Proportional Hazards Regression</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-13" role="navigation" aria-expanded="false">
+ <span class="menu-text">Part 12 — Multiple Testing &amp; Bioinformatics Statistics</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-13" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-13" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">12.1 Hypothesis-Test Review</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-12-multiple-testing-bioinformatics/12-2-why-multiple-testing-is-dangerous.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">12.2 Why Multiple Testing Is Dangerous</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-12-multiple-testing-bioinformatics/12-3-family-wise-error-rate.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">12.3 Family-Wise Error Rate</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">12.4 False Discovery Rate</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+ <span class="menu-text">part-12-multiple-testing-bioinformatics/12-5-resampling-for-p-values.qmd</span>
+  </li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-12-multiple-testing-bioinformatics/12-6-differential-expression.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Coming soon</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-14" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part 13 — Large Language Models</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-14" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-14" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-13-large-language-models/13-1-foundations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">13.1 LLM Foundations</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-13-large-language-models/13-2-transformer-architecture.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">13.2 Transformer Architecture</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-13-large-language-models/13-3-training-pipeline.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">13.3 Training Pipeline</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-13-large-language-models/13-4-model-families.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">13.4 Model Families and Variants</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-13-large-language-models/13-5-local-deployment.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">13.5 Local Deployment</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-13-large-language-models/13-6-customization.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">13.6 Customization: RAG, LoRA, Agents</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-13-large-language-models/13-7-evaluation-limitations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">13.7 Evaluation and Limitations</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../part-13-large-language-models/13-8-applications-next-steps.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">13.8 Applications and Next Steps</span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-15" role="navigation" aria-expanded="false">
+ <span class="menu-text">Appendix A — Deriving the Formulas</span></a>
+          <a class="sidebar-item-toggle text-start collapsed" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-15" role="navigation" aria-expanded="false" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-15" class="collapse list-unstyled sidebar-section depth1 ">  
+          <li class="sidebar-item">
+ <span class="menu-text">appendix-a-derivations/a-4-ridge-closed-form.qmd</span>
+  </li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul class="collapse">
+  <li><a href="#basic-concept" id="toc-basic-concept" class="nav-link active" data-scroll-target="#basic-concept">1. Basic Concept</a></li>
+  <li><a href="#concept-questions" id="toc-concept-questions" class="nav-link" data-scroll-target="#concept-questions">2. Concept Questions</a></li>
+  <li><a href="#drills-exercises" id="toc-drills-exercises" class="nav-link" data-scroll-target="#drills-exercises">3. Drills &amp; Exercises</a></li>
+  <li><a href="#advanced-information-pitfalls" id="toc-advanced-information-pitfalls" class="nav-link" data-scroll-target="#advanced-information-pitfalls">4. Advanced Information &amp; Pitfalls</a></li>
+  <li><a href="#advanced-questions" id="toc-advanced-questions" class="nav-link" data-scroll-target="#advanced-questions">5. Advanced Questions</a></li>
+  <li><a href="#complex-questions" id="toc-complex-questions" class="nav-link" data-scroll-target="#complex-questions">6. Complex Questions</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">7. Summary</a></li>
+  </ul>
+<div class="toc-actions"><ul class="collapse"><li><a href="https://github.com/EnduringChung/ml-interactive-course/edit/main/part-13-large-language-models/13-8-applications-next-steps.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/EnduringChung/ml-interactive-course/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../part-13-large-language-models/13-1-foundations.html">Part 13 — Large Language Models</a></li><li class="breadcrumb-item"><a href="../part-13-large-language-models/13-8-applications-next-steps.html">13.8 Applications and Next Steps</a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title">13.8 Applications and Next Steps</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p>The course ends where the work begins: choosing where an LLM earns its keep. This page maps the application landscape — with the course’s biological-data thread made explicit — and turns the last thirteen parts into a decision procedure you can reuse. The summary is the course itself: classical models for structure, deep learning for perception, LLMs for language, and statistics holding all of it honest.</p>
+<blockquote class="blockquote">
+<p><strong>Tier 1 — concept page with light compute; every cell below runs live (NumPy only).</strong></p>
+</blockquote>
+<section id="basic-concept" class="level2">
+<h2 class="anchored" data-anchor-id="basic-concept">1. Basic Concept</h2>
+<p><strong>The application patterns, by what the model is asked to do:</strong></p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Pattern</th>
+<th>The model does</th>
+<th>Course tools</th>
+<th>Biological example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Grounded Q&amp;A</strong></td>
+<td>answers from your documents</td>
+<td>RAG (<a href="../part-13-large-language-models/13-6-customization.html">13.6</a>)</td>
+<td>query a lab’s protocol library</td>
+</tr>
+<tr class="even">
+<td><strong>Structured extraction</strong></td>
+<td>text → JSON/fields</td>
+<td>prompting + schema</td>
+<td>pull variants from clinical notes</td>
+</tr>
+<tr class="odd">
+<td><strong>Code &amp; analysis</strong></td>
+<td>writes and runs code</td>
+<td>agents (<a href="../part-13-large-language-models/13-6-customization.html">13.6</a>)</td>
+<td>a pandas pipeline from a plain-English spec</td>
+</tr>
+<tr class="even">
+<td><strong>Literature triage</strong></td>
+<td>summarizes, compares, cites</td>
+<td>RAG + long context</td>
+<td>200 papers → a structured table</td>
+</tr>
+<tr class="odd">
+<td><strong>Specialist behavior</strong></td>
+<td>domain style/format</td>
+<td>LoRA (<a href="../part-13-large-language-models/13-6-customization.html">13.6</a>)</td>
+<td>write in your lab’s report format</td>
+</tr>
+<tr class="even">
+<td><strong>Perceptual/scientific</strong></td>
+<td>sequences → structure/function</td>
+<td>protein LMs (ESM, AlphaFold-adjacent)</td>
+<td>variant effect prediction</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The biological thread, made explicit.</strong> The course’s running theme — biological data — has a natural LLM layer: <strong>protein language models</strong> (ESM-2) treat amino-acid sequences as a language, pretrained on ~65M sequences, and learn the same way <a href="../part-13-large-language-models/13-3-training-pipeline.html">13.3</a> describes — next-token (next-residue) prediction. The applications mirror the text ones: variant effect prediction (does this mutation break the protein? — a classification head on the LM’s embeddings, <a href="../part-03-classification-glm/03-4-generative-classifiers.html">3.4</a>’s generative story), protein design (sampling from the LM), and function annotation (zero-shot classification from sequence alone). The statistics you now own — multiple testing for genomics (<a href="../part-12-multiple-testing-bioinformatics/12-1-hypothesis-test-review.html">12.x</a>), survival for censored outcomes (<a href="../part-11-survival-analysis/11-1-why-survival-is-special.html">11.x</a>), honest evaluation (<a href="../part-13-large-language-models/13-7-evaluation-limitations.html">13.7</a>) — is exactly what those applications need to be believed.</p>
+<p><strong>The decision procedure</strong> (the course in one flow):</p>
+<ol type="1">
+<li><strong>Is the structure in the data or in the language?</strong> Tables → <a href="../part-07-trees-ensembles/07-1-decision-trees.html">7.x</a> trees/boosting; images/sequences → <a href="../part-10-deep-learning/10-1-pytorch-foundations.html">10.x</a> deep nets; text → LLMs.</li>
+<li><strong>Is the knowledge in the model or in your documents?</strong> In the model → prompt it. In your documents → RAG. In your data’s <em>style</em> → LoRA.</li>
+<li><strong>What does failure cost?</strong> Low → use it directly. High → ground it (RAG), verify it (tools), route it (confidence), monitor it (<a href="../part-13-large-language-models/13-7-evaluation-limitations.html">13.7</a>).</li>
+<li><strong>What would change your mind?</strong> Pre-register the eval before looking (<a href="../part-12-multiple-testing-bioinformatics/12-3-family-wise-error-rate.html">12.3</a>, <a href="../part-13-large-language-models/13-7-evaluation-limitations.html">13.7</a>).</li>
+</ol>
+<p><strong>Worked example</strong> — the cost of a real workflow, computed: a literature-triage pipeline over 10,000 papers.</p>
+<div>
+<div id="pyodide-1" class="exercise-cell">
+
+</div>
+<script type="pyodide-1-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWUsImZpZy1oZWlnaHQiOjMuMiwiZmlnLXdpZHRoIjo3fSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuaW1wb3J0IG1hdHBsb3RsaWIucHlwbG90IGFzIHBsdFxuXG5uX3BhcGVycyA9IDEwXzAwMFxuIyBwYXRoIEE6IGh1bWFuIHJlYWRpbmcgKDIwIG1pbi9wYXBlcikgdnMgcGF0aCBCOiBMTE0gdHJpYWdlICsgaHVtYW4gcmV2aWV3IG9mIHRoZSB0b3AgMjAlXG5odW1hbl9taW5fcGVyX3BhcGVyID0gMjBcbmxsbV9jb3N0X3Blcl9wYXBlciA9IDAuMDAyICAgICAgICAgICMgQVBJOiB+MjAwMCB0b2tlbnMgQCAkMS8xTVxucmV2aWV3X3JhdGUgPSAwLjIwICAgICAgICAgICAgICAgICAgIyBMTE0gZmxhZ3MgMjAlIGZvciBodW1hbiByZXZpZXdcbmh1bWFuX21pbl9mbGFnZ2VkID0gMTAgICAgICAgICAgICAgICMgcmV2aWV3IGlzIGZhc3RlciB0aGFuIGZ1bGwgcmVhZFxuXG5ob3Vyc19BID0gbl9wYXBlcnMgKiBodW1hbl9taW5fcGVyX3BhcGVyIC8gNjBcbmhvdXJzX0IgPSAobl9wYXBlcnMgKiByZXZpZXdfcmF0ZSAqIGh1bWFuX21pbl9mbGFnZ2VkXG4gICAgICAgICAgICsgbl9wYXBlcnMgKiAoMSAtIHJldmlld19yYXRlKSAqIDApIC8gNjBcbmNvc3RfQiA9IG5fcGFwZXJzICogbGxtX2Nvc3RfcGVyX3BhcGVyXG5cbmZpZywgYXggPSBwbHQuc3VicGxvdHMoZmlnc2l6ZT0oNywgMy4yKSlcbmF4LmJhcihbXCJodW1hbiBvbmx5XCIsIFwiTExNIHRyaWFnZSArIHJldmlld1wiXSwgW2hvdXJzX0EsIGhvdXJzX0JdLFxuICAgICAgIGNvbG9yPVtcImdyYXlcIiwgXCJzdGVlbGJsdWVcIl0pXG5heC5zZXQoeWxhYmVsPVwiaG91cnNcIiwgdGl0bGU9ZlwiMTBrIHBhcGVyczoge2hvdXJzX0E6LjBmfWggdnMge2hvdXJzX0I6LjBmfWggXCJcbiAgICAgICBmXCIoJHtjb3N0X0I6LjBmfSBBUEkgY29zdClcIilcbmZvciBpLCB2IGluIGVudW1lcmF0ZShbaG91cnNfQSwgaG91cnNfQl0pOlxuICAgIGF4LnRleHQoaSwgdiArIDUsIGZcInt2Oi4wZn1oXCIsIGhhPVwiY2VudGVyXCIpXG5wbHQuc2hvdygpXG5wcmludChmXCJzcGVlZHVwOiB7aG91cnNfQS9ob3Vyc19COi4wZn14IHwgdGhlIGNhdGNoOiB0aGUgODAlIGF1dG8tZHJvcHBlZCBwYXBlcnMgXCJcbiAgICAgIGZcImFyZSBkcm9wcGVkIG9uIHRoZSBMTE0ncyBqdWRnbWVudCDigJQgWzEzLjddKDEzLTctZXZhbHVhdGlvbi1saW1pdGF0aW9ucy5xbWQpJ3MgdGFpbCByaXNrXCIpIn0=
+</script>
+</div>
+<p>The speedup is real and large; the catch is the <a href="../part-13-large-language-models/13-7-evaluation-limitations.html">13.7</a> lesson — the auto-dropped 80% are dropped on the model’s judgment, and the errors are concentrated in the tail (the papers that <em>look</em> irrelevant but aren’t). The honest deployment: sample the dropped papers for audit, and measure the triage’s recall on a labeled subset before trusting it.</p>
+</section>
+<section id="concept-questions" class="level2">
+<h2 class="anchored" data-anchor-id="concept-questions">2. Concept Questions</h2>
+<ol type="1">
+<li>The decision procedure’s first question is “structure in the data or in the language?” For a clinical-notes dataset (free text + structured fields), which parts go to which tool, and what is the interface between them?</li>
+<li>Protein LMs and text LMs share the <a href="../part-13-large-language-models/13-3-training-pipeline.html">13.3</a> recipe. What is the “vocabulary” of a protein LM, why is it so much smaller than a text tokenizer’s, and what does that imply for the model’s context length in residues?</li>
+<li>The triage example’s 20% review rate is a design choice. What does the optimal rate depend on, and how would you find it? (Frame it as the <a href="../part-04-validation-model-selection/04-6-hyperparameter-tuning.html">4.6</a> tuning problem it is.)</li>
+<li>“The model is a junior colleague, not an oracle.” Map each half of that metaphor to a specific practice from the course (two for “junior colleague,” two for “not an oracle”).</li>
+<li>What is the single most important habit from the first twelve parts that an LLM user must keep, and why is it most at risk exactly when the model is most fluent?</li>
+</ol>
+<details>
+<summary>
+Answers
+</summary>
+<ol type="1">
+<li>The structured fields (labs, diagnoses, dates) go to the classical stack — a database, then <a href="../part-07-trees-ensembles/07-1-decision-trees.html">7.x</a> models or <a href="../part-11-survival-analysis/11-1-why-survival-is-special.html">11.x</a> survival models for prediction; the free text goes to the LLM for extraction (text → structured fields) and grounded Q&amp;A (RAG over the corpus). The interface is the <em>schema</em>: the LLM’s structured output becomes the database’s input, and the classical models consume the database. Neither tool does the other’s job well — the art is the seam.</li>
+<li>The vocabulary is the 20 amino acids (+ a few special tokens) — ~22 tokens vs a text tokenizer’s 32k–128k. Sequences are short (hundreds to ~2000 residues), so the context window is a non-issue — a protein LM can see an entire protein in one pass. The small vocabulary also means the model spends its capacity on <em>structure</em> (which residues co-occur, which are conserved) rather than on a large lexical inventory — the same objective, a very different language.</li>
+<li>The optimal rate is a cost–risk trade-off: review more when the cost of a missed relevant paper is high (a systematic review for guidelines) and the review is cheap; review less when the volume is overwhelming and the cost of a miss is low (a first-pass scan). Find it like any <a href="../part-04-validation-model-selection/04-6-hyperparameter-tuning.html">4.6</a> hyperparameter: sweep the rate on a labeled dev set, plot the recall–cost curve, pick the knee for your risk tolerance. The metric is <em>recall on the relevant class</em> — the <a href="../part-03-classification-glm/03-1-5-auprc.html">3.1.5</a> lesson: for a rare-but-important class, accuracy is the wrong objective.</li>
+<li>Junior colleague: it can draft, summarize, and code — but you review its work (human-in-the-loop); it has broad but shallow knowledge — you supply the domain context (RAG, your data). Not an oracle: it hallucinates fluently (<a href="../part-13-large-language-models/13-7-evaluation-limitations.html">13.7</a>) — you verify its claims against sources; it has no persistent memory or accountability — you own the decision and the audit trail.</li>
+<li><strong>Verify against held-out data.</strong> The model’s fluency is the most dangerous property in the course: it makes unverified output <em>feel</em> correct, and the feeling scales with the model’s quality. Every statistical habit — split before you look, stratify the eval, pre-register the primary metric, distrust the winner — exists because humans are bad at self-auditing, and the LLM is a fluent generator of things to self-audit. The habit is most at risk exactly when the model is most fluent, because fluency is the strongest possible “looks right” signal.</li>
+</ol>
+</details>
+</section>
+<section id="drills-exercises" class="level2">
+<h2 class="anchored" data-anchor-id="drills-exercises">3. Drills &amp; Exercises</h2>
+<section id="drills" class="level3">
+<h3 class="anchored" data-anchor-id="drills">Drills</h3>
+<p>Predict, then run.</p>
+<div>
+<div id="pyodide-2" class="exercise-cell">
+
+</div>
+<script type="pyodide-2-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiIyB0aGUgdm9jYWJ1bGFyeSBvZiBhIHByb3RlaW4gTE0gdnMgYSB0ZXh0IExNXG5hYV92b2NhYiA9IDIwICsgMiAgICAgICAgICAgICAgICAgICAgIyAyMCBhbWlubyBhY2lkcyArIHBhZC91bmtcbnRleHRfdm9jYWIgPSAzMjAwMFxucHJpbnQoZlwicHJvdGVpbiB2b2NhYjoge2FhX3ZvY2FifSB8IHRleHQgdm9jYWI6IHt0ZXh0X3ZvY2FifSBcIlxuICAgICAgZlwiKHt0ZXh0X3ZvY2FiL2FhX3ZvY2FiOi4wZn14IGxhcmdlcilcIilcbnByaW50KGZcImEgMTAwMC1yZXNpZHVlIHByb3RlaW4gPSAxMDAwIHRva2VuczsgYSAxMDAwLXdvcmQgZG9jdW1lbnQgPSB+MTMwMCB0b2tlbnNcIilcbnByaW50KFwiLT4gYSBwcm90ZWluIExNIHNlZXMgYSB3aG9sZSBwcm90ZWluIGluIG9uZSBwYXNzOyB0aGUgY29udGV4dCB3aW5kb3cgaXMgYSBub24taXNzdWVcIikifQ==
+</script>
+</div>
+<div>
+<div id="pyodide-3" class="exercise-cell">
+
+</div>
+<script type="pyodide-3-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiIyB0aGUgdHJpYWdlIHJlY2FsbC1jb3N0IGN1cnZlOiBzd2VlcCB0aGUgcmV2aWV3IHJhdGVcbmltcG9ydCBudW1weSBhcyBucFxucm5nID0gbnAucmFuZG9tLmRlZmF1bHRfcm5nKDApXG5uLCBuX3JlbCA9IDEwMDAwLCA1MDAgICAgICAgICAgICAgICAgIyAxMGsgcGFwZXJzLCA1MDAgdHJ1bHkgcmVsZXZhbnRcbiMgdGhlIExMTSByYW5rcyBwYXBlcnM7IHJlbGV2YW50IHBhcGVycyBhcmUgdW5pZm9ybWx5IGRpc3RyaWJ1dGVkIGluIHRoZSByYW5rXG5yYW5rcyA9IG5wLmFyYW5nZShuKVxucmVjYWxsID0gbnAuYXJyYXkoWyAocmFua3MgPCBuICogcikuc3VtKCkgLyBuX3JlbCBmb3IgciBpblxuICAgICAgICAgICAgICAgICAgIFswLjA1LCAwLjEsIDAuMiwgMC4zLCAwLjUsIDEuMF0gXSlcbmNvc3QgPSBucC5hcnJheShbbiAqIHIgKiAxMCAvIDYwIGZvciByIGluIFswLjA1LCAwLjEsIDAuMiwgMC4zLCAwLjUsIDEuMF1dKVxuZm9yIHIsIHJlYywgYyBpbiB6aXAoWzAuMDUsIDAuMSwgMC4yLCAwLjMsIDAuNSwgMS4wXSwgcmVjYWxsLCBjb3N0KTpcbiAgICBwcmludChmXCJyZXZpZXcge3I6PjQuMCV9OiByZWNhbGwge3JlYzouM2Z9LCBjb3N0IHtjOi4wZn0gaHVtYW4taG91cnNcIikifQ==
+</script>
+</div>
+<div>
+<div id="pyodide-4" class="exercise-cell">
+
+</div>
+<script type="pyodide-4-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiIyB0aGUgaW50ZXJmYWNlOiBMTE0gc3RydWN0dXJlZCBvdXRwdXQgLT4gY2xhc3NpY2FsIG1vZGVsIGlucHV0XG5pbXBvcnQganNvblxubm90ZSA9IFwiUGF0aWVudCBoYXMgZWxldmF0ZWQgY3JlYXRpbmluZSAoMS45KSBhbmQgcmVkdWNlZCBlR0ZSICg0NSkuXCJcbiMgdGhlIExMTSdzIGpvYjogZXh0cmFjdCBzdHJ1Y3R1cmVkIGZpZWxkcyAodGhpcyBpcyB0aGUgc2NoZW1hIGludGVyZmFjZSlcbmV4dHJhY3RlZCA9IHtcImNyZWF0aW5pbmVcIjogMS45LCBcImVnZnJcIjogNDUsIFwiY2tkX3N0YWdlX2hpbnRcIjogM31cbiMgdGhlIGNsYXNzaWNhbCBtb2RlbCdzIGpvYjogY29uc3VtZSB0aGUgZmllbGRzIChhIFsxMS41XSBDb3ggbW9kZWwsIGEgWzcueF0gdHJlZSlcbnByaW50KFwiTExNIG91dHB1dCAoSlNPTik6XCIsIGpzb24uZHVtcHMoZXh0cmFjdGVkKSlcbnByaW50KFwiLT4gZmVlZHMgYSBzdXJ2aXZhbCBtb2RlbCAvIHJpc2sgY2FsY3VsYXRvciDigJQgdGhlIHNlYW0gYmV0d2VlbiB0aGUgdHdvIHN0YWNrc1wiKSJ9
+</script>
+</div>
+<div>
+<div id="pyodide-5" class="exercise-cell">
+
+</div>
+<script type="pyodide-5-contents">
+eyJhdHRyIjp7ImVkaXQiOnRydWUsImV2YWwiOnRydWV9LCJjb2RlIjoiIyB0aGUgYXVkaXQ6IHNhbXBsZSB0aGUgYXV0by1kcm9wcGVkIHBhcGVyc1xuaW1wb3J0IG51bXB5IGFzIG5wXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoMClcbmRyb3BwZWQgPSA4MDAwXG5hdWRpdF9uID0gMjAwXG5hdWRpdCA9IHJuZy5jaG9pY2UoZHJvcHBlZCwgYXVkaXRfbiwgcmVwbGFjZT1GYWxzZSlcbiMgaWYgMyBvZiAyMDAgYXVkaXRlZCBkcm9wcyB3ZXJlIGFjdHVhbGx5IHJlbGV2YW50LCB0aGUgdHJpYWdlIG1pc3NlZCB+MS41JVxucHJpbnQoZlwiYXVkaXQge2F1ZGl0X259IG9mIHtkcm9wcGVkfSBkcm9wcGVkIHBhcGVyczsgXCJcbiAgICAgIGZcImVhY2ggbWlzc2VkIHJlbGV2YW50IHBhcGVyID0gYSBzaWxlbnQgZXJyb3IgKFsxMy43XSgxMy03LWV2YWx1YXRpb24tbGltaXRhdGlvbnMucW1kKSB0YWlsKVwiKSJ9
+</script>
+</div>
+</section>
+<section id="exercises-with-solutions" class="level3">
+<h3 class="anchored" data-anchor-id="exercises-with-solutions">Exercises (with solutions)</h3>
+<p><strong>Exercise 1.</strong> Build the triage eval: simulate 10,000 papers with 500 relevant, an LLM ranker with a known recall–rank curve, and compute (a) the recall at each review rate, (b) the <em>precision</em> of the review queue (what fraction of flagged papers are relevant — the number that determines whether reviewers trust the tool), (c) the <a href="../part-03-classification-glm/03-1-5-auprc.html">3.1.5</a> AUPRC of the ranker. State which of the three numbers you’d report to a hospital’s review board and why.</p>
+<details>
+<summary>
+Solution
+</summary>
+<div>
+<div id="pyodide-6" class="exercise-cell">
+
+</div>
+<script type="pyodide-6-contents">
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuXG5ybmcgPSBucC5yYW5kb20uZGVmYXVsdF9ybmcoMSlcbm4sIG5fcmVsID0gMTAwMDAsIDUwMFxuIyByYW5rZXI6IHJlbGV2YW50IHBhcGVycyBnZXQgc2NvcmVzIH4gTigwLjcsIDAuMiksIGlycmVsZXZhbnQgfiBOKDAuMywgMC4yKVxuc2NvcmVzID0gbnAuY29uY2F0ZW5hdGUoW3JuZy5ub3JtYWwoMC43LCAwLjIsIG5fcmVsKSxcbiAgICAgICAgICAgICAgICAgICAgICAgICBybmcubm9ybWFsKDAuMywgMC4yLCBuIC0gbl9yZWwpXSlcbmxhYmVscyA9IG5wLmNvbmNhdGVuYXRlKFtucC5vbmVzKG5fcmVsKSwgbnAuemVyb3MobiAtIG5fcmVsKV0pLmFzdHlwZShpbnQpXG5vcmRlciA9IG5wLmFyZ3NvcnQoLXNjb3JlcylcbmxhYmVsc19zb3J0ZWQgPSBsYWJlbHNbb3JkZXJdXG5cbnByaW50KGZcInsncmV2aWV3IHJhdGUnOj4xMn0geydyZWNhbGwnOj44fSB7J3F1ZXVlIHByZWNpc2lvbic6PjE2fVwiKVxuZm9yIHIgaW4gWzAuMDUsIDAuMSwgMC4yLCAwLjMsIDAuNV06XG4gICAgayA9IGludChuICogcilcbiAgICByZWNhbGwgPSBsYWJlbHNfc29ydGVkWzprXS5zdW0oKSAvIG5fcmVsXG4gICAgcHJlYyA9IGxhYmVsc19zb3J0ZWRbOmtdLm1lYW4oKVxuICAgIHByaW50KGZcIntyOj4xMi4wJX0ge3JlY2FsbDo+OC4zZn0ge3ByZWM6PjE2LjNmfVwiKVxuXG4jIEFVUFJDOiBhcmVhIHVuZGVyIHByZWNpc2lvbi1yZWNhbGwgKHRyYXBlem9pZGFsLCBbQS43XShhcHBlbmRpeC1hLWRlcml2YXRpb25zL2EtNy1hdXByYy10cmFwZXpvaWRhbC5xbWQpKVxudHAgPSBucC5jdW1zdW0obGFiZWxzX3NvcnRlZClcbnByZWNfY3VydmUgPSB0cCAvIG5wLmFyYW5nZSgxLCBuICsgMSlcbnJlY19jdXJ2ZSA9IHRwIC8gbl9yZWxcbmF1cHJjID0gbnAuc3VtKChyZWNfY3VydmVbMTpdIC0gcmVjX2N1cnZlWzotMV0pICpcbiAgICAgICAgICAgICAgICAocHJlY19jdXJ2ZVsxOl0gKyBwcmVjX2N1cnZlWzotMV0pIC8gMilcbnByaW50KGZcIlxcbkFVUFJDOiB7YXVwcmM6LjNmfSAocmFuZG9tIHJhbmtlcjoge25fcmVsL246LjNmfSlcIikifQ==
+</script>
+</div>
+<ol type="a">
+<li>Recall rises with the review rate — more review, more catches. (b) Queue precision <em>falls</em> — the first 5% of the queue is nearly pure relevant papers; by 50% it’s diluted. The precision is the number that determines whether reviewers trust the tool: a queue that’s 90% relevant feels useful; one that’s 30% feels like noise. (c) AUPRC summarizes the whole curve (0.5 = random here). Report to the review board: <strong>recall at the chosen operating rate</strong> (did we catch the relevant papers?) and <strong>queue precision</strong> (is the review queue worth a human’s time?) — the two numbers that together determine the workflow’s value, with AUPRC as the single summary for comparing rankers. The <a href="../part-03-classification-glm/03-1-5-auprc.html">3.1.5</a> lesson: for a rare class, the precision–recall view is the honest one.</li>
+</ol>
+</details>
+<p><strong>Exercise 2.</strong> The protein-LM connection: ESM-2’s vocabulary is 22 tokens; a sequence of length <span class="math inline">\(L\)</span> is <span class="math inline">\(L\)</span> tokens. Compute: (a) the embedding matrix size for a 650M-param protein LM (most of the parameters are the FFN, <a href="../part-13-large-language-models/13-4-model-families.html">13.4</a>) — how does the tiny vocabulary change the parameter distribution vs a text LM? (b) The context window in residues: a 1024-token window covers how many average proteins (≈350 residues)? (c) Why does the small vocabulary mean the model’s capacity goes to <em>structure</em> rather than <em>lexicon</em>?</p>
+<details>
+<summary>
+Solution
+</summary>
+<div>
+<div id="pyodide-7" class="exercise-cell">
+
+</div>
+<script type="pyodide-7-contents">
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6IiMgKGEpIHBhcmFtZXRlciBkaXN0cmlidXRpb246IGVtYmVkZGluZ3MgYXJlIG5lZ2xpZ2libGUgYXQgdm9jYWIgMjJcblZfcHJvdCwgZCwgTCA9IDIyLCAxMjgwLCAzMlxuZW1iID0gVl9wcm90ICogZFxucGVyX2xheWVyID0gMTIgKiBkICogZFxudG90YWwgPSBlbWIgKyBMICogcGVyX2xheWVyXG5wcmludChmXCJwcm90ZWluIExNOiBlbWJlZGRpbmdzIHtlbWIvMWU2Oi4xZn1NIG9mIHt0b3RhbC8xZTY6LjBmfU0gPSB7ZW1iL3RvdGFsOi4yJX1cIilcbnByaW50KGZcIiAgKHRleHQgTE0gYXQgMTMuNDogZW1iZWRkaW5ncyB3ZXJlIGEgcmVhbCBmcmFjdGlvbiDigJQgaGVyZSB0aGV5J3JlIG5vdGhpbmcpXCIpXG4jIChiKSBjb250ZXh0IGluIHJlc2lkdWVzXG5wcmludChmXCIxMDI0LXRva2VuIHdpbmRvdyAvIDM1MCByZXNpZHVlcyBwZXIgcHJvdGVpbiA9IHsxMDI0LzM1MDouMWZ9IHByb3RlaW5zIHBlciBwYXNzXCIpXG4jIChjKSBjYXBhY2l0eTogdGhlIG1vZGVsIGNhbid0IHNwZW5kIHBhcmFtZXRlcnMgb24gYSBsZXhpY29uIOKAlCB0aGVyZSBpcyBub25lXG5wcmludChcIndpdGggMjIgdG9rZW5zLCBldmVyeSBwYXJhbWV0ZXIgbGVhcm5zIHJlc2lkdWUgKnN0cnVjdHVyZSo6IGNvLW9jY3VycmVuY2UsXCIpXG5wcmludChcImNvbnNlcnZhdGlvbiwgY29udGFjdCDigJQgdGhlIFsxMy4zXSBjb21wcmVzc2lvbiBhcmd1bWVudCwgb24gYSAyMC1sZXR0ZXIgYWxwaGFiZXRcIikifQ==
+</script>
+</div>
+<ol type="a">
+<li>The embedding matrix is 22 × 1280 ≈ 28k parameters — 0.004% of the model. In a text LM the embeddings are a real fraction (<a href="../part-13-large-language-models/13-4-model-families.html">13.4</a> drill 4); here they’re nothing, so essentially <em>all</em> the capacity is in the transformer layers. (b) A 1024-token window covers ~3 average proteins — the whole-structure-in-one-pass property. (c) The model can’t spend parameters on a lexicon (there are only 22 words), so every parameter learns <em>structure</em>: which residues co-occur, which positions are conserved, which folds are possible. The <a href="../part-13-large-language-models/13-3-training-pipeline.html">13.3</a> compression argument applied to proteins: to predict the next residue well, the model must internalize the statistical structure of protein sequence space — which is why a protein LM’s embeddings are good features for variant-effect prediction (the <a href="../part-03-classification-glm/03-4-generative-classifiers.html">3.4</a> generative-classifier story: the LM <em>is</em> a model of the protein distribution).</li>
+</ol>
+</details>
+<p><strong>Exercise 3.</strong> The course in one experiment: you have a clinical dataset — 2,000 patient notes (free text) + structured labs + a censored survival outcome. Design the full pipeline using at least four parts of the course, naming the specific technique from each part and the seam between them. Then state the single most likely failure point and the check that would catch it.</p>
+<details>
+<summary>
+Solution
+</summary>
+Pipeline: (1) <strong>LLM extraction</strong> (<a href="../part-13-large-language-models/13-6-customization.html">13.6</a>): the notes → structured fields (diagnoses, medications) via a schema-constrained prompt — the text/database seam from drill 3. (2) <strong>Classical prediction</strong> (<a href="../part-11-survival-analysis/11-5-cox-model.html">11.5</a>): the structured fields + labs → a Cox model for the censored outcome (or <a href="../part-07-trees-ensembles/07-5-gradient-boosting.html">7.5</a> gradient boosting if the interactions matter more than the hazard ratios). (3) <strong>Honest evaluation</strong> (<a href="../part-04-validation-model-selection/04-3-cross-validation.html">4.3</a>, <a href="../part-13-large-language-models/13-7-evaluation-limitations.html">13.7</a>): patient-level splits (never note-level — the same patient’s notes must not straddle train/test), time-based validation (train on earlier patients, test on later — deployment is always in the future), and a pre-registered primary metric. (4) <strong>Multiple-testing discipline</strong> (<a href="../part-12-multiple-testing-bioinformatics/12-4-false-discovery-rate.html">12.4</a>): if the pipeline screens many biomarkers from the extracted fields, the FDR correction applies to the screening. The most likely failure point: <strong>the extraction step’s errors propagate silently</strong> — a mis-extracted medication becomes a wrong feature, and the downstream model is confidently wrong on exactly the patients whose notes were ambiguous. The check: audit a random sample of extractions against the source notes (the <a href="../part-13-large-language-models/13-7-evaluation-limitations.html">13.7</a> habit — measure the <em>system’s</em> error, not the model’s), and report the end-to-end outcome <em>conditioned on extraction quality</em>. The general principle: a pipeline is only as good as its noisiest stage, and the noisiest stage is usually the one that “looks like” language.
+</details>
+</section>
+</section>
+<section id="advanced-information-pitfalls" class="level2">
+<h2 class="anchored" data-anchor-id="advanced-information-pitfalls">4. Advanced Information &amp; Pitfalls</h2>
+<ul>
+<li><strong>The hype cycle is a selection effect.</strong> The applications you hear about are the ones that worked and got written up — the <a href="../part-12-multiple-testing-bioinformatics/12-2-why-multiple-testing-is-dangerous.html">12.2</a> winner’s curse at the level of the field’s <em>anecdotes</em>. For every demo, ask: what’s the eval, what’s the tail, what’s the cost of a miss?</li>
+<li><strong>Automation bias is the human failure mode:</strong> people over-trust fluent system output and under-trust their own correct instincts. The mitigation is structural (verification steps, audit sampling, keeping a human in the loop for high-stakes decisions), not willpower.</li>
+<li><strong>The model is a component, not a product.</strong> Every successful application is a <em>system</em>: model + data + verification + monitoring + human oversight. The model is the most visible and least sufficient part.</li>
+<li><strong>Costs are lumpy and non-obvious:</strong> API costs scale with tokens (the triage example), local costs scale with hardware and electricity (<a href="../part-13-large-language-models/13-5-local-deployment.html">13.5</a>), and the <em>human</em> cost of reviewing output is often the largest line item — and the one nobody budgets.</li>
+<li><strong>The field moves; the principles don’t.</strong> The specific models, benchmarks, and leaderboards of 2026 will be obsolete; the decision procedure (structure → tool, knowledge → RAG/LoRA, failure cost → verification, pre-registration → honesty) is the durable part. Learn the principles deeply and the tools shallowly — the tools you can look up.</li>
+<li><strong>Your data is the moat.</strong> A model is a commodity (the field’s models converge, <a href="../part-13-large-language-models/13-4-model-families.html">13.4</a>); your documents, your schemas, your domain knowledge, and your eval are the defensible assets. Invest accordingly.</li>
+</ul>
+<section id="read-refactor-ai-code" class="level3">
+<h3 class="anchored" data-anchor-id="read-refactor-ai-code">Read &amp; Refactor AI Code</h3>
+<p>This AI-generated project plan has <strong>three flaws</strong>. Diagnose before running the fixed version.</p>
+<blockquote class="blockquote">
+<p><em>“We’ll fine-tune GPT-4 on our 500 clinical notes to predict 30-day readmission, evaluate on a random 80/20 split, and deploy if accuracy is above 85%. The model’s fluency will also let it summarize the notes for the doctors.”</em></p>
+</blockquote>
+<details>
+<summary>
+What’s wrong, and the fix
+</summary>
+<ol type="1">
+<li><strong>Random split on patient data:</strong> notes from the same patient (or the same time period) straddle train/test — the <a href="../part-04-validation-model-selection/04-3-cross-validation.html">4.3</a> leakage that inflates every metric. Split by patient, and by time (train on the past, test on the future).</li>
+<li><strong>Accuracy on an imbalanced outcome:</strong> 30-day readmission is ~10–15% — an 85% accuracy bar is met by predicting “no readmission” for everyone. The metric must be recall/AUPRC on the positive class (<a href="../part-03-classification-glm/03-1-5-auprc.html">3.1.5</a>) with a clinically meaningful operating threshold.</li>
+<li><strong>“Fluency” as a requirement for the summary task:</strong> the summary is a <em>clinical</em> artifact — a fluent hallucination is worse than a terse correct one. The summary task needs its own eval (factuality against the source note) and is a separate workstream from the prediction task; bundling them means neither gets the verification it needs.</li>
+</ol>
+<strong>Refactor:</strong> patient-level and time-based splits; AUPRC + recall at a pre-registered threshold as the primary metric; a baseline (logistic regression on the structured fields — <a href="../part-03-classification-glm/03-3-logistic-regression.html">3.3</a>) that the LLM pipeline must beat to justify its cost; the summary task scoped separately with a factuality audit. The discipline: every claim in the plan gets an eval, a baseline, and a leakage check before a single GPU-hour is spent.
+</details>
+</section>
+</section>
+<section id="advanced-questions" class="level2">
+<h2 class="anchored" data-anchor-id="advanced-questions">5. Advanced Questions</h2>
+<p><strong>Q1.</strong> The endgame of the decision procedure: as models get cheaper and more capable, the optimal boundary between “classical model” and “LLM” shifts. Model it: let the classical model’s cost be <span class="math inline">\(C_c\)</span> (fixed, cheap) with accuracy <span class="math inline">\(A_c\)</span>, and the LLM’s cost be <span class="math inline">\(C_l\)</span> (per-query, falling over time) with accuracy <span class="math inline">\(A_l &gt; A_c\)</span>. The LLM’s accuracy advantage is <em>task-dependent</em> — it’s large for language-shaped tasks and ~zero for tabular ones. Compute the break-even query volume where the LLM’s total cost (including the <a href="../part-13-large-language-models/13-7-evaluation-limitations.html">13.7</a> verification overhead) beats the classical model’s, and state how the boundary moves as <span class="math inline">\(C_l\)</span> falls.</p>
+<details>
+<summary>
+Hint
+</summary>
+The break-even is where (cost per query) × (queries) + (verification cost) equal — with the accuracy advantage as the benefit side.
+</details>
+<details>
+<summary>
+Solution
+</summary>
+<div>
+<div id="pyodide-8" class="exercise-cell">
+
+</div>
+<script type="pyodide-8-contents">
+eyJhdHRyIjp7ImVkaXQiOmZhbHNlLCJldmFsIjp0cnVlfSwiY29kZSI6ImltcG9ydCBudW1weSBhcyBucFxuXG4jIGJlbmVmaXQ6IHZhbHVlIG9mIHRoZSBhY2N1cmFjeSBhZHZhbnRhZ2UgcGVyIHF1ZXJ5OyBjb3N0OiBwZXItcXVlcnkgKyB2ZXJpZmljYXRpb25cbkFfYywgQV9sID0gMC44MCwgMC45MlxudmFsdWVfcGVyX3F1ZXJ5ID0gMS4wICAgICAgICAgICAjIG5vcm1hbGl6ZWQgdmFsdWUgb2YgYSBjb3JyZWN0IHByZWRpY3Rpb25cbkNfYywgQ19sID0gMC4wMDEsIDAuMDEgICAgICAgICAjIGNvc3QgcGVyIHF1ZXJ5IChjbGFzc2ljYWwsIExMTSlcbnZlcmlmeSA9IDAuMDIgICAgICAgICAgICAgICAgICAjIExMTSB2ZXJpZmljYXRpb24gb3ZlcmhlYWQgcGVyIHF1ZXJ5IChodW1hbiByZXZpZXcsIHNwb3QgY2hlY2tzKVxuXG5kZWYgbmV0X3ZhbHVlKG1vZGVsLCBuKTpcbiAgICBpZiBtb2RlbCA9PSBcImNsYXNzaWNhbFwiOlxuICAgICAgICByZXR1cm4gbiAqIChBX2MgKiB2YWx1ZV9wZXJfcXVlcnkgLSBDX2MpXG4gICAgcmV0dXJuIG4gKiAoQV9sICogdmFsdWVfcGVyX3F1ZXJ5IC0gQ19sIC0gdmVyaWZ5KVxuXG5mb3IgbiBpbiBbMWUzLCAxZTQsIDFlNSwgMWU2XTpcbiAgICBwcmludChmXCJuPXtuOi4wZX06IGNsYXNzaWNhbCB7bmV0X3ZhbHVlKCdjbGFzc2ljYWwnLCBuKTo+OS4wZn0gfCBcIlxuICAgICAgICAgIGZcIkxMTSB7bmV0X3ZhbHVlKCdsbG0nLCBuKTo+OS4wZn0gfCBcIlxuICAgICAgICAgIGZcIndpbm5lcjogeydMTE0nIGlmIG5ldF92YWx1ZSgnbGxtJywgbikgPiBuZXRfdmFsdWUoJ2NsYXNzaWNhbCcsIG4pIGVsc2UgJ2NsYXNzaWNhbCd9XCIpXG5cbiMgYnJlYWstZXZlbjogQV9sKnYgLSBDX2wgLSB2ZXJpZnkgPSBBX2MqdiAtIENfYyAgLT4gIGluZGVwZW5kZW50IG9mIG4hXG5iZSA9IChBX2wgLSBBX2MpICogdmFsdWVfcGVyX3F1ZXJ5IC0gKENfbCAtIENfYykgLSB2ZXJpZnlcbnByaW50KGZcIlxcbnBlci1xdWVyeSBuZXQgYWR2YW50YWdlIG9mIHRoZSBMTE06IHtiZTouNGZ9IFwiXG4gICAgICBmXCIoeydwb3NpdGl2ZSDigJQgTExNIHdpbnMgYXQgYW55IHZvbHVtZScgaWYgYmUgPiAwIGVsc2UgJ25lZ2F0aXZlIOKAlCBjbGFzc2ljYWwgd2lucyBhdCBhbnkgdm9sdW1lJ30pXCIpIn0=
+</script>
+</div>
+The break-even is <em>per-query</em>, not a volume threshold: if the LLM’s net value per query (accuracy advantage × value − cost − verification) is positive, it wins at any volume; if negative, at none. As <span class="math inline">\(C_l\)</span> falls (models get cheaper), the per-query advantage rises and the boundary moves toward the LLM — but the <em>verification</em> term is the floor: it’s the <a href="../part-13-large-language-models/13-7-evaluation-limitations.html">13.7</a> cost of the model’s structural hallucination, and it doesn’t fall with the model’s price. The durable boundary: tasks where the accuracy advantage is real (language-shaped) and the verification is cheap (low-stakes, high-volume) move to the LLM; tasks where the advantage is ~zero (tabular) or the verification is expensive (high-stakes) stay classical — regardless of how cheap the LLM gets.
+</details>
+<p><strong>Q2.</strong> The course’s final synthesis: take the four most important ideas from the course — one from statistics, one from classical ML, one from deep learning, one from LLMs — and state how each one changes what you do <em>on Monday morning</em> in a data-driven biology lab. Then state the one idea that, if you remember nothing else, prevents the most errors.</p>
+<details>
+<summary>
+Hint
+</summary>
+The ideas should be practices, not facts: things you <em>do</em>, not things you know.
+</details>
+<details>
+<summary>
+Solution
+</summary>
+<ul>
+<li><strong>Statistics (<a href="../part-12-multiple-testing-bioinformatics/12-3-family-wise-error-rate.html">12.3</a>):</strong> pre-register the primary analysis and correct for the number of tests you run — the habit that separates a finding from a fishing expedition. On Monday: when the screen comes back with 20,000 p-values, the FDR correction is the difference between a paper and a retraction.</li>
+<li><strong>Classical ML (<a href="../part-04-validation-model-selection/04-3-cross-validation.html">4.3</a>):</strong> every preprocessing step lives inside the CV fold, and the split respects the data’s structure (patient, not sample; past, not future). On Monday: the pipeline is a <code>Pipeline</code> object, and the split is by patient — the two lines of code that prevent the most common irreproducible result.</li>
+<li><strong>Deep learning (<a href="../part-10-deep-learning/10-4-gradient-descent-backprop.html">10.4</a>):</strong> you can derive and verify any gradient by hand and finite differences — no black boxes, no “the library said so.” On Monday: when the model misbehaves, you check the gradient before you check the hyperparameters.</li>
+<li><strong>LLMs (<a href="../part-13-large-language-models/13-7-evaluation-limitations.html">13.7</a>):</strong> evaluate on <em>your</em> data, stratify the tail, and verify the output — the model is a fluent probability machine, not an oracle. On Monday: the LLM’s answer is the <em>input</em> to your verification, never the conclusion.</li>
+</ul>
+The one idea that prevents the most errors: <strong>verify against held-out data you didn’t touch.</strong> It is the common root of every statistical habit in the course — the split, the fold, the pre-registration, the contamination check, the audit sample. Every way this course has found to be wrong (leakage, selection, contamination, the winner’s curse, hallucination) is a version of the same failure: letting the answer influence the evaluation. The habit is one sentence — <em>decide how you’ll judge before you see the result</em> — and it is the whole course.
+</details>
+</section>
+<section id="complex-questions" class="level2">
+<h2 class="anchored" data-anchor-id="complex-questions">6. Complex Questions</h2>
+<p><strong>C1 (applications × <a href="../part-12-multiple-testing-bioinformatics/12-6-differential-expression.html">12.6 differential expression</a> × <a href="../part-13-large-language-models/13-6-customization.html">13.6</a>).</strong> A genomics core facility wants to add an LLM to its analysis pipeline: researchers will ask it to interpret DESeq2 results (“what do these 200 significant genes mean?”). Design the system: the LLM gets the results table + RAG over pathway databases + a schema for structured output. State the three places the pipeline can silently produce a wrong biological conclusion, and the check at each. This is the course’s bioinformatics thread and its LLM thread, joined.</p>
+<p><strong>C2 (applications × <a href="../part-11-survival-analysis/11-5-cox-model.html">11.5 Cox</a> × <a href="../part-13-large-language-models/13-7-evaluation-limitations.html">13.7</a> × <a href="../part-13-large-language-models/13-8-applications-next-steps.html">13.8</a>).</strong> The final exam, in one question: a hospital’s LLM-based triage tool has been running for a year. Its monthly eval (200 fresh questions) shows 94% accuracy, stable. Using <a href="../part-11-survival-analysis/11-5-cox-model.html">11.5</a>’s framing, define the “failure event” and the covariates that predict it; using <a href="../part-13-large-language-models/13-7-evaluation-limitations.html">13.7</a>, state why the stable 94% might be hiding a rising hazard; using this page’s decision procedure, state the monitoring and update policy. The answer is a design, not a number.</p>
+</section>
+<section id="summary" class="level2">
+<h2 class="anchored" data-anchor-id="summary">7. Summary</h2>
+<ul>
+<li>Choose the tool by where the structure lives: tables → classical, perception → deep nets, language → LLMs; the seam is the schema.</li>
+<li>Knowledge in the model → prompt; in your documents → RAG; in your data’s style → LoRA; failure cost high → ground, verify, route, monitor.</li>
+<li>Protein LMs are the course’s bioinformatics thread made explicit: next-residue prediction, tiny vocabulary, capacity spent on structure — and the same statistics applies.</li>
+<li>The triage workflow: speedup is real, the tail is the risk — audit the auto-dropped, measure recall on a labeled subset.</li>
+<li>The course in four habits: pre-register (statistics), split by structure (ML), verify gradients (DL), evaluate on your data (LLMs).</li>
+<li>The one idea: decide how you’ll judge before you see the result — every failure in this course is a version of its opposite.</li>
+<li>The course is the toolbox; the decision procedure is the craft. Go build something — and evaluate it like you mean it.</li>
+</ul>
+
+
+<script type="pyodide-data">
+eyJvcHRpb25zIjp7ImVudiI6eyJQTE9UTFlfUkVOREVSRVIiOiJwbG90bHlfbWltZXR5cGUifSwiaW5kZXhVUkwiOiJodHRwczovL2Nkbi5qc2RlbGl2ci5uZXQvcHlvZGlkZS92MC4yOC4xL2Z1bGwvIn0sInBhY2thZ2VzIjp7InBrZ3MiOlsicHlvZGlkZV9odHRwIiwibWljcm9waXAiLCJpcHl0aG9uIiwibnVtcHkiLCJtYXRwbG90bGliIl19fQ==
+</script>
+<script type="ojs-module-contents">
+eyJjb250ZW50cyI6W3siY2VsbE5hbWUiOiJweW9kaWRlLTgiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoiX3B5b2RpZGVfdmFsdWVfOCA9IHtcbiAgY29uc3QgeyBoaWdobGlnaHRQeXRob24sIGI2NERlY29kZX0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS04LWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgLy8gRGVmYXVsdCBldmFsdWF0aW9uIGNvbmZpZ3VyYXRpb25cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oe1xuICAgIGlkOiBcInB5b2RpZGUtOC1jb250ZW50c1wiLFxuICAgIGVjaG86IHRydWUsXG4gICAgb3V0cHV0OiB0cnVlXG4gIH0sIGJsb2NrLmF0dHIpO1xuXG4gIC8vIEV2YWx1YXRlIHRoZSBwcm92aWRlZCBQeXRob24gY29kZVxuICBjb25zdCByZXN1bHQgPSBweW9kaWRlT2pzLnByb2Nlc3Moe2NvZGU6IGJsb2NrLmNvZGUsIG9wdGlvbnN9LCB7fSk7XG5cbiAgLy8gRWFybHkgeWllbGQgd2hpbGUgd2Ugd2FpdCBmb3IgdGhlIGZpcnN0IGV2YWx1YXRpb24gYW5kIHJlbmRlclxuICBpZiAob3B0aW9ucy5vdXRwdXQgJiYgIShcIjhcIiBpbiBweW9kaWRlT2pzLnJlbmRlcmVkT2pzKSkge1xuICAgIGNvbnN0IGNvbnRhaW5lciA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJkaXZcIik7XG4gICAgY29uc3Qgc3Bpbm5lciA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJkaXZcIik7XG5cbiAgICBpZiAob3B0aW9ucy5lY2hvKSB7XG4gICAgICAvLyBTaG93IG91dHB1dCBhcyBoaWdobGlnaHRlZCBzb3VyY2VcbiAgICAgIGNvbnN0IHByZUVsZW0gPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwicHJlXCIpO1xuICAgICAgY29udGFpbmVyLmNsYXNzTmFtZSA9IFwic291cmNlQ29kZVwiO1xuICAgICAgcHJlRWxlbS5jbGFzc05hbWUgPSBcInNvdXJjZUNvZGUgcHl0aG9uXCI7XG4gICAgICBwcmVFbGVtLmFwcGVuZENoaWxkKGhpZ2hsaWdodFB5dGhvbihibG9jay5jb2RlKSk7XG4gICAgICBzcGlubmVyLmNsYXNzTmFtZSA9IFwic3Bpbm5lci1ncm93IHNwaW5uZXItZ3Jvdy1zbSBtLTIgcG9zaXRpb24tYWJzb2x1dGUgdG9wLTAgZW5kLTBcIjtcbiAgICAgIHByZUVsZW0uYXBwZW5kQ2hpbGQoc3Bpbm5lcik7XG4gICAgICBjb250YWluZXIuYXBwZW5kQ2hpbGQocHJlRWxlbSk7XG4gICAgfSBlbHNlIHtcbiAgICAgIHNwaW5uZXIuY2xhc3NOYW1lID0gXCJzcGlubmVyLWJvcmRlciBzcGlubmVyLWJvcmRlci1zbVwiO1xuICAgICAgY29udGFpbmVyLmFwcGVuZENoaWxkKHNwaW5uZXIpO1xuICAgIH1cblxuICAgIHlpZWxkIGNvbnRhaW5lcjtcbiAgfVxuXG4gIHB5b2RpZGVPanMucmVuZGVyZWRPanNbXCI4XCJdID0gdHJ1ZTtcbiAgeWllbGQgYXdhaXQgcmVzdWx0O1xufVxuIn0seyJjZWxsTmFtZSI6InB5b2RpZGUtNyIsImlubGluZSI6ZmFsc2UsIm1ldGhvZE5hbWUiOiJpbnRlcnByZXQiLCJzb3VyY2UiOiJfcHlvZGlkZV92YWx1ZV83ID0ge1xuICBjb25zdCB7IGhpZ2hsaWdodFB5dGhvbiwgYjY0RGVjb2RlfSA9IHdpbmRvdy5fZXhlcmNpc2Vfb2pzX3J1bnRpbWU7XG5cbiAgY29uc3Qgc2NyaXB0Q29udGVudCA9IGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3IoYHNjcmlwdFt0eXBlPVxcXCJweW9kaWRlLTctY29udGVudHNcXFwiXWApLnRleHRDb250ZW50O1xuICBjb25zdCBibG9jayA9IEpTT04ucGFyc2UoYjY0RGVjb2RlKHNjcmlwdENvbnRlbnQpKTtcblxuICAvLyBEZWZhdWx0IGV2YWx1YXRpb24gY29uZmlndXJhdGlvblxuICBjb25zdCBvcHRpb25zID0gT2JqZWN0LmFzc2lnbih7XG4gICAgaWQ6IFwicHlvZGlkZS03LWNvbnRlbnRzXCIsXG4gICAgZWNobzogdHJ1ZSxcbiAgICBvdXRwdXQ6IHRydWVcbiAgfSwgYmxvY2suYXR0cik7XG5cbiAgLy8gRXZhbHVhdGUgdGhlIHByb3ZpZGVkIFB5dGhvbiBjb2RlXG4gIGNvbnN0IHJlc3VsdCA9IHB5b2RpZGVPanMucHJvY2Vzcyh7Y29kZTogYmxvY2suY29kZSwgb3B0aW9uc30sIHt9KTtcblxuICAvLyBFYXJseSB5aWVsZCB3aGlsZSB3ZSB3YWl0IGZvciB0aGUgZmlyc3QgZXZhbHVhdGlvbiBhbmQgcmVuZGVyXG4gIGlmIChvcHRpb25zLm91dHB1dCAmJiAhKFwiN1wiIGluIHB5b2RpZGVPanMucmVuZGVyZWRPanMpKSB7XG4gICAgY29uc3QgY29udGFpbmVyID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcImRpdlwiKTtcbiAgICBjb25zdCBzcGlubmVyID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcImRpdlwiKTtcblxuICAgIGlmIChvcHRpb25zLmVjaG8pIHtcbiAgICAgIC8vIFNob3cgb3V0cHV0IGFzIGhpZ2hsaWdodGVkIHNvdXJjZVxuICAgICAgY29uc3QgcHJlRWxlbSA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJwcmVcIik7XG4gICAgICBjb250YWluZXIuY2xhc3NOYW1lID0gXCJzb3VyY2VDb2RlXCI7XG4gICAgICBwcmVFbGVtLmNsYXNzTmFtZSA9IFwic291cmNlQ29kZSBweXRob25cIjtcbiAgICAgIHByZUVsZW0uYXBwZW5kQ2hpbGQoaGlnaGxpZ2h0UHl0aG9uKGJsb2NrLmNvZGUpKTtcbiAgICAgIHNwaW5uZXIuY2xhc3NOYW1lID0gXCJzcGlubmVyLWdyb3cgc3Bpbm5lci1ncm93LXNtIG0tMiBwb3NpdGlvbi1hYnNvbHV0ZSB0b3AtMCBlbmQtMFwiO1xuICAgICAgcHJlRWxlbS5hcHBlbmRDaGlsZChzcGlubmVyKTtcbiAgICAgIGNvbnRhaW5lci5hcHBlbmRDaGlsZChwcmVFbGVtKTtcbiAgICB9IGVsc2Uge1xuICAgICAgc3Bpbm5lci5jbGFzc05hbWUgPSBcInNwaW5uZXItYm9yZGVyIHNwaW5uZXItYm9yZGVyLXNtXCI7XG4gICAgICBjb250YWluZXIuYXBwZW5kQ2hpbGQoc3Bpbm5lcik7XG4gICAgfVxuXG4gICAgeWllbGQgY29udGFpbmVyO1xuICB9XG5cbiAgcHlvZGlkZU9qcy5yZW5kZXJlZE9qc1tcIjdcIl0gPSB0cnVlO1xuICB5aWVsZCBhd2FpdCByZXN1bHQ7XG59XG4ifSx7ImNlbGxOYW1lIjoicHlvZGlkZS02IiwiaW5saW5lIjpmYWxzZSwibWV0aG9kTmFtZSI6ImludGVycHJldCIsInNvdXJjZSI6Il9weW9kaWRlX3ZhbHVlXzYgPSB7XG4gIGNvbnN0IHsgaGlnaGxpZ2h0UHl0aG9uLCBiNjREZWNvZGV9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzY3JpcHRDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInB5b2RpZGUtNi1jb250ZW50c1xcXCJdYCkudGV4dENvbnRlbnQ7XG4gIGNvbnN0IGJsb2NrID0gSlNPTi5wYXJzZShiNjREZWNvZGUoc2NyaXB0Q29udGVudCkpO1xuXG4gIC8vIERlZmF1bHQgZXZhbHVhdGlvbiBjb25maWd1cmF0aW9uXG4gIGNvbnN0IG9wdGlvbnMgPSBPYmplY3QuYXNzaWduKHtcbiAgICBpZDogXCJweW9kaWRlLTYtY29udGVudHNcIixcbiAgICBlY2hvOiB0cnVlLFxuICAgIG91dHB1dDogdHJ1ZVxuICB9LCBibG9jay5hdHRyKTtcblxuICAvLyBFdmFsdWF0ZSB0aGUgcHJvdmlkZWQgUHl0aG9uIGNvZGVcbiAgY29uc3QgcmVzdWx0ID0gcHlvZGlkZU9qcy5wcm9jZXNzKHtjb2RlOiBibG9jay5jb2RlLCBvcHRpb25zfSwge30pO1xuXG4gIC8vIEVhcmx5IHlpZWxkIHdoaWxlIHdlIHdhaXQgZm9yIHRoZSBmaXJzdCBldmFsdWF0aW9uIGFuZCByZW5kZXJcbiAgaWYgKG9wdGlvbnMub3V0cHV0ICYmICEoXCI2XCIgaW4gcHlvZGlkZU9qcy5yZW5kZXJlZE9qcykpIHtcbiAgICBjb25zdCBjb250YWluZXIgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpO1xuICAgIGNvbnN0IHNwaW5uZXIgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KFwiZGl2XCIpO1xuXG4gICAgaWYgKG9wdGlvbnMuZWNobykge1xuICAgICAgLy8gU2hvdyBvdXRwdXQgYXMgaGlnaGxpZ2h0ZWQgc291cmNlXG4gICAgICBjb25zdCBwcmVFbGVtID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudChcInByZVwiKTtcbiAgICAgIGNvbnRhaW5lci5jbGFzc05hbWUgPSBcInNvdXJjZUNvZGVcIjtcbiAgICAgIHByZUVsZW0uY2xhc3NOYW1lID0gXCJzb3VyY2VDb2RlIHB5dGhvblwiO1xuICAgICAgcHJlRWxlbS5hcHBlbmRDaGlsZChoaWdobGlnaHRQeXRob24oYmxvY2suY29kZSkpO1xuICAgICAgc3Bpbm5lci5jbGFzc05hbWUgPSBcInNwaW5uZXItZ3JvdyBzcGlubmVyLWdyb3ctc20gbS0yIHBvc2l0aW9uLWFic29sdXRlIHRvcC0wIGVuZC0wXCI7XG4gICAgICBwcmVFbGVtLmFwcGVuZENoaWxkKHNwaW5uZXIpO1xuICAgICAgY29udGFpbmVyLmFwcGVuZENoaWxkKHByZUVsZW0pO1xuICAgIH0gZWxzZSB7XG4gICAgICBzcGlubmVyLmNsYXNzTmFtZSA9IFwic3Bpbm5lci1ib3JkZXIgc3Bpbm5lci1ib3JkZXItc21cIjtcbiAgICAgIGNvbnRhaW5lci5hcHBlbmRDaGlsZChzcGlubmVyKTtcbiAgICB9XG5cbiAgICB5aWVsZCBjb250YWluZXI7XG4gIH1cblxuICBweW9kaWRlT2pzLnJlbmRlcmVkT2pzW1wiNlwiXSA9IHRydWU7XG4gIHlpZWxkIGF3YWl0IHJlc3VsdDtcbn1cbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTUiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoidmlld29mIF9weW9kaWRlX2VkaXRvcl81ID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS01LWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtNS1jb250ZW50c2AgfSwgYmxvY2suYXR0cik7XG4gIGNvbnN0IGVkaXRvciA9IG5ldyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IoXG4gICAgcHlvZGlkZU9qcy5weW9kaWRlUHJvbWlzZSxcbiAgICBibG9jay5jb2RlLFxuICAgIG9wdGlvbnNcbiAgKTtcblxuICByZXR1cm4gZWRpdG9yLmNvbnRhaW5lcjtcbn1cbl9weW9kaWRlX3ZhbHVlXzUgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzUsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTQiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoidmlld29mIF9weW9kaWRlX2VkaXRvcl80ID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS00LWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtNC1jb250ZW50c2AgfSwgYmxvY2suYXR0cik7XG4gIGNvbnN0IGVkaXRvciA9IG5ldyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IoXG4gICAgcHlvZGlkZU9qcy5weW9kaWRlUHJvbWlzZSxcbiAgICBibG9jay5jb2RlLFxuICAgIG9wdGlvbnNcbiAgKTtcblxuICByZXR1cm4gZWRpdG9yLmNvbnRhaW5lcjtcbn1cbl9weW9kaWRlX3ZhbHVlXzQgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzQsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTMiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoidmlld29mIF9weW9kaWRlX2VkaXRvcl8zID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS0zLWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtMy1jb250ZW50c2AgfSwgYmxvY2suYXR0cik7XG4gIGNvbnN0IGVkaXRvciA9IG5ldyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IoXG4gICAgcHlvZGlkZU9qcy5weW9kaWRlUHJvbWlzZSxcbiAgICBibG9jay5jb2RlLFxuICAgIG9wdGlvbnNcbiAgKTtcblxuICByZXR1cm4gZWRpdG9yLmNvbnRhaW5lcjtcbn1cbl9weW9kaWRlX3ZhbHVlXzMgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzMsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTIiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoidmlld29mIF9weW9kaWRlX2VkaXRvcl8yID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS0yLWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtMi1jb250ZW50c2AgfSwgYmxvY2suYXR0cik7XG4gIGNvbnN0IGVkaXRvciA9IG5ldyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IoXG4gICAgcHlvZGlkZU9qcy5weW9kaWRlUHJvbWlzZSxcbiAgICBibG9jay5jb2RlLFxuICAgIG9wdGlvbnNcbiAgKTtcblxuICByZXR1cm4gZWRpdG9yLmNvbnRhaW5lcjtcbn1cbl9weW9kaWRlX3ZhbHVlXzIgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzIsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLTEiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0Iiwic291cmNlIjoidmlld29mIF9weW9kaWRlX2VkaXRvcl8xID0ge1xuICBjb25zdCB7IFB5b2RpZGVFeGVyY2lzZUVkaXRvciwgYjY0RGVjb2RlIH0gPSB3aW5kb3cuX2V4ZXJjaXNlX29qc19ydW50aW1lO1xuXG4gIGNvbnN0IHNjcmlwdENvbnRlbnQgPSBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKGBzY3JpcHRbdHlwZT1cXFwicHlvZGlkZS0xLWNvbnRlbnRzXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgYmxvY2sgPSBKU09OLnBhcnNlKGI2NERlY29kZShzY3JpcHRDb250ZW50KSk7XG5cbiAgY29uc3Qgb3B0aW9ucyA9IE9iamVjdC5hc3NpZ24oeyBpZDogYHB5b2RpZGUtMS1jb250ZW50c2AgfSwgYmxvY2suYXR0cik7XG4gIGNvbnN0IGVkaXRvciA9IG5ldyBQeW9kaWRlRXhlcmNpc2VFZGl0b3IoXG4gICAgcHlvZGlkZU9qcy5weW9kaWRlUHJvbWlzZSxcbiAgICBibG9jay5jb2RlLFxuICAgIG9wdGlvbnNcbiAgKTtcblxuICByZXR1cm4gZWRpdG9yLmNvbnRhaW5lcjtcbn1cbl9weW9kaWRlX3ZhbHVlXzEgPSBweW9kaWRlT2pzLnByb2Nlc3MoX3B5b2RpZGVfZWRpdG9yXzEsIHt9KTtcbiJ9LHsiY2VsbE5hbWUiOiJweW9kaWRlLXByZWx1ZGUiLCJpbmxpbmUiOmZhbHNlLCJtZXRob2ROYW1lIjoiaW50ZXJwcmV0UXVpZXQiLCJzb3VyY2UiOiJweW9kaWRlT2pzID0ge1xuICBjb25zdCB7XG4gICAgUHlvZGlkZUV2YWx1YXRvcixcbiAgICBQeW9kaWRlRW52aXJvbm1lbnRNYW5hZ2VyLFxuICAgIHNldHVwUHl0aG9uLFxuICAgIHN0YXJ0UHlvZGlkZVdvcmtlcixcbiAgICBiNjREZWNvZGUsXG4gICAgY29sbGFwc2VQYXRoLFxuICB9ID0gd2luZG93Ll9leGVyY2lzZV9vanNfcnVudGltZTtcblxuICBjb25zdCBzdGF0dXNDb250YWluZXIgPSBkb2N1bWVudC5nZXRFbGVtZW50QnlJZChcImV4ZXJjaXNlLWxvYWRpbmctc3RhdHVzXCIpO1xuICBjb25zdCBpbmRpY2F0b3JDb250YWluZXIgPSBkb2N1bWVudC5nZXRFbGVtZW50QnlJZChcImV4ZXJjaXNlLWxvYWRpbmctaW5kaWNhdG9yXCIpO1xuICBpbmRpY2F0b3JDb250YWluZXIuY2xhc3NMaXN0LnJlbW92ZShcImQtbm9uZVwiKTtcblxuICBsZXQgc3RhdHVzVGV4dCA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoXCJkaXZcIilcbiAgc3RhdHVzVGV4dC5jbGFzc0xpc3QgPSBcImV4ZXJjaXNlLWxvYWRpbmctZGV0YWlsc1wiO1xuICBzdGF0dXNUZXh0ID0gc3RhdHVzQ29udGFpbmVyLmFwcGVuZENoaWxkKHN0YXR1c1RleHQpO1xuICBzdGF0dXNUZXh0LnRleHRDb250ZW50ID0gYEluaXRpYWxpc2VgO1xuXG4gIC8vIEhvaXN0IGluZGljYXRvciBvdXQgZnJvbSBmaW5hbCBzbGlkZSB3aGVuIHJ1bm5pbmcgdW5kZXIgcmV2ZWFsXG4gIGNvbnN0IHJldmVhbFN0YXR1cyA9IGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3IoXCIucmV2ZWFsIC5leGVyY2lzZS1sb2FkaW5nLWluZGljYXRvclwiKTtcbiAgaWYgKHJldmVhbFN0YXR1cykge1xuICAgIHJldmVhbFN0YXR1cy5yZW1vdmUoKTtcbiAgICBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKFwiLnJldmVhbCA+IC5zbGlkZXNcIikuYXBwZW5kQ2hpbGQocmV2ZWFsU3RhdHVzKTtcbiAgfVxuXG4gIC8vIE1ha2UgYW55IHJldmVhbCBzbGlkZXMgd2l0aCBsaXZlIGNlbGxzIHNjcm9sbGFibGVcbiAgZG9jdW1lbnQucXVlcnlTZWxlY3RvckFsbChcIi5yZXZlYWwgLmV4ZXJjaXNlLWNlbGxcIikuZm9yRWFjaCgoZWwpID0+IHtcbiAgICBlbC5jbG9zZXN0KCdzZWN0aW9uLnNsaWRlJykuY2xhc3NMaXN0LmFkZChcInNjcm9sbGFibGVcIik7XG4gIH0pXG5cbiAgLy8gUHlvZGlkZSBzdXBwbGVtZW50YWwgZGF0YSBhbmQgb3B0aW9uc1xuICBjb25zdCBkYXRhQ29udGVudCA9IGRvY3VtZW50LnF1ZXJ5U2VsZWN0b3IoYHNjcmlwdFt0eXBlPVxcXCJweW9kaWRlLWRhdGFcXFwiXWApLnRleHRDb250ZW50O1xuICBjb25zdCBkYXRhID0gSlNPTi5wYXJzZShiNjREZWNvZGUoZGF0YUNvbnRlbnQpKTtcblxuICAvLyBHcmFiIGxpc3Qgb2YgcmVzb3VyY2VzIHRvIGJlIGRvd25sb2FkZWRcbiAgY29uc3QgZmlsZXNDb250ZW50ID0gZG9jdW1lbnQucXVlcnlTZWxlY3Rvcihgc2NyaXB0W3R5cGU9XFxcInZmcy1maWxlXFxcIl1gKS50ZXh0Q29udGVudDtcbiAgY29uc3QgZmlsZXMgPSBKU09OLnBhcnNlKGI2NERlY29kZShmaWxlc0NvbnRlbnQpKTtcblxuICBsZXQgcHlvZGlkZVByb21pc2UgPSAoYXN5bmMgKCkgPT4ge1xuICAgIHN0YXR1c1RleHQudGV4dENvbnRlbnQgPSBgRG93bmxvYWRpbmcgUHlvZGlkZWA7XG4gICAgY29uc3QgcHlvZGlkZSA9IGF3YWl0IHN0YXJ0UHlvZGlkZVdvcmtlcihkYXRhLm9wdGlvbnMpO1xuXG4gICAgc3RhdHVzVGV4dC50ZXh0Q29udGVudCA9IGBEb3dubG9hZGluZyBwYWNrYWdlOiBtaWNyb3BpcGA7XG4gICAgYXdhaXQgcHlvZGlkZS5sb2FkUGFja2FnZShcIm1pY3JvcGlwXCIpO1xuICAgIGNvbnN0IG1pY3JvcGlwID0gYXdhaXQgcHlvZGlkZS5weWltcG9ydChcIm1pY3JvcGlwXCIpO1xuICAgIGF3YWl0IGRhdGEucGFja2FnZXMucGtncy5tYXAoKHBrZykgPT4gKCkgPT4ge1xuICAgICAgc3RhdHVzVGV4dC50ZXh0Q29udGVudCA9IGBEb3dubG9hZGluZyBwYWNrYWdlOiAke3BrZ31gO1xuICAgICAgcmV0dXJuIG1pY3JvcGlwLmluc3RhbGwocGtnKTtcbiAgICB9KS5yZWR1Y2UoKGN1ciwgbmV4dCkgPT4gY3VyLnRoZW4obmV4dCksIFByb21pc2UucmVzb2x2ZSgpKTtcbiAgICBhd2FpdCBtaWNyb3BpcC5kZXN0cm95KCk7XG5cbiAgICAvLyBEb3dubG9hZCBhbmQgaW5zdGFsbCByZXNvdXJjZXNcbiAgICBhd2FpdCBmaWxlcy5tYXAoKGZpbGUpID0+IGFzeW5jICgpID0+IHtcbiAgICAgIGNvbnN0IG5hbWUgPSBmaWxlLnN1YnN0cmluZyhmaWxlLmxhc3RJbmRleE9mKCcvJykgKyAxKTtcbiAgICAgIHN0YXR1c1RleHQudGV4dENvbnRlbnQgPSBgRG93bmxvYWRpbmcgcmVzb3VyY2U6ICR7bmFtZX1gO1xuICAgICAgY29uc3QgcmVzcG9uc2UgPSBhd2FpdCBmZXRjaChmaWxlKTtcbiAgICAgIGlmICghcmVzcG9uc2Uub2spIHtcbiAgICAgICAgdGhyb3cgbmV3IEVycm9yKGBDYW4ndCBkb3dubG9hZCBcXGAke2ZpbGV9XFxgLiBFcnJvciAke3Jlc3BvbnNlLnN0YXR1c306IFwiJHtyZXNwb25zZS5zdGF0dXNUZXh0fVwiLmApO1xuICAgICAgfVxuICAgICAgY29uc3QgZGF0YSA9IGF3YWl0IHJlc3BvbnNlLmFycmF5QnVmZmVyKCk7XG5cbiAgICAgIC8vIFN0b3JlIFVSTHMgaW4gdGhlIGN3ZCB3aXRob3V0IGFueSBzdWJkaXJlY3Rvcnkgc3RydWN0dXJlXG4gICAgICBpZiAoZmlsZS5pbmNsdWRlcyhcIjovL1wiKSkge1xuICAgICAgICBmaWxlID0gbmFtZTtcbiAgICAgIH1cblxuICAgICAgLy8gQ29sbGFwc2UgaGlnaGVyIGRpcmVjdG9yeSBzdHJ1Y3R1cmVcbiAgICAgIGZpbGUgPSBjb2xsYXBzZVBhdGgoZmlsZSk7XG5cbiAgICAgIC8vIENyZWF0ZSBkaXJlY3RvcnkgdHJlZSwgaWdub3JpbmcgXCJkaXJlY3RvcnkgZXhpc3RzXCIgVkZTIGVycm9yc1xuICAgICAgY29uc3QgcGFydHMgPSBmaWxlLnNwbGl0KCcvJykuc2xpY2UoMCwgLTEpO1xuICAgICAgbGV0IHBhdGggPSAnJztcbiAgICAgIHdoaWxlIChwYXJ0cy5sZW5ndGggPiAwKSB7XG4gICAgICAgIHBhdGggKz0gcGFydHMuc2hpZnQoKSArICcvJztcbiAgICAgICAgdHJ5IHtcbiAgICAgICAgICBhd2FpdCBweW9kaWRlLkZTLm1rZGlyKHBhdGgpO1xuICAgICAgICB9IGNhdGNoIChlKSB7XG4gICAgICAgICAgaWYgKGUubmFtZSAhPT0gXCJFcnJub0Vycm9yXCIpIHRocm93IGU7XG4gICAgICAgICAgaWYgKGUuZXJybm8gIT09IDIwKSB7XG4gICAgICAgICAgICBjb25zdCBlcnJvclRleHRQdHIgPSBhd2FpdCBweW9kaWRlLl9tb2R1bGUuX3N0cmVycm9yKGUuZXJybm8pO1xuICAgICAgICAgICAgY29uc3QgZXJyb3JUZXh0ID0gYXdhaXQgcHlvZGlkZS5fbW9kdWxlLlVURjhUb1N0cmluZyhlcnJvclRleHRQdHIpO1xuICAgICAgICAgICAgdGhyb3cgbmV3IEVycm9yKGBGaWxlc3lzdGVtIEVycm9yICR7ZS5lcnJub30gXCIke2Vycm9yVGV4dH1cIi5gKTtcbiAgICAgICAgICB9XG4gICAgICAgIH1cbiAgICAgIH1cblxuICAgICAgLy8gV3JpdGUgdGhpcyBmaWxlIHRvIHRoZSBWRlNcbiAgICAgIHRyeSB7XG4gICAgICAgIHJldHVybiBhd2FpdCBweW9kaWRlLkZTLndyaXRlRmlsZShmaWxlLCBuZXcgVWludDhBcnJheShkYXRhKSk7XG4gICAgICB9IGNhdGNoIChlKSB7XG4gICAgICAgIGlmIChlLm5hbWUgIT09IFwiRXJybm9FcnJvclwiKSB0aHJvdyBlO1xuICAgICAgICBjb25zdCBlcnJvclRleHRQdHIgPSBhd2FpdCBweW9kaWRlLl9tb2R1bGUuX3N0cmVycm9yKGUuZXJybm8pO1xuICAgICAgICBjb25zdCBlcnJvclRleHQgPSBhd2FpdCBweW9kaWRlLl9tb2R1bGUuVVRGOFRvU3RyaW5nKGVycm9yVGV4dFB0cik7XG4gICAgICAgIHRocm93IG5ldyBFcnJvcihgRmlsZXN5c3RlbSBFcnJvciAke2UuZXJybm99IFwiJHtlcnJvclRleHR9XCIuYCk7XG4gICAgICB9XG4gICAgfSkucmVkdWNlKChjdXIsIG5leHQpID0+IGN1ci50aGVuKG5leHQpLCBQcm9taXNlLnJlc29sdmUoKSk7XG5cbiAgICBzdGF0dXNUZXh0LnRleHRDb250ZW50ID0gYFB5b2RpZGUgZW52aXJvbm1lbnQgc2V0dXBgO1xuICAgIGF3YWl0IHNldHVwUHl0aG9uKHB5b2RpZGUpO1xuXG4gICAgc3RhdHVzVGV4dC5yZW1vdmUoKTtcbiAgICBpZiAoc3RhdHVzQ29udGFpbmVyLmNoaWxkcmVuLmxlbmd0aCA9PSAwKSB7XG4gICAgICBzdGF0dXNDb250YWluZXIucGFyZW50Tm9kZS5yZW1vdmUoKTtcbiAgICB9XG4gICAgcmV0dXJuIHB5b2RpZGU7XG4gIH0pKCkuY2F0Y2goKGVycikgPT4ge1xuICAgIHN0YXR1c1RleHQuc3R5bGUuY29sb3IgPSBcInZhcigtLWV4ZXJjaXNlLWVkaXRvci1obC1lciwgI0FEMDAwMClcIjtcbiAgICBzdGF0dXNUZXh0LnRleHRDb250ZW50ID0gZXJyLm1lc3NhZ2U7XG4gICAgLy9pbmRpY2F0b3JDb250YWluZXIucXVlcnlTZWxlY3RvcihcIi5zcGlubmVyLWdyb3dcIikuY2xhc3NMaXN0LmFkZChcImQtbm9uZVwiKTtcbiAgICB0aHJvdyBlcnI7XG4gIH0pO1xuXG4gIC8vIEtlZXAgdHJhY2sgb2YgaW5pdGlhbCBPSlMgYmxvY2sgcmVuZGVyXG4gIGNvbnN0IHJlbmRlcmVkT2pzID0ge307XG5cbiAgY29uc3QgcHJvY2VzcyA9IGFzeW5jIChjb250ZXh0LCBpbnB1dHMpID0+IHtcbiAgICBjb25zdCBweW9kaWRlID0gYXdhaXQgcHlvZGlkZVByb21pc2U7XG4gICAgY29uc3QgZXZhbHVhdG9yID0gbmV3IFB5b2RpZGVFdmFsdWF0b3IocHlvZGlkZSwgY29udGV4dCk7XG4gICAgYXdhaXQgZXZhbHVhdG9yLnByb2Nlc3MoaW5wdXRzKTtcbiAgICByZXR1cm4gZXZhbHVhdG9yLmNvbnRhaW5lcjtcbiAgfVxuXG4gIHJldHVybiB7XG4gICAgcHlvZGlkZVByb21pc2UsXG4gICAgcmVuZGVyZWRPanMsXG4gICAgcHJvY2VzcyxcbiAgfTtcbn1cbiJ9XX0=
+</script>
+<div id="exercise-loading-indicator" class="exercise-loading-indicator d-none d-flex align-items-center gap-2">
+<div id="exercise-loading-status" class="d-flex gap-2">
+
+</div>
+<div class="spinner-grow spinner-grow-sm">
+
+</div>
+</div>
+<script type="vfs-file">
+W10=
+</script>
+</section>
+
+</main> <!-- /main -->
+<script type="ojs-module-contents">
+eyJjb250ZW50cyI6W119
+</script>
+<script type="module">
+if (window.location.protocol === "file:") { alert("The OJS runtime does not work with file:// URLs. Please use a web server to view this document."); }
+window._ojs.paths.runtimeToDoc = "../../part-13-large-language-models";
+window._ojs.paths.runtimeToRoot = "../..";
+window._ojs.paths.docToRoot = "..";
+window._ojs.selfContained = false;
+window._ojs.runtime.interpretFromScriptTags();
+</script>
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/enduringchung\.github\.io\/ml-interactive-course\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="../part-13-large-language-models/13-7-evaluation-limitations.html" class="pagination-link" aria-label="13.7 Evaluation and Limitations">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">13.7 Evaluation and Limitations</span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="../appendix-a-derivations/a-1-normal-equations.qmd" class="pagination-link" aria-label="">
+        <span class="nav-page-text"></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/EnduringChung/ml-interactive-course/edit/main/part-13-large-language-models/13-8-applications-next-steps.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/EnduringChung/ml-interactive-course/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
