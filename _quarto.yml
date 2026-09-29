@@ -3,6 +3,7 @@ project:
   render:
     - index.qmd
     - part-*/
+    - appendix-a-derivations/
     - "!notebooks/*"
 
 # All pages are pure client-side documents: no local Python/R execution
@@ -121,6 +122,7 @@ website:
             - part-09-unsupervised-learning/09-4-k-means.qmd
             - part-09-unsupervised-learning/09-5-hierarchical-clustering.qmd
             - part-09-unsupervised-learning/09-6-practical-clustering.qmd
+            - part-09-unsupervised-learning/09-7-manifolds-and-embeddings.qmd
         - section: "Part 10 — Deep Learning with PyTorch"
           contents:
             - part-10-deep-learning/10-1-pytorch-foundations.qmd
